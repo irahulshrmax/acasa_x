@@ -1,0 +1,103 @@
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer utilities {
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+ 
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+}
+ 
+/* Root Variables */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  --font-playfair: 'Playfair Display', serif;
+  --font-inter: 'Inter', sans-serif;
+}
+
+/* Global Body */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter); /* ✅ Default Inter */
+}
+
+/* Utility Classes */
+.font-playfair {
+  font-family: var(--font-playfair);
+}
+
+.font-inter {
+  font-family: var(--font-inter);
+}
+
+
+:root{
+  --text-dark: #171717;
+  --muted: #525252;
+  --card-bg: #FAFAFA;
+  --card-border: #F0F0F0;
+  --accent-bg: #F4EFEB;
+}
+
+/* Font families used in component */
+.font-playfair { font-family: 'Playfair Display', serif; }
+.font-sans { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+
+/* Small utility overrides for exact spacing/line-height */
+.text-14 { font-size: 14px; }
+.text-15 { font-size: 15px; }
+.leading-18 { line-height: 1.8; }
+
+/* Icon wrapper to ensure consistent icon size */
+.about-icon {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dark);
+}
+
+/* Card shadow that matches screenshot more closely */
+.card-shadow {
+  box-shadow: 0 6px 18px rgba(23,23,23,0.04);
+}
+
+/* Ensure images keep intended aspect and don't stretch */
+.about-image {
+  object-fit: cover;
+  border-radius: 6px;
+}
+/* Add at the end */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

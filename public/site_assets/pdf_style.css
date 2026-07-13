@@ -1,0 +1,41 @@
+p {
+    margin: 0 0 20px
+}
+a {
+    color: #fff;font-family: Compass Sans,Helvetica,Arial,sans-serif;
+	text-transform: capitalize;
+    transition: all 200ms ease-in;
+}
+a:hover, a:focus {color: inherit;opacity: 0.75;outline: none;text-decoration: none;}
+
+.nocolor {
+    color: #606060
+}
+.nocolor:hover {
+    color: #fff
+}
+h1{
+font-size: 36px;
+font-family: "Compass Serif",Times,Times New Roman,serif;
+line-height: 36px;
+margin-top: 0;
+text-align: center;
+letter-spacing: 2px;
+margin-bottom: 10px;
+font-weight: 400;
+font-style: normal;
+}
+h2 {font-size: 17px;line-height: 5px; font-family: Compass Sans,Helvetica,Arial,sans-serif;}
+h3 {font-size: 18px;margin-bottom: 20px;font-weight: 400; text-transform: uppercase; font-family: Compass Sans,Helvetica,Arial,sans-serif;}
+h4 {font-size: 16px;font-family: Compass Sans,Helvetica,Arial,sans-serif;}
+h5 { font-size: 14px;line-height: 18px;font-family: Compass Sans,Helvetica,Arial,sans-serif;}
+h1.post-title, h2.post-title {font-size: 20px;line-height: 26px;}
+.main-title {font-weight: 300;font-size: 24px; margin-bottom: 30px;text-transform: none;}
+.main-title strong {font-weight: 900}
+.sidebar-box {
+    background: none !important;
+    padding: 10px 30px 30px;
+    margin-bottom: 40px;
+    margin-top: 25px;
+    border: 1px solid;
+}
