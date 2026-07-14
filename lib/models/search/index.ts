@@ -1,21 +1,15 @@
-// models/search.ts
+// lib/models/search.ts
 import { db } from '@/lib/database';
-import {
-  UPLOAD_BASE_URL,
-  getImageUrl,
-  getImageUrlVariations,
-  getProjectImageUrl,
-  getProjectImageVariations,
-  getProjectGalleryImages,
-  getMediaImageUrl,
-  getNoImageUrl,
-  getDeveloperImageUrl,
-  getCommunityImageUrl,
-  getAgentImageUrl,
-  getUserImageUrl,
-} from '@/lib/image-resolver';
+import { cache } from '@/lib/cache';
 
-// ─── TYPES ──────────────────────────────────────────────────────────────
+// ─── CONSTANTS ──────────────────────────────────────────────────────────────
+
+const UPLOAD_BASE_URL = 'https://acasa.ae/upload';
+const IMAGE_DIRS = ['media', 'media/thumbnail', 'media/medium', 'properties', 'blogs'] as const;
+const CACHE_TTL = 300;
+const MAX_RESULTS = 100;
+
+// ─── TYPES ──────────────────────────────────────────────────────────────────
 
 export interface SearchResult {
   id: number;
@@ -50,12 +44,10 @@ export interface SearchResult {
   status: number;
   created_at: string | null;
   updated_at: string | null;
-  // Project specific
   project_id?: number;
   ProjectName?: string;
   project_slug?: string;
   LogoUrl?: string | null;
-  // Extra fields
   extra?: Record<string, any>;
 }
 
@@ -91,27 +83,69 @@ export interface SearchResponse {
     totalPages: number;
     properties_count: number;
     projects_count: number;
+    total_properties?: number;
+    total_projects?: number;
+    cached?: boolean;
   };
 }
 
-// ─── HELPERS ────────────────────────────────────────────────────────────
-
-function parseCommaIds(ids: string | null): number[] {
-  if (!ids) return [];
-  return ids
-    .split(',')
-    .map((id) => parseInt(id.trim(), 10))
-    .filter((id) => !isNaN(id));
+export interface ProjectSpecs {
+  id: number;
+  project_id: number;
+  kitchen_open_plan: string | null;
+  kitchen_closed: string | null;
+  maid_quarters: string | null;
+  storage_room: string | null;
+  laundry_room: string | null;
+  study_room: string | null;
+  furnished: string | null;
+  swimming_pool: string | null;
+  gymnasium: string | null;
+  tennis_court: string | null;
+  basketball_court: string | null;
+  parking: string | null;
+  child_play_area: string | null;
+  allocated_parking_qty: string | null;
+  status: number;
 }
 
-function toNullableNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
+export interface ProjectGallery {
+  id: number;
+  project_id: number | null;
+  Url: string | null;
+  created_at: Date | null;
+  updated_at: Date | null;
 }
 
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
+export interface ProjectContact {
+  id: number;
+  project_id: number | null;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  created_at: Date | null;
+  updated_at: Date | null;
+}
+
+// ─── CACHE KEYS ─────────────────────────────────────────────────────────────
+
+const CACHE_KEYS = {
+  search: (filters: SearchFilters) => `search:${JSON.stringify(filters)}`,
+  single: (id: string) => `search:single:${id}`,
+  stats: () => `search:stats`,
+};
+
+// ─── HELPERS ────────────────────────────────────────────────────────────────
+
+function toNullableNumber(val: unknown): number | null {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'number') return isFinite(val) ? val : null;
+  if (typeof val === 'string') {
+    const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+    return isFinite(num) ? num : null;
+  }
+  return null;
 }
 
 function formatPrice(price: number | null): string | null {
@@ -128,7 +162,8 @@ function formatArea(area: number | null): string | null {
 
 function getBedroomDisplay(bedroom: string | null): string {
   if (!bedroom) return "Studio";
-  if (bedroom.toLowerCase().includes("studio")) return "Studio";
+  const t = bedroom.toLowerCase().trim();
+  if (t.includes("studio")) return "Studio";
   const match = bedroom.match(/(\d+)/);
   if (match) {
     const num = parseInt(match[1]);
@@ -156,183 +191,167 @@ function getOccupancyLabel(occupancy: string | null): string {
     "under construction": "Under Construction",
     "ready to move": "Ready to Move",
     vacant: "Vacant",
+    "ready": "Ready to Move",
+    "off plan": "Off Plan",
   };
-  return map[occupancy.toLowerCase()] || occupancy;
+  const key = occupancy.toLowerCase().trim();
+  return map[key] || occupancy;
 }
 
 function getCompletionStatus(completionDate: string | null): string {
   if (!completionDate) return "Date TBC";
-  const now = new Date();
-  const comp = new Date(completionDate);
-  const diffMonths = (comp.getFullYear() - now.getFullYear()) * 12 + (comp.getMonth() - now.getMonth());
-  if (diffMonths < 0) return "Ready to Move";
-  if (diffMonths <= 3) return "Handover in 3 Months";
-  if (diffMonths <= 6) return "Handover in 6 Months";
-  if (diffMonths <= 12) return `Handover by ${comp.getFullYear()}`;
-  return `Handover ${comp.getFullYear()}`;
+  try {
+    const now = new Date();
+    const comp = new Date(completionDate);
+    if (isNaN(comp.getTime())) return "Date TBC";
+    const diffMonths = (comp.getFullYear() - now.getFullYear()) * 12 + (comp.getMonth() - now.getMonth());
+    if (diffMonths < 0) return "Ready to Move";
+    if (diffMonths <= 3) return "Handover in 3 Months";
+    if (diffMonths <= 6) return "Handover in 6 Months";
+    return `Handover ${comp.getFullYear()}`;
+  } catch {
+    return "Date TBC";
+  }
 }
 
-// ─── IMAGE RESOLUTION ──────────────────────────────────────────────────
+function parseCommaIds(ids: string | null): number[] {
+  if (!ids) return [];
+  return ids
+    .split(',')
+    .map((id) => parseInt(id.trim(), 10))
+    .filter((id) => !isNaN(id));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function cleanPath(val: string): string {
+  return val.replace(/\\/g, '/').trim().replace(/^\/+/, '');
+}
+
+function isAbsoluteUrl(val: string): boolean {
+  return /^https?:\/\//i.test(val);
+}
+
+function stripUploadPrefix(val: string): string {
+  return cleanPath(val).replace(/^upload\//i, '').replace(/^\/+/, '');
+}
+
+// ─── IMAGE HELPERS ──────────────────────────────────────────────────────────
+
+export function getNoImageUrl(): string {
+  return `${UPLOAD_BASE_URL}/no-image.png`;
+}
 
 function resolvePropertyImage(imagePath: string | null): string {
-  return getImageUrl(imagePath);
-}
+  if (!imagePath) return getNoImageUrl();
+  if (isAbsoluteUrl(imagePath)) return imagePath;
 
-function resolvePropertyGallery(mediaIds: string | null, mediaRecords: any[]): string[] {
-  const ids = parseCommaIds(mediaIds);
-  const paths = ids
-    .map((id) => {
-      const record = mediaRecords.find((m) => m.id === id);
-      return record?.path || null;
-    })
-    .filter((path): path is string => !!path);
-  
-  const urls = paths.map((path) => getMediaImageUrl(path));
-  return uniqueStrings(urls.filter((url) => !url.includes('no-image')));
+  const clean = stripUploadPrefix(imagePath);
+  if (!clean) return getNoImageUrl();
+
+  const paths = [
+    `${UPLOAD_BASE_URL}/media/${clean}`,
+    `${UPLOAD_BASE_URL}/properties/${clean}`,
+    `${UPLOAD_BASE_URL}/uploads/${clean}`,
+    `${UPLOAD_BASE_URL}/${clean}`,
+  ];
+
+  for (const path of paths) {
+    if (!path.includes('no-image')) {
+      return path;
+    }
+  }
+
+  return getNoImageUrl();
 }
 
 function resolveProjectImage(imagePath: string | null): string {
-  return getProjectImageUrl(imagePath);
+  if (!imagePath) return getNoImageUrl();
+  if (isAbsoluteUrl(imagePath)) return imagePath;
+
+  const clean = stripUploadPrefix(imagePath);
+  if (!clean) return getNoImageUrl();
+
+  const paths = [
+    `${UPLOAD_BASE_URL}/media/${clean}`,
+    `${UPLOAD_BASE_URL}/projects/${clean}`,
+    `${UPLOAD_BASE_URL}/uploads/${clean}`,
+    `${UPLOAD_BASE_URL}/${clean}`,
+  ];
+
+  for (const path of paths) {
+    if (!path.includes('no-image')) {
+      return path;
+    }
+  }
+
+  return getNoImageUrl();
 }
 
-function resolveProjectGallery(galleryRecords: { Url: string | null }[]): string[] {
-  return getProjectGalleryImages(galleryRecords);
+function getImageUrlVariations(imagePath: string | null): string[] {
+  if (!imagePath) return [getNoImageUrl()];
+
+  const mainUrl = resolvePropertyImage(imagePath);
+  const variations = [mainUrl];
+
+  const clean = stripUploadPrefix(imagePath);
+  if (clean) {
+    const sizes = ['thumbnail', 'medium', 'large'];
+    for (const size of sizes) {
+      const url = `${UPLOAD_BASE_URL}/media/${size}/${clean}`;
+      if (!url.includes('no-image')) {
+        variations.push(url);
+      }
+    }
+  }
+
+  return uniqueStrings(variations);
 }
 
-function resolveProjectLogo(logoPath: string | null): string {
-  if (!logoPath) return getNoImageUrl();
-  return getProjectImageUrl(logoPath);
+function getProjectImageVariations(imagePath: string | null): string[] {
+  if (!imagePath) return [getNoImageUrl()];
+
+  const mainUrl = resolveProjectImage(imagePath);
+  const variations = [mainUrl];
+
+  const clean = stripUploadPrefix(imagePath);
+  if (clean) {
+    const sizes = ['thumbnail', 'medium', 'large'];
+    for (const size of sizes) {
+      const url = `${UPLOAD_BASE_URL}/media/${size}/${clean}`;
+      if (!url.includes('no-image')) {
+        variations.push(url);
+      }
+    }
+  }
+
+  return uniqueStrings(variations);
 }
 
-// ─── TRANSFORM PROPERTY ───────────────────────────────────────────────
+// ─── TABLE CHECK HELPERS ────────────────────────────────────────────────────
 
-function transformProperty(
-  property: any,
-  mediaRecords: any[] = []
-): SearchResult {
-  const imageUrl = resolvePropertyImage(property.featured_image);
-  const imageVariations = getImageUrlVariations(property.featured_image);
-  const galleryImages = resolvePropertyGallery(property.gallery_media_ids, mediaRecords);
-
-  // Get featured image from gallery if main image is not available
-  const finalImageUrl = imageUrl.includes('no-image') && galleryImages.length > 0
-    ? galleryImages[0]
-    : imageUrl;
-
-  return {
-    id: property.id,
-    result_type: 'property',
-    name: property.property_name || 'Property',
-    slug: property.property_slug || `property-${property.id}`,
-    listing_type: property.listing_type || null,
-    price: toNullableNumber(property.price),
-    price_display: formatPrice(toNullableNumber(property.price)),
-    bedroom: property.bedroom ? getBedroomDisplay(property.bedroom) : null,
-    bathrooms: property.bathrooms ? getBathroomDisplay(property.bathrooms) : null,
-    area: toNullableNumber(property.area),
-    area_display: formatArea(toNullableNumber(property.area)),
-    location: property.location || null,
-    city_name: property.city_name || null,
-    community_name: property.community_name || null,
-    developer_name: property.developer_name || null,
-    description: property.description || null,
-    featured_image: property.featured_image || null,
-    image_url: finalImageUrl,
-    image_variations: imageVariations.length > 0 ? imageVariations : [finalImageUrl],
-    gallery_images: galleryImages.length > 0 ? galleryImages : [finalImageUrl],
-    completion_date: property.completion_date || null,
-    occupancy: property.occupancy ? getOccupancyLabel(property.occupancy) : null,
-    property_type: property.property_type || null,
-    furnishing: property.furnishing || null,
-    parking: property.parking || null,
-    rera_number: property.ReraNumber || null,
-    dld_permit: property.dld_permit || null,
-    video_url: property.video_url || null,
-    amenities: property.amenities ? property.amenities.split(',').filter(Boolean).map((a: string) => a.trim()) : [],
-    status: property.status || 0,
-    created_at: property.created_at || null,
-    updated_at: property.updated_at || null,
-    extra: {
-      completion_status: getCompletionStatus(property.completion_date),
-      p_id: property.p_id || null,
-      project_id: property.project_id || null,
-      featured_property: property.featured_property || null,
-      agent_id: property.agent_id || null,
-      user_id: property.user_id || null,
-    },
-  };
+async function tableExists(knex: any, tableName: string): Promise<boolean> {
+  try {
+    return await knex.schema.hasTable(tableName);
+  } catch {
+    return false;
+  }
 }
 
-// ─── TRANSFORM PROJECT ────────────────────────────────────────────────
-
-function transformProject(project: any, galleryRecords: any[] = []): SearchResult {
-  const imageUrl = resolveProjectImage(project.featured_image);
-  const imageVariations = getProjectImageVariations(project.featured_image);
-  const galleryImages = resolveProjectGallery(galleryRecords);
-  const logoUrl = resolveProjectLogo(project.LogoUrl);
-
-  // Get featured image from gallery if main image is not available
-  const finalImageUrl = imageUrl.includes('no-image') && galleryImages.length > 0
-    ? galleryImages[0]
-    : imageUrl;
-
-  return {
-    id: project.id,
-    result_type: 'project',
-    name: project.ProjectName || 'Project',
-    slug: project.project_slug || `project-${project.id}`,
-    listing_type: project.listing_type || 'Project',
-    price: toNullableNumber(project.price),
-    price_display: formatPrice(toNullableNumber(project.price)),
-    bedroom: project.bedroom ? getBedroomDisplay(project.bedroom) : null,
-    bathrooms: project.bathrooms ? getBathroomDisplay(project.bathrooms) : null,
-    area: toNullableNumber(project.area),
-    area_display: formatArea(toNullableNumber(project.area)),
-    location: project.LocationName || null,
-    city_name: project.city_name || null,
-    community_name: project.community_name || null,
-    developer_name: project.developer_name || null,
-    description: project.Description || null,
-    featured_image: project.featured_image || null,
-    image_url: finalImageUrl,
-    image_variations: imageVariations.length > 0 ? imageVariations : [finalImageUrl],
-    gallery_images: galleryImages.length > 0 ? galleryImages : [finalImageUrl],
-    completion_date: project.completion_date || null,
-    occupancy: project.occupancy ? getOccupancyLabel(project.occupancy) : null,
-    property_type: project.property_type || null,
-    furnishing: project.furnishing || null,
-    parking: project.parking || null,
-    rera_number: project.ReraNumber || null,
-    dld_permit: project.dld_permit || null,
-    video_url: project.video_url || null,
-    amenities: project.amenities ? project.amenities.split(',').filter(Boolean).map((a: string) => a.trim()) : [],
-    status: project.status || 0,
-    created_at: project.created_at || null,
-    updated_at: project.updated_at || null,
-    // Project specific
-    project_id: project.id,
-    ProjectName: project.ProjectName,
-    project_slug: project.project_slug,
-    LogoUrl: logoUrl,
-    extra: {
-      completion_status: getCompletionStatus(project.completion_date),
-      featured_project: project.featured_project || null,
-      city_id: project.city_id || null,
-      community_id: project.community_id || null,
-      sub_community_id: project.sub_community_id || null,
-      price_end: project.price_end || null,
-      area_end: project.area_end || null,
-    },
-  };
-}
-
-// ─── FETCH MEDIA RECORDS ──────────────────────────────────────────────
+// ─── FETCH FUNCTIONS WITH SAFE TABLE CHECKS ───────────────────────────────
 
 async function fetchMediaRecords(knex: any, propertyIds: number[]): Promise<Map<number, any[]>> {
   const mediaByPropertyId = new Map<number, any[]>();
   if (!propertyIds.length) return mediaByPropertyId;
 
   try {
+    const exists = await tableExists(knex, 'media');
+    if (!exists) {
+      return mediaByPropertyId;
+    }
+
     const rows = await knex('media')
       .whereIn('module_id', propertyIds)
       .where('module_type', 'property')
@@ -346,8 +365,8 @@ async function fetchMediaRecords(knex: any, propertyIds: number[]): Promise<Map<
         mediaByPropertyId.set(row.module_id, existing);
       }
     }
-  } catch (error) {
-    // Table might not exist
+  } catch (error: any) {
+    // Silent fail
   }
   return mediaByPropertyId;
 }
@@ -357,6 +376,11 @@ async function fetchProjectGallery(knex: any, projectIds: number[]): Promise<Map
   if (!projectIds.length) return galleryByProjectId;
 
   try {
+    const exists = await tableExists(knex, 'project_gallery');
+    if (!exists) {
+      return galleryByProjectId;
+    }
+
     const rows = await knex('project_gallery')
       .whereIn('project_id', projectIds)
       .select('id', 'project_id', 'Url', 'created_at');
@@ -368,13 +392,204 @@ async function fetchProjectGallery(knex: any, projectIds: number[]): Promise<Map
         galleryByProjectId.set(row.project_id, existing);
       }
     }
-  } catch (error) {
-    // Table might not exist
+  } catch (error: any) {
+    // Silent fail
   }
   return galleryByProjectId;
 }
 
-// ─── MAIN SEARCH FUNCTION ─────────────────────────────────────────────
+async function fetchProjectSpecs(knex: any, projectIds: number[]): Promise<Map<number, ProjectSpecs>> {
+  const result = new Map<number, ProjectSpecs>();
+  if (!projectIds.length) return result;
+
+  try {
+    const exists = await tableExists(knex, 'project_specs');
+    if (!exists) {
+      return result;
+    }
+
+    const rows: ProjectSpecs[] = await knex('project_specs')
+      .whereIn('project_id', projectIds)
+      .select('*');
+
+    for (const row of rows) {
+      if (row.project_id) result.set(row.project_id, row);
+    }
+  } catch (error: any) {
+    // Silent fail
+  }
+  return result;
+}
+
+async function fetchProjectContacts(knex: any, projectIds: number[]): Promise<Map<number, ProjectContact[]>> {
+  const result = new Map<number, ProjectContact[]>();
+  if (!projectIds.length) return result;
+
+  try {
+    const exists = await tableExists(knex, 'project_contacts');
+    if (!exists) {
+      return result;
+    }
+
+    const rows: ProjectContact[] = await knex('project_contacts')
+      .whereIn('project_id', projectIds)
+      .select('*')
+      .orderBy('created_at', 'desc');
+
+    for (const row of rows) {
+      if (row.project_id !== null) {
+        const list = result.get(row.project_id) ?? [];
+        list.push(row);
+        result.set(row.project_id, list);
+      }
+    }
+  } catch (error: any) {
+    // Silent fail
+  }
+  return result;
+}
+
+// ─── TRANSFORM FUNCTIONS ────────────────────────────────────────────────────
+
+function transformProperty(property: any, mediaRecords: any[] = []): SearchResult {
+  const imagePath = property.featured_image || property.image || property.imageurl || property.img || null;
+  let imageUrl = resolvePropertyImage(imagePath);
+
+  let galleryImages: string[] = [];
+  if (mediaRecords && mediaRecords.length > 0) {
+    galleryImages = mediaRecords
+      .map((m) => resolvePropertyImage(m.path))
+      .filter((url) => !url.includes('no-image'));
+  }
+
+  if (imageUrl.includes('no-image') && galleryImages.length > 0) {
+    imageUrl = galleryImages[0];
+  }
+
+  const imageVariations = getImageUrlVariations(imagePath);
+  const finalGallery = galleryImages.length > 0 ? galleryImages : [imageUrl];
+
+  return {
+    id: property.id,
+    result_type: 'property',
+    name: property.property_name || property.name || 'Property',
+    slug: property.property_slug || property.slug || `property-${property.id}`,
+    listing_type: property.listing_type || null,
+    price: toNullableNumber(property.price),
+    price_display: formatPrice(toNullableNumber(property.price)),
+    bedroom: property.bedroom ? getBedroomDisplay(property.bedroom) : null,
+    bathrooms: property.bathrooms ? getBathroomDisplay(property.bathrooms) : null,
+    area: toNullableNumber(property.area),
+    area_display: formatArea(toNullableNumber(property.area)),
+    location: property.location || property.address || null,
+    city_name: property.city_name || property.city || null,
+    community_name: property.community_name || property.community || null,
+    developer_name: property.developer_name || property.developer || null,
+    description: property.description || property.descriptions || null,
+    featured_image: imagePath,
+    image_url: imageUrl,
+    image_variations: imageVariations.length > 0 ? imageVariations : [imageUrl],
+    gallery_images: finalGallery,
+    completion_date: property.completion_date || null,
+    occupancy: property.occupancy ? getOccupancyLabel(property.occupancy) : null,
+    property_type: property.property_type || null,
+    furnishing: property.furnishing || null,
+    parking: property.parking || null,
+    rera_number: property.ReraNumber || property.rera_number || null,
+    dld_permit: property.dld_permit || null,
+    video_url: property.video_url || null,
+    amenities: property.amenities
+      ? property.amenities.split(',').filter(Boolean).map((a: string) => a.trim())
+      : [],
+    status: property.status || 0,
+    created_at: property.created_at || null,
+    updated_at: property.updated_at || null,
+    extra: {
+      completion_status: getCompletionStatus(property.completion_date),
+      p_id: property.p_id || null,
+      project_id: property.project_id || null,
+      featured_property: property.featured_property || null,
+      agent_id: property.agent_id || null,
+      user_id: property.user_id || null,
+      community_id: property.community_id || null,
+      city_id: property.city_id || null,
+    },
+  };
+}
+
+function transformProject(project: any, galleryRecords: any[] = []): SearchResult {
+  const imagePath = project.featured_image || project.image || project.imageurl || project.Img || project.LogoUrl || null;
+  let imageUrl = resolveProjectImage(imagePath);
+
+  let galleryImages: string[] = [];
+  if (galleryRecords && galleryRecords.length > 0) {
+    galleryImages = galleryRecords
+      .map((g) => resolveProjectImage(g.Url))
+      .filter((url) => !url.includes('no-image'));
+  }
+
+  if (imageUrl.includes('no-image') && galleryImages.length > 0) {
+    imageUrl = galleryImages[0];
+  }
+
+  const imageVariations = getProjectImageVariations(imagePath);
+  const finalGallery = galleryImages.length > 0 ? galleryImages : [imageUrl];
+
+  const logoUrl = project.LogoUrl ? resolveProjectImage(project.LogoUrl) : null;
+
+  return {
+    id: project.id,
+    result_type: 'project',
+    name: project.ProjectName || project.name || 'Project',
+    slug: project.project_slug || project.slug || `project-${project.id}`,
+    listing_type: project.listing_type || 'Project',
+    price: toNullableNumber(project.price),
+    price_display: formatPrice(toNullableNumber(project.price)),
+    bedroom: project.bedroom ? getBedroomDisplay(project.bedroom) : null,
+    bathrooms: project.bathrooms ? getBathroomDisplay(project.bathrooms) : null,
+    area: toNullableNumber(project.area),
+    area_display: formatArea(toNullableNumber(project.area)),
+    location: project.LocationName || project.location || project.address || null,
+    city_name: project.city_name || project.CityName || project.city || null,
+    community_name: project.community_name || project.CommunityName || project.community || null,
+    developer_name: project.developer_name || project.developer || null,
+    description: project.Description || project.description || null,
+    featured_image: imagePath,
+    image_url: imageUrl,
+    image_variations: imageVariations.length > 0 ? imageVariations : [imageUrl],
+    gallery_images: finalGallery,
+    completion_date: project.completion_date || null,
+    occupancy: project.occupancy ? getOccupancyLabel(project.occupancy) : null,
+    property_type: project.property_type || null,
+    furnishing: project.furnishing || null,
+    parking: project.parking || null,
+    rera_number: project.ReraNumber || null,
+    dld_permit: project.dld_permit || null,
+    video_url: project.video_url || null,
+    amenities: project.amenities
+      ? project.amenities.split(',').filter(Boolean).map((a: string) => a.trim())
+      : [],
+    status: project.status || 0,
+    created_at: project.created_at || null,
+    updated_at: project.updated_at || null,
+    project_id: project.id,
+    ProjectName: project.ProjectName || project.name,
+    project_slug: project.project_slug || project.slug,
+    LogoUrl: logoUrl,
+    extra: {
+      completion_status: getCompletionStatus(project.completion_date),
+      featured_project: project.featured_project || null,
+      city_id: project.city_id || null,
+      community_id: project.community_id || null,
+      sub_community_id: project.sub_community_id || null,
+      price_end: project.price_end || null,
+      area_end: project.area_end || null,
+      total_units: project.total_units || null,
+    },
+  };
+}
+
+// ─── MAIN SEARCH FUNCTION ──────────────────────────────────────────────────
 
 export async function search(filters: SearchFilters = {}): Promise<SearchResponse> {
   const {
@@ -400,9 +615,15 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     include_projects = true,
   } = filters;
 
+  const cacheKey = CACHE_KEYS.search(filters);
+  const cached = await cache.get<SearchResponse>(cacheKey);
+  if (cached) {
+    return { ...cached, meta: { ...cached.meta, cached: true } };
+  }
+
   const knex = await db();
   const offset = (page - 1) * limit;
-  
+
   let properties: any[] = [];
   let projects: any[] = [];
   let totalProperties = 0;
@@ -410,7 +631,6 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
   let propertyIds: number[] = [];
   let projectIds: number[] = [];
 
-  // ─── FETCH PROPERTIES ──────────────────────────────────────────────
   if (include_properties) {
     const propQuery = knex('properties as p')
       .distinct('p.id')
@@ -420,41 +640,36 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       .leftJoin('internationaldevelopers as idev', 'p.developer_id', 'idev.id')
       .where('p.status', status);
 
-    // Search query
     if (q) {
       propQuery.where(function (this: any) {
         this.where('p.property_name', 'like', `%${q}%`)
           .orWhere('p.location', 'like', `%${q}%`)
           .orWhere('p.address', 'like', `%${q}%`)
-          .orWhere('p.keyword', 'like', `%${q}%`);
+          .orWhere('p.keyword', 'like', `%${q}%`)
+          .orWhere('p.property_slug', 'like', `%${q}%`);
       });
     }
 
-    // Listing type
     if (type === 'rent') {
       propQuery.where('p.listing_type', 'Rent');
     } else if (type === 'buy') {
-      propQuery.where('p.listing_type', 'in', ['Sale', 'Off plan']);
+      propQuery.where('p.listing_type', 'in', ['Sale', 'Off plan', 'Off-plan', 'Offplan']);
     } else if (listing_type) {
       propQuery.where('p.listing_type', listing_type);
     }
 
-    // Locations
     if (locations.length > 0) {
       propQuery.where(function (this: any) {
         for (const loc of locations) {
-          this.orWhere('p.location', 'like', `%${loc}%`);
+          this.orWhere('p.location', 'like', `%${loc}%`)
+            .orWhere('p.address', 'like', `%${loc}%`);
         }
       });
     }
 
-    // City
     if (city_id) propQuery.where('p.city_id', city_id);
-
-    // Community
     if (community_id) propQuery.where('p.community_id', community_id);
 
-    // Price
     if (min_price) {
       propQuery.where(function (this: any) {
         this.where('p.price', '>=', min_price)
@@ -468,7 +683,6 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       });
     }
 
-    // Bedrooms
     if (min_bedrooms !== undefined && min_bedrooms !== null) {
       propQuery.whereRaw('CAST(p.bedroom AS UNSIGNED) >= ?', [min_bedrooms]);
     }
@@ -476,22 +690,16 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       propQuery.whereRaw('CAST(p.bedroom AS UNSIGNED) <= ?', [max_bedrooms]);
     }
 
-    // Area
     if (min_area) propQuery.where('p.area', '>=', min_area);
     if (max_area) propQuery.where('p.area', '<=', max_area);
 
-    // Property type
     if (property_type) propQuery.where('p.property_type', property_type);
-
-    // Featured
     if (featured) propQuery.where('p.featured_property', '1');
 
-    // Count
     const countQuery = propQuery.clone();
     const [{ total: propTotal }] = await countQuery.count('* as total');
     totalProperties = Number(propTotal) || 0;
 
-    // Sort
     switch (sort_by) {
       case 'price_asc':
         propQuery.orderBy('p.price', 'asc');
@@ -502,15 +710,16 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       case 'oldest':
         propQuery.orderBy('p.created_at', 'asc');
         break;
-      case 'newest':
+      case 'popular':
+        propQuery.orderBy('p.featured_property', 'desc');
+        break;
       default:
         propQuery.orderBy('p.created_at', 'desc');
     }
 
-    // Pagination
-    propQuery.limit(limit).offset(offset);
+    const propertyLimit = Math.ceil(limit / 2);
+    propQuery.limit(propertyLimit).offset(offset);
 
-    // Select
     properties = await propQuery.select(
       'p.*',
       'c.name as city_name',
@@ -521,7 +730,6 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     propertyIds = properties.map((p) => p.id);
   }
 
-  // ─── FETCH PROJECTS ────────────────────────────────────────────────
   if (include_projects) {
     const projQuery = knex('project_listing as pl')
       .distinct('pl.id')
@@ -531,22 +739,24 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       .leftJoin('internationaldevelopers as idev', 'pl.developer_id', 'idev.id')
       .where('pl.status', status);
 
-    // Search query
     if (q) {
       projQuery.where(function (this: any) {
         this.where('pl.ProjectName', 'like', `%${q}%`)
           .orWhere('pl.LocationName', 'like', `%${q}%`)
           .orWhere('pl.Description', 'like', `%${q}%`)
-          .orWhere('pl.keyword', 'like', `%${q}%`);
+          .orWhere('pl.keyword', 'like', `%${q}%`)
+          .orWhere('pl.project_slug', 'like', `%${q}%`);
       });
     }
 
-    // Listing type
     if (listing_type) {
       projQuery.where('pl.listing_type', listing_type);
+    } else if (type === 'buy') {
+      projQuery.where('pl.listing_type', 'in', ['Sale', 'Off plan', 'Off-plan', 'Offplan']);
+    } else if (type === 'rent') {
+      projQuery.where('pl.listing_type', 'Rent');
     }
 
-    // Locations
     if (locations.length > 0) {
       projQuery.where(function (this: any) {
         for (const loc of locations) {
@@ -555,13 +765,9 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       });
     }
 
-    // City
     if (city_id) projQuery.where('pl.city_id', city_id);
-
-    // Community
     if (community_id) projQuery.where('pl.community_id', community_id);
 
-    // Price
     if (min_price) {
       projQuery.where(function (this: any) {
         this.where('pl.price', '>=', min_price)
@@ -575,7 +781,6 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       });
     }
 
-    // Bedrooms
     if (min_bedrooms !== undefined && min_bedrooms !== null) {
       projQuery.whereRaw('CAST(pl.bedroom AS UNSIGNED) >= ?', [min_bedrooms]);
     }
@@ -583,19 +788,15 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       projQuery.whereRaw('CAST(pl.bedroom AS UNSIGNED) <= ?', [max_bedrooms]);
     }
 
-    // Area
     if (min_area) projQuery.where('pl.area', '>=', min_area);
     if (max_area) projQuery.where('pl.area', '<=', max_area);
 
-    // Featured
     if (featured) projQuery.where('pl.featured_project', '1');
 
-    // Count
     const countQuery2 = projQuery.clone();
     const [{ total: projTotal }] = await countQuery2.count('* as total');
     totalProjects = Number(projTotal) || 0;
 
-    // Sort
     switch (sort_by) {
       case 'price_asc':
         projQuery.orderBy('pl.price', 'asc');
@@ -606,16 +807,16 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       case 'oldest':
         projQuery.orderBy('pl.created_at', 'asc');
         break;
-      case 'newest':
+      case 'popular':
+        projQuery.orderBy('pl.featured_project', 'desc');
+        break;
       default:
         projQuery.orderBy('pl.created_at', 'desc');
     }
 
-    // Pagination - take remaining
-    const remainingLimit = limit - properties.length;
-    projQuery.limit(Math.max(0, remainingLimit)).offset(offset);
+    const projectLimit = Math.ceil(limit / 2);
+    projQuery.limit(projectLimit).offset(offset);
 
-    // Select
     projects = await projQuery.select(
       'pl.*',
       'c.name as city_name',
@@ -626,13 +827,11 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     projectIds = projects.map((p) => p.id);
   }
 
-  // ─── FETCH MEDIA ────────────────────────────────────────────────────
   const [mediaByPropertyId, galleryByProjectId] = await Promise.all([
     fetchMediaRecords(knex, propertyIds),
     fetchProjectGallery(knex, projectIds),
   ]);
 
-  // ─── TRANSFORM ──────────────────────────────────────────────────────
   const transformedProperties = properties.map((p) => {
     const mediaRecords = mediaByPropertyId.get(p.id) ?? [];
     return transformProperty(p, mediaRecords);
@@ -643,16 +842,10 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     return transformProject(p, galleryRecords);
   });
 
-  // Combine results
   const allResults = [...transformedProperties, ...transformedProjects];
   const total = totalProperties + totalProjects;
 
-  // Apply sorting to combined results if needed
-  if (sort_by === 'popular') {
-    // Could add popularity sorting
-  }
-
-  return {
+  const response: SearchResponse = {
     data: allResults,
     meta: {
       total,
@@ -661,104 +854,134 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       totalPages: Math.ceil(total / limit) || 0,
       properties_count: transformedProperties.length,
       projects_count: transformedProjects.length,
+      total_properties: totalProperties,
+      total_projects: totalProjects,
     },
   };
+
+  await cache.set(cacheKey, response, { ttl: CACHE_TTL, tags: ['search', 'list'] });
+
+  return response;
 }
 
-// ─── GET SINGLE RESULT ─────────────────────────────────────────────────
-
 export async function getSearchResult(slugOrId: string): Promise<SearchResult | null> {
+  const cacheKey = CACHE_KEYS.single(slugOrId);
+  const cached = await cache.get<SearchResult>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const knex = await db();
   const isNumeric = /^\d+$/.test(slugOrId);
 
-  // ─── TRY PROPERTY ──────────────────────────────────────────────────
-  let property = null;
-  let mediaRecords: any[] = [];
+  try {
+    let property = null;
 
-  if (isNumeric) {
-    property = await knex('properties as p')
+    const propertyQuery = knex('properties as p')
       .leftJoin('cities as c', 'p.city_id', 'c.id')
       .leftJoin('community as com', 'p.community_id', 'com.id')
       .leftJoin('developers as d', 'p.developer_id', 'd.id')
       .leftJoin('internationaldevelopers as idev', 'p.developer_id', 'idev.id')
-      .where('p.id', parseInt(slugOrId))
-      .where('p.status', 1)
-      .select(
-        'p.*',
-        'c.name as city_name',
-        'com.name as community_name',
-        knex.raw('COALESCE(d.name, idev.name) as developer_name')
-      )
-      .first();
-  } else {
-    property = await knex('properties as p')
-      .leftJoin('cities as c', 'p.city_id', 'c.id')
-      .leftJoin('community as com', 'p.community_id', 'com.id')
-      .leftJoin('developers as d', 'p.developer_id', 'd.id')
-      .leftJoin('internationaldevelopers as idev', 'p.developer_id', 'idev.id')
-      .where('p.property_slug', slugOrId)
-      .where('p.status', 1)
-      .select(
-        'p.*',
-        'c.name as city_name',
-        'com.name as community_name',
-        knex.raw('COALESCE(d.name, idev.name) as developer_name')
-      )
-      .first();
+      .where('p.status', 1);
+
+    if (isNumeric) {
+      property = await propertyQuery.where('p.id', parseInt(slugOrId)).first();
+    } else {
+      property = await propertyQuery
+        .where('p.property_slug', slugOrId)
+        .orWhere('p.slug', slugOrId)
+        .first();
+    }
+
+    if (property) {
+      let mediaRecords: any[] = [];
+      try {
+        const exists = await knex.schema.hasTable('media');
+        if (exists) {
+          mediaRecords = await knex('media')
+            .where('module_id', property.id)
+            .where('module_type', 'property')
+            .where('status', 1)
+            .select('id', 'path', 'title', 'featured', 'media_order');
+        }
+      } catch (err) {
+        // Silent fail
+      }
+
+      const fullProperty = await knex('properties as p')
+        .leftJoin('cities as c', 'p.city_id', 'c.id')
+        .leftJoin('community as com', 'p.community_id', 'com.id')
+        .leftJoin('developers as d', 'p.developer_id', 'd.id')
+        .leftJoin('internationaldevelopers as idev', 'p.developer_id', 'idev.id')
+        .where('p.id', property.id)
+        .select(
+          'p.*',
+          'c.name as city_name',
+          'com.name as community_name',
+          knex.raw('COALESCE(d.name, idev.name) as developer_name')
+        )
+        .first();
+
+      const result = transformProperty(fullProperty || property, mediaRecords);
+      await cache.set(cacheKey, result, { ttl: CACHE_TTL * 2 });
+      return result;
+    }
+  } catch (err) {
+    // Silent fail
   }
 
-  if (property) {
-    const media = await knex('media')
-      .where('module_id', property.id)
-      .where('module_type', 'property')
-      .where('status', 1)
-      .select('id', 'path', 'title', 'featured', 'media_order');
-    mediaRecords = media || [];
-    return transformProperty(property, mediaRecords);
-  }
+  try {
+    let project = null;
 
-  // ─── TRY PROJECT ───────────────────────────────────────────────────
-  let project = null;
-  let galleryRecords: any[] = [];
-
-  if (isNumeric) {
-    project = await knex('project_listing as pl')
+    const projectQuery = knex('project_listing as pl')
       .leftJoin('cities as c', 'pl.city_id', 'c.id')
       .leftJoin('community as com', 'pl.community_id', 'com.id')
       .leftJoin('developers as d', 'pl.developer_id', 'd.id')
       .leftJoin('internationaldevelopers as idev', 'pl.developer_id', 'idev.id')
-      .where('pl.id', parseInt(slugOrId))
-      .where('pl.status', 1)
-      .select(
-        'pl.*',
-        'c.name as city_name',
-        'com.name as community_name',
-        knex.raw('COALESCE(d.name, idev.name) as developer_name')
-      )
-      .first();
-  } else {
-    project = await knex('project_listing as pl')
-      .leftJoin('cities as c', 'pl.city_id', 'c.id')
-      .leftJoin('community as com', 'pl.community_id', 'com.id')
-      .leftJoin('developers as d', 'pl.developer_id', 'd.id')
-      .leftJoin('internationaldevelopers as idev', 'pl.developer_id', 'idev.id')
-      .where('pl.project_slug', slugOrId)
-      .where('pl.status', 1)
-      .select(
-        'pl.*',
-        'c.name as city_name',
-        'com.name as community_name',
-        knex.raw('COALESCE(d.name, idev.name) as developer_name')
-      )
-      .first();
-  }
+      .where('pl.status', 1);
 
-  if (project) {
-    const gallery = await knex('project_gallery')
-      .where('project_id', project.id)
-      .select('id', 'Url', 'created_at');
-    galleryRecords = gallery || [];
-    return transformProject(project, galleryRecords);
+    if (isNumeric) {
+      project = await projectQuery.where('pl.id', parseInt(slugOrId)).first();
+    } else {
+      project = await projectQuery
+        .where('pl.project_slug', slugOrId)
+        .orWhere('pl.slug', slugOrId)
+        .first();
+    }
+
+    if (project) {
+      let galleryRecords: any[] = [];
+      try {
+        const exists = await knex.schema.hasTable('project_gallery');
+        if (exists) {
+          galleryRecords = await knex('project_gallery')
+            .where('project_id', project.id)
+            .select('id', 'Url', 'created_at');
+        }
+      } catch (err) {
+        // Silent fail
+      }
+
+      const fullProject = await knex('project_listing as pl')
+        .leftJoin('cities as c', 'pl.city_id', 'c.id')
+        .leftJoin('community as com', 'pl.community_id', 'com.id')
+        .leftJoin('developers as d', 'pl.developer_id', 'd.id')
+        .leftJoin('internationaldevelopers as idev', 'pl.developer_id', 'idev.id')
+        .where('pl.id', project.id)
+        .select(
+          'pl.*',
+          'c.name as city_name',
+          'com.name as community_name',
+          knex.raw('COALESCE(d.name, idev.name) as developer_name')
+        )
+        .first();
+
+      const result = transformProject(fullProject || project, galleryRecords);
+      await cache.set(cacheKey, result, { ttl: CACHE_TTL * 2 });
+      return result;
+    }
+  } catch (err) {
+    // Silent fail
   }
 
   return null;

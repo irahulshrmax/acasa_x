@@ -1,3 +1,4 @@
+// app/search/[slug]/SearchDetailClient.tsx
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -9,13 +10,14 @@ import {
   HiOutlineMapPin,
   HiOutlineBuildingOffice2,
   HiOutlineHomeModern,
-  HiOutlinePencilSquare,     // ✅ Replaced HiOutlineRulerSquare
+  HiOutlinePencilSquare,
   HiOutlineCalendarDays,
   HiOutlineCheckCircle,
   HiOutlineArrowPath,
   HiOutlineHeart,
   HiHeart,
   HiOutlineShare,
+  HiOutlineHome,
 } from "react-icons/hi2";
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -28,14 +30,19 @@ interface SearchDetail {
   property_slug?: string;
   slug?: string;
   listing_type: string;
-  price: string | null;
+  price: number | null;
+  price_display: string | null;
   bedroom: string | null;
   bathrooms: string | null;
-  area: string | null;
+  area: number | null;
+  area_display: string | null;
   featured_image: string | null;
   image_url?: string | null;
-  image_fallbacks?: string[];
+  image_variations?: string[];
+  gallery_images?: string[];
   location: string | null;
+  city_name: string | null;
+  community_name: string | null;
   developer_name: string | null;
   description: string | null;
   completion_date: string | null;
@@ -46,28 +53,41 @@ interface SearchDetail {
   rera_number: string | null;
   dld_permit: string | null;
   video_url: string | null;
-  amenities: string | null;
+  amenities: string[];
   result_type: 'property' | 'project';
+  extra?: Record<string, any>;
 }
 
-function formatPriceFull(price: string | null): string {
+// ─── HELPERS ────────────────────────────────────────────────────────────
+
+function formatPriceFull(price: number | null): string {
   if (!price) return "Price on Request";
-  const num = parseInt(price);
-  if (isNaN(num)) return "Price on Request";
-  return `AED ${num.toLocaleString()}`;
+  return `AED ${price.toLocaleString()}`;
 }
 
 function getBedroomDisplay(bedroom: string | null): string {
-  if (!bedroom) return "Studio Apartment";
-  if (bedroom.toLowerCase().includes("studio")) return "Studio Apartment";
+  if (!bedroom) return "Studio";
+  const t = bedroom.toLowerCase().trim();
+  if (t.includes("studio")) return "Studio";
   const match = bedroom.match(/(\d+)/);
   if (match) {
     const num = parseInt(match[1]);
-    if (num === 0) return "Studio Apartment";
+    if (num === 0) return "Studio";
     if (num === 1) return "1 Bedroom";
     return `${num} Bedrooms`;
   }
   return bedroom;
+}
+
+function getBathroomDisplay(bathrooms: string | null): string {
+  if (!bathrooms) return "1 Bath";
+  const match = bathrooms.match(/(\d+)/);
+  if (match) {
+    const num = parseInt(match[1]);
+    if (num === 0) return "1 Bath";
+    return `${num} Bath${num > 1 ? 's' : ''}`;
+  }
+  return bathrooms;
 }
 
 function getUnsplashFallback(name?: string | null): string {
@@ -90,8 +110,11 @@ function getOccupancyLabel(occupancy: string | null): string {
     "under construction": "Under Construction",
     "ready to move": "Ready to Move",
     vacant: "Vacant",
+    "ready": "Ready to Move",
+    "off plan": "Off Plan",
   };
-  return map[occupancy.toLowerCase()] || occupancy;
+  const key = occupancy.toLowerCase().trim();
+  return map[key] || occupancy;
 }
 
 // ─── FULL PAGE LOADER ───────────────────────────────────────────────────
@@ -127,7 +150,7 @@ function FullPageLoader() {
 
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────
 
-export default function SearchDetailPage() {
+export default function SearchDetailClient() {
   const router = useRouter();
   const params = useParams();
   const slug = params?.slug as string;
@@ -137,8 +160,10 @@ export default function SearchDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [liked, setLiked] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const fetchedRef = useRef(false);
 
+  // ─── Fetch Data ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!slug) return;
 
@@ -146,12 +171,45 @@ export default function SearchDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/public/search?slug=${encodeURIComponent(slug)}`);
+        // ✅ FIXED: Use correct API endpoint with slug
+        const apiUrl = `/api/v1/location?slug=${encodeURIComponent(slug)}`;
+        console.log("🔍 [Detail] Fetching:", apiUrl);
+        
+        const res = await fetch(apiUrl);
+        console.log("📡 [Detail] Response status:", res.status);
+        
+        // ✅ Check if response is OK
+        if (!res.ok) {
+          console.error("❌ [Detail] Response not OK:", res.status);
+          throw new Error(`API returned ${res.status}: ${res.statusText}`);
+        }
+        
+        // ✅ Check content type
+        const contentType = res.headers.get("content-type");
+        console.log("📡 [Detail] Content-Type:", contentType);
+        
+        if (!contentType || !contentType.includes("application/json")) {
+          const text = await res.text();
+          console.error("❌ [Detail] Non-JSON response:", text.substring(0, 200));
+          throw new Error("API returned non-JSON response. Check if route exists.");
+        }
+
         const data = await res.json();
-        if (!data.success) throw new Error(data.message || "Not found");
+        console.log("✅ [Detail] Data received:", data);
+
+        if (!data.success) {
+          throw new Error(data.message || "Not found");
+        }
+        
+        // ✅ Check if data exists
+        if (!data.data) {
+          throw new Error("No data found for this slug");
+        }
+        
         setItem(data.data);
       } catch (err: any) {
-        setError(err.message);
+        console.error("❌ [Detail] Error:", err);
+        setError(err.message || "Failed to fetch search results");
       } finally {
         setLoading(false);
       }
@@ -163,6 +221,7 @@ export default function SearchDetailPage() {
     }
   }, [slug]);
 
+  // ─── Wishlist ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!item) return;
     try {
@@ -189,7 +248,10 @@ export default function SearchDetailPage() {
     setShareLoading(true);
     try {
       if (navigator.share) {
-        await navigator.share({ title: item.property_name || item.name || "Property", url: window.location.href });
+        await navigator.share({ 
+          title: item.property_name || item.name || "Property", 
+          url: window.location.href 
+        });
       } else {
         await navigator.clipboard.writeText(window.location.href);
         alert("Link copied!");
@@ -198,20 +260,81 @@ export default function SearchDetailPage() {
     setShareLoading(false);
   };
 
-  const amenitiesList = item?.amenities?.split(",").filter(Boolean).map((a) => a.trim()) || [];
+  // ─── IMAGE HELPERS ────────────────────────────────────────────────────
+  
+  function getImageUrl(): string {
+    if (imgError) return getUnsplashFallback(item?.name || item?.property_name);
+    
+    // Try image_url
+    if (item?.image_url && !item.image_url.includes('no-image')) {
+      return item.image_url;
+    }
+    
+    // Try gallery images
+    if (item?.gallery_images && item.gallery_images.length > 0) {
+      const validImage = item.gallery_images.find(img => !img.includes('no-image'));
+      if (validImage) return validImage;
+    }
+    
+    // Try image variations
+    if (item?.image_variations && item.image_variations.length > 0) {
+      const validImage = item.image_variations.find(img => !img.includes('no-image'));
+      if (validImage) return validImage;
+    }
+    
+    // Fallback to Unsplash
+    return getUnsplashFallback(item?.name || item?.property_name);
+  }
+
+  // ─── Render States ────────────────────────────────────────────────────
 
   if (loading) return <FullPageLoader />;
 
   if (error || !item) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="text-center">
-          <HiOutlineBuildingOffice2 className="mx-auto h-16 w-16 text-gray-300" />
+        <div className="text-center max-w-md">
+          <HiOutlineHome className="mx-auto h-16 w-16 text-gray-300" />
           <h1 className="mt-4 text-3xl text-[#192334]" style={{ fontFamily: FONT_DISPLAY }}>Not Found</h1>
           <p className="mt-2 text-sm text-gray-500">{error || "This item doesn't exist."}</p>
-          <Link href="/search" className="mt-6 inline-flex items-center gap-2 bg-[#192334] px-6 py-2.5 text-[11px] tracking-widest text-white hover:bg-[#2a3a4a]">
-            <HiOutlineArrowLeft className="h-4 w-4" /> BACK TO SEARCH
-          </Link>
+          <div className="mt-4 p-4 bg-gray-50 rounded text-xs text-left font-mono overflow-auto max-h-32 border border-gray-200">
+            <p><strong>Slug:</strong> {slug}</p>
+            <p><strong>API:</strong> /api/v1/location?slug={slug}</p>
+            <p><strong>Error:</strong> {error || "Item not found"}</p>
+          </div>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={() => {
+                fetchedRef.current = false;
+                setLoading(true);
+                setError(null);
+                const fetchDetail = async () => {
+                  try {
+                    const res = await fetch(`/api/v1/location?slug=${encodeURIComponent(slug)}`);
+                    if (!res.ok) throw new Error(`API returned ${res.status}`);
+                    const data = await res.json();
+                    if (data.success && data.data) {
+                      setItem(data.data);
+                      setError(null);
+                    } else {
+                      throw new Error(data.message || "Not found");
+                    }
+                  } catch (err: any) {
+                    setError(err.message);
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                fetchDetail();
+              }}
+              className="bg-[#192334] px-6 py-2.5 text-[11px] tracking-widest text-white hover:bg-[#2a3a4a]"
+            >
+              <HiOutlineArrowPath className="inline h-4 w-4 mr-2" /> RETRY
+            </button>
+            <Link href="/search" className="bg-gray-200 px-6 py-2.5 text-[11px] tracking-widest text-gray-700 hover:bg-gray-300">
+              BACK TO SEARCH
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -219,13 +342,19 @@ export default function SearchDetailPage() {
 
   const isProperty = item.result_type === 'property';
   const name = isProperty ? item.property_name : item.name;
-  const location = item.location || "Dubai";
+  const location = item.location || item.city_name || "Dubai";
   const bedroomLabel = getBedroomDisplay(item.bedroom);
-  const bathroomCount = item.bathrooms || "1";
-  const area = item.area || "N/A";
+  const bathroomCount = getBathroomDisplay(item.bathrooms);
+  const areaDisplay = item.area_display || (item.area ? `${item.area} sq.ft` : null);
   const occupancyLabel = getOccupancyLabel(item.occupancy);
   const handoverDate = item.completion_date;
-  const imageUrl = item.image_url || getUnsplashFallback(name);
+  const priceDisplay = item.price_display || formatPriceFull(item.price);
+  const imageUrl = getImageUrl();
+
+  // Gallery images
+  const galleryImages = item.gallery_images || [];
+  const allImages = galleryImages.filter(img => !img.includes('no-image'));
+  const displayImages = allImages.length > 0 ? allImages : [imageUrl];
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
@@ -234,7 +363,7 @@ export default function SearchDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-[11px] tracking-[0.2em] text-[#577C8E]">
-              {item.listing_type?.toUpperCase() || "PROPERTY"}
+              {item.listing_type?.toUpperCase() || (isProperty ? "PROPERTY" : "PROJECT")}
             </p>
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
@@ -254,9 +383,9 @@ export default function SearchDetailPage() {
                 <>
                   <span>{bedroomLabel}</span>
                   <span className="text-gray-300">|</span>
-                  <span>{bathroomCount} Bath</span>
+                  <span>{bathroomCount}</span>
                   <span className="text-gray-300">|</span>
-                  <span>{area} sq.ft</span>
+                  <span>{areaDisplay || "Area on Request"}</span>
                 </>
               )}
               {!isProperty && <span>Project</span>}
@@ -264,6 +393,12 @@ export default function SearchDetailPage() {
                 <>
                   <span className="text-gray-300">|</span>
                   <span>Handover: {formatHandoverDate(handoverDate)}</span>
+                </>
+              )}
+              {priceDisplay && (
+                <>
+                  <span className="text-gray-300">|</span>
+                  <span className="font-semibold text-[#192334]">{priceDisplay}</span>
                 </>
               )}
             </div>
@@ -301,10 +436,10 @@ export default function SearchDetailPage() {
               src={imageUrl}
               alt={name || "Property"}
               className="h-full w-full object-cover"
-              onError={(e) => { e.currentTarget.src = getUnsplashFallback(name); }}
+              onError={() => setImgError(true)}
             />
             <span className="absolute left-0 top-4 bg-[#192334] px-4 py-1.5 text-[9px] font-medium tracking-[0.2em] text-white">
-              {item.listing_type?.toUpperCase() || "PROPERTY"}
+              {item.listing_type?.toUpperCase() || (isProperty ? "PROPERTY" : "PROJECT")}
             </span>
           </div>
         </section>
@@ -329,10 +464,10 @@ export default function SearchDetailPage() {
                   <p className="mt-1 text-[13px] font-medium text-[#192334]">{formatHandoverDate(handoverDate)}</p>
                 </div>
               )}
-              {isProperty && item.price && (
+              {priceDisplay && (
                 <div className="border border-gray-100 p-4 text-center">
                   <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400">Price</p>
-                  <p className="mt-1 text-[13px] font-medium text-[#192334]">{formatPriceFull(item.price)}</p>
+                  <p className="mt-1 text-[13px] font-medium text-[#192334]">{priceDisplay}</p>
                 </div>
               )}
             </div>
@@ -347,11 +482,11 @@ export default function SearchDetailPage() {
             )}
 
             {/* Amenities */}
-            {amenitiesList.length > 0 && (
+            {item.amenities && item.amenities.length > 0 && (
               <div className="mt-10">
                 <h3 className="text-[24px] text-[#192334]" style={{ fontFamily: FONT_DISPLAY }}>Amenities</h3>
                 <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-                  {amenitiesList.map((amenity, i) => (
+                  {item.amenities.map((amenity, i) => (
                     <div key={i} className="flex items-center gap-2 text-[13px] text-gray-700">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#192334]" /> {amenity}
                     </div>
@@ -369,12 +504,12 @@ export default function SearchDetailPage() {
               {isProperty && (
                 <>
                   <div className="flex items-center gap-2 text-[12px] text-gray-600">
-                    <HiOutlineHomeModern className="h-4 w-4 text-[#577C8E]" />   {/* ✅ Replaced HiOutlineBed */}
+                    <HiOutlineHomeModern className="h-4 w-4 text-[#577C8E]" />
                     <span>{bedroomLabel}</span>
                   </div>
                   <div className="flex items-center gap-2 text-[12px] text-gray-600">
-                    <HiOutlinePencilSquare className="h-4 w-4 text-[#577C8E]" />   {/* ✅ Replaced HiOutlineRulerSquare */}
-                    <span>{area} sq.ft</span>
+                    <HiOutlinePencilSquare className="h-4 w-4 text-[#577C8E]" />
+                    <span>{areaDisplay || "N/A"}</span>
                   </div>
                 </>
               )}

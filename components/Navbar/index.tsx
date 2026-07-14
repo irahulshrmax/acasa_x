@@ -44,81 +44,21 @@ const NAV_LINKS = [
 ];
 
 const SLIDE_LINKS = [
-  {
-    name: 'Properties For Sale',
-    href: '/properties-for-sale-in-dubai',
-    icon: Building2,
-  },
-  {
-    name: 'Properties For Rent',
-    href: '/properties-for-rent-in-dubai',
-    icon: Home,
-  },
-  {
-    name: 'Apartments For Sale',
-    href: '/apartments-for-sale-in-dubai',
-    icon: Building,
-  },
-  {
-    name: 'Off Plan Properties',
-    href: '/off-plan-properties-in-dubai',
-    icon: Landmark,
-  },
-  {
-    name: 'New Projects',
-    href: '/new-projects-in-dubai',
-    icon: Building,
-  },
-  {
-    name: 'Luxury Properties',
-    href: '/luxury-properties-in-dubai',
-    icon: Landmark,
-  },
-  {
-    name: 'International Properties',
-    href: '/international-properties-for-sale',
-    icon: Globe,
-  },
-  {
-    name: 'Developers',
-    href: '/developers',
-    icon: Users,
-  },
-  {
-    name: 'Neighborhood Guide',
-    href: '/dubai-neighborhood-guide',
-    icon: Map,
-  },
-  {
-    name: 'Sell Your Property',
-    href: '/sell-your-property-in-dubai',
-    icon: MapPin,
-  },
-  {
-    name: 'Seller Guide',
-    href: '/seller-guide',
-    icon: BookOpen,
-  },
-  {
-    name: 'Journal',
-    href: '/blog',
-    icon: BookOpen,
-  },
-  {
-    name: 'About Us',
-    href: '/about-us',
-    icon: Users,
-  },
-  {
-    name: 'Careers',
-    href: '/careers',
-    icon: Briefcase,
-  },
-  {
-    name: 'Contact Us',
-    href: '/contact-us',
-    icon: Mail,
-  },
+  { name: 'Properties For Sale',      href: '/properties-for-sale-in-dubai',      icon: Building2 },
+  { name: 'Properties For Rent',      href: '/properties-for-rent-in-dubai',      icon: Home      },
+  { name: 'Apartments For Sale',      href: '/apartments-for-sale-in-dubai',      icon: Building  },
+  { name: 'Off Plan Properties',      href: '/off-plan-properties-in-dubai',      icon: Landmark  },
+  { name: 'New Projects',             href: '/new-projects-in-dubai',             icon: Building  },
+  { name: 'Luxury Properties',        href: '/luxury-properties-in-dubai',        icon: Landmark  },
+  { name: 'International Properties', href: '/international-properties-for-sale', icon: Globe     },
+  { name: 'Developers',               href: '/developers',                        icon: Users     },
+  { name: 'Neighborhood Guide',       href: '/dubai-neighborhood-guide',          icon: Map       },
+  { name: 'Sell Your Property',       href: '/sell-your-property-in-dubai',       icon: MapPin    },
+  { name: 'Seller Guide',             href: '/seller-guide',                      icon: BookOpen  },
+  { name: 'Journal',                  href: '/blog',                              icon: BookOpen  },
+  { name: 'About Us',                 href: '/about-us',                          icon: Users     },
+  { name: 'Careers',                  href: '/careers',                           icon: Briefcase },
+  { name: 'Contact Us',               href: '/contact-us',                        icon: Mail      },
 ];
 
 const ALLOWED_IMAGE_HOSTS = [
@@ -175,7 +115,7 @@ function LoadingSpinner() {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  AVATAR COMPONENT
+//  AVATAR
 // ════════════════════════════════════════════════════════════════
 
 function UserAvatar({
@@ -193,7 +133,6 @@ function UserAvatar({
   onClick?: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
-
   const dims     = size === 'lg' ? 'h-14 w-14' : size === 'md' ? 'h-10 w-10' : 'h-8 w-8';
   const imgSize  = size === 'lg' ? 56           : size === 'md' ? 40           : 32;
   const textSize = size === 'lg' ? 'text-lg'    : size === 'md' ? 'text-sm'    : 'text-xs';
@@ -231,7 +170,7 @@ function UserAvatar({
 }
 
 // ════════════════════════════════════════════════════════════════
-//  USER DROPDOWN (Desktop)
+//  USER DROPDOWN (Desktop only)
 // ════════════════════════════════════════════════════════════════
 
 function UserDropdown() {
@@ -318,9 +257,7 @@ function UserDropdown() {
           <div className="flex items-center gap-3">
             <UserAvatar user={user} size="md" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">
-                {displayName}
-              </p>
+              <p className="truncate text-sm font-semibold text-white">{displayName}</p>
               <p className="truncate text-[11px] text-white/40">{user.email}</p>
               <span className="mt-1 inline-flex items-center rounded-full bg-[#C9A96E]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#C9A96E]">
                 {userRole}
@@ -362,38 +299,6 @@ function UserDropdown() {
         </div>
       </div>
     </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════
-//  HAMBURGER
-// ════════════════════════════════════════════════════════════════
-
-function Hamburger({ isOpen, onClick }: { isOpen: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E] lg:hidden"
-      aria-label="Toggle menu"
-    >
-      <div className="relative h-5 w-5">
-        <span
-          className={`absolute left-0 top-1/2 h-[2px] w-5 rounded-full bg-current transition-all duration-300 ${
-            isOpen ? 'top-1/2 rotate-45' : '-translate-y-2'
-          }`}
-        />
-        <span
-          className={`absolute left-0 top-1/2 h-[2px] w-5 rounded-full bg-current transition-all duration-300 ${
-            isOpen ? 'opacity-0' : 'opacity-100'
-          }`}
-        />
-        <span
-          className={`absolute left-0 top-1/2 h-[2px] w-5 rounded-full bg-current transition-all duration-300 ${
-            isOpen ? 'top-1/2 -rotate-45' : 'translate-y-2'
-          }`}
-        />
-      </div>
-    </button>
   );
 }
 
@@ -447,21 +352,18 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
 
   return (
     <>
-      {/* Overlay */}
       <div
-        className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-[6px] transition-opacity duration-500 ${
+        className={`fixed inset-0 z-[60] bg-black/70 backdrop-blur-[6px] transition-opacity duration-500 ${
           isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
         }`}
         onClick={onClose}
       />
 
-      {/* Panel */}
       <aside
-        className={`fixed left-0 top-0 z-50 h-full w-[390px] max-w-[88vw] overflow-hidden bg-[#0F1C2E] shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+        className={`fixed left-0 top-0 z-[70] h-full w-[390px] max-w-[88vw] overflow-hidden bg-[#0F1C2E] shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Background glow */}
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-[#C9A96E]/10 blur-[90px]" />
           <div className="absolute -right-28 bottom-20 h-80 w-80 rounded-full bg-[#5B7FBF]/10 blur-[100px]" />
@@ -470,7 +372,7 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
         </div>
 
         <div className="relative flex h-full flex-col">
-          {/* ── Header ────────────────────────────────────────── */}
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
             <Link
               href="/"
@@ -503,7 +405,7 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             </button>
           </div>
 
-          {/* ── User Section (Mobile) ─────────────────────────── */}
+          {/* User Section */}
           {isAuthenticated && user ? (
             <div className="border-b border-white/10 px-6 py-5">
               <div className="flex items-center gap-3">
@@ -512,19 +414,14 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                   <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0F1C2E] bg-emerald-400" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-white">
-                    {displayName}
-                  </p>
-                  <p className="truncate text-[11px] text-white/40">
-                    {user.email}
-                  </p>
+                  <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+                  <p className="truncate text-[11px] text-white/40">{user.email}</p>
                 </div>
                 <span className="flex-shrink-0 rounded-full bg-[#C9A96E]/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[#C9A96E]">
                   {userRole}
                 </span>
               </div>
 
-              {/* Quick Actions Grid */}
               <div className="mt-4 grid grid-cols-3 gap-2">
                 {[
                   { label: 'Profile',   icon: User,            href: '/profile'  },
@@ -540,9 +437,7 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
                     className="flex flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 text-white/50 transition-all duration-200 hover:border-[#C9A96E]/40 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
                   >
                     <item.icon className="h-4 w-4" />
-                    <span className="text-[9px] font-semibold uppercase tracking-wider">
-                      {item.label}
-                    </span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wider">{item.label}</span>
                   </a>
                 ))}
               </div>
@@ -573,7 +468,7 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             </div>
           )}
 
-          {/* ── Navigation Links ──────────────────────────────── */}
+          {/* Navigation Links */}
           <div className="px-4 pb-2 pt-4">
             <p className="px-2 text-[10px] font-medium uppercase tracking-[0.28em] text-[#C9A96E]/80">
               Explore
@@ -636,7 +531,7 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
             </div>
           </div>
 
-          {/* ── Footer ────────────────────────────────────────── */}
+          {/* Footer */}
           <div className="border-t border-white/10 p-5">
             {isAuthenticated && user && (
               <button
@@ -719,10 +614,6 @@ export default function Navbar() {
     [router]
   );
 
-  const linkColorClasses = 'text-white/80 hover:text-[#C9A96E] active:text-[#C9A96E]';
-  const buttonBgClasses  =
-    'border-white/10 bg-white/[0.03] text-white/80 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]';
-
   return (
     <>
       <style jsx global>{`
@@ -752,8 +643,7 @@ export default function Navbar() {
           border: 1px solid rgba(201, 169, 110, 0.55);
           background: transparent;
           transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03),
-                      0 4px 18px rgba(0,0,0,0.12);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 4px 18px rgba(0,0,0,0.12);
         }
         .nav-golden-cta::before {
           content: "";
@@ -770,12 +660,7 @@ export default function Navbar() {
           position: absolute;
           inset: 0;
           z-index: 0;
-          background: linear-gradient(
-            90deg,
-            transparent,
-            rgba(255,255,255,0.25),
-            transparent
-          );
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
           transform: translateX(-120%);
           transition: transform 0.7s ease;
         }
@@ -785,8 +670,7 @@ export default function Navbar() {
           color: #0F1C2E;
           border-color: #c9a96e;
           transform: translateY(-2px);
-          box-shadow: 0 12px 32px rgba(201,169,110,0.2),
-                      0 4px 16px rgba(0,0,0,0.18);
+          box-shadow: 0 12px 32px rgba(201,169,110,0.2), 0 4px 16px rgba(0,0,0,0.18);
         }
         .nav-golden-cta span,
         .nav-golden-cta .navbar-loader  { position: relative; z-index: 1; }
@@ -809,27 +693,18 @@ export default function Navbar() {
 
       <header className="fixed left-0 top-0 z-50 w-full border-b border-white/10 bg-[#0F1C2E] shadow-[0_4px_20px_rgba(0,0,0,0.15)] transition-all duration-500">
         <div className="mx-auto max-w-[1500px] px-4 md:px-8">
-          <div className="flex h-[72px] items-center justify-between">
+          <div className="flex h-[64px] items-center justify-between lg:h-[72px]">
 
-            {/* ── Left ────────────────────────────────────────── */}
-            <div className="flex flex-1 items-center">
-              <button
-                onClick={() => setIsOpen(true)}
-                className="group hidden items-center gap-3 text-white transition-all duration-300 hover:text-[#C9A96E] lg:flex"
-                aria-label="Open menu"
+            {/* ═══════════════════════════════════════════ */}
+            {/* MOBILE LAYOUT (< lg) — Logo Left + Hamburger Right */}
+            {/* ═══════════════════════════════════════════ */}
+            <div className="flex w-full items-center justify-between lg:hidden">
+              {/* Mobile Logo */}
+              <Link
+                href="/"
+                className="inline-flex items-center"
+                onClick={handleLogoClick}
               >
-                <div className="relative h-5 w-5">
-                  <span className="absolute left-0 top-1 h-[2px] w-5 rounded-full bg-current" />
-                  <span className="absolute left-0 top-1/2 h-[2px] w-3 rounded-full bg-current transition-all duration-300 group-hover:w-5" />
-                  <span className="absolute bottom-1 left-0 h-[2px] w-5 rounded-full bg-current" />
-                </div>
-                <span className="text-xs font-semibold uppercase tracking-[0.22em]">
-                  Menu
-                </span>
-              </button>
-
-              {/* Mobile logo */}
-              <Link href="/" className="inline-flex lg:hidden" onClick={handleLogoClick}>
                 <Image
                   src="/acasa.png"
                   alt="ACASA"
@@ -839,9 +714,73 @@ export default function Navbar() {
                   priority
                 />
               </Link>
+
+              {/* Mobile Right Icons */}
+              <div className="flex items-center gap-2">
+                {/* Search */}
+                <button
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/80 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
+                  aria-label="Search"
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+
+                {/* Avatar / Login */}
+                {isAuthenticated && user ? (
+                  <div className="relative">
+                    <UserAvatar
+                      user={user}
+                      size="sm"
+                      onClick={() => setIsOpen(true)}
+                    />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-[1.5px] border-[#0F1C2E] bg-emerald-400" />
+                  </div>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
+                    aria-label="Sign In"
+                  >
+                    <User className="h-4 w-4" />
+                  </Link>
+                )}
+
+                {/* Hamburger */}
+                <button
+                  onClick={() => setIsOpen(true)}
+                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
+                  aria-label="Open menu"
+                >
+                  <div className="relative h-4 w-4">
+                    <span className="absolute left-0 top-1/2 h-[2px] w-4 -translate-y-[5px] rounded-full bg-current" />
+                    <span className="absolute left-0 top-1/2 h-[2px] w-4 -translate-y-1/2 rounded-full bg-current" />
+                    <span className="absolute left-0 top-1/2 h-[2px] w-4 translate-y-[3px] rounded-full bg-current" />
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* ── Center Logo ─────────────────────────────────── */}
+            {/* ═══════════════════════════════════════════ */}
+            {/* DESKTOP LAYOUT (lg+) — 3 columns */}
+            {/* ═══════════════════════════════════════════ */}
+
+            {/* Desktop Left — Menu button */}
+            <div className="hidden flex-1 items-center lg:flex">
+              <button
+                onClick={() => setIsOpen(true)}
+                className="group flex items-center gap-3 text-white transition-all duration-300 hover:text-[#C9A96E]"
+                aria-label="Open menu"
+              >
+                <div className="relative h-5 w-5">
+                  <span className="absolute left-0 top-1 h-[2px] w-5 rounded-full bg-current" />
+                  <span className="absolute left-0 top-1/2 h-[2px] w-3 rounded-full bg-current transition-all duration-300 group-hover:w-5" />
+                  <span className="absolute bottom-1 left-0 h-[2px] w-5 rounded-full bg-current" />
+                </div>
+                <span className="text-xs font-semibold uppercase tracking-[0.22em]">Menu</span>
+              </button>
+            </div>
+
+            {/* Desktop Center Logo */}
             <div className="absolute left-1/2 hidden -translate-x-1/2 lg:block">
               <Link
                 href="/"
@@ -873,10 +812,9 @@ export default function Navbar() {
               </Link>
             </div>
 
-            {/* ── Right ───────────────────────────────────────── */}
-            <div className="flex flex-1 items-center justify-end gap-3 md:gap-5">
-              {/* Desktop Nav Links */}
-              <nav className="hidden items-center gap-7 lg:flex">
+            {/* Desktop Right */}
+            <div className="hidden flex-1 items-center justify-end gap-5 lg:flex">
+              <nav className="flex items-center gap-7">
                 {NAV_LINKS.map((link) => {
                   const active    = isActive(link.href);
                   const isLoading = loadingHref === link.href;
@@ -886,7 +824,7 @@ export default function Navbar() {
                       key={link.name}
                       href={link.href}
                       onClick={(e) => handleNavLinkClick(e, link.href)}
-                      className={`${linkColorClasses} nav-link-underline ${
+                      className={`text-white/80 hover:text-[#C9A96E] nav-link-underline ${
                         active ? 'active' : ''
                       } group relative py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-colors duration-300 ${
                         isLoading ? 'cursor-wait opacity-50' : ''
@@ -905,48 +843,22 @@ export default function Navbar() {
                 })}
               </nav>
 
-              {/* Search */}
               <button
-                className={`flex h-9 w-9 items-center justify-center rounded-full border transition-all duration-300 ${buttonBgClasses}`}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/80 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
                 aria-label="Search"
               >
                 <Search className="h-4 w-4" />
               </button>
 
-              {/* Desktop User Dropdown */}
               <UserDropdown />
-
-              {/* Mobile: Avatar or Login icon */}
-              {isAuthenticated && user ? (
-                <div className="relative lg:hidden">
-                  <UserAvatar
-                    user={user}
-                    size="sm"
-                    onClick={() => setIsOpen(true)}
-                  />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-[1.5px] border-[#0F1C2E] bg-emerald-400" />
-                </div>
-              ) : (
-                <Link
-                  href="/login"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E] lg:hidden"
-                >
-                  <User className="h-4 w-4" />
-                </Link>
-              )}
-
-              {/* Hamburger */}
-              <Hamburger isOpen={isOpen} onClick={() => setIsOpen(!isOpen)} />
             </div>
           </div>
         </div>
       </header>
 
-      {/* Slide Panel */}
       <SlidePanel isOpen={isOpen} onClose={() => setIsOpen(false)} />
 
-      {/* Spacer */}
-      <div className="h-[72px]" />
+      <div className="h-[64px] lg:h-[72px]" />
     </>
   );
 }
