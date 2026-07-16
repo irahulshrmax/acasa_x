@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Bed, Ruler, CheckCircle, Tag, Building2, Loader2 } from "lucide-react";
+import { Bed, Ruler, CheckCircle, Tag, Building2, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 interface PropertyDetail {
   id: number;
@@ -41,6 +41,7 @@ interface PropertyDetail {
     community_id: number | null;
     city_id: number | null;
     address: string | null;
+    sub_community?: string | null;
   };
   developer: {
     id: number | null;
@@ -72,12 +73,9 @@ function isValidValue(val: any): boolean {
 
 function getDisplayName(property: any): string {
   if (!property) return "Property";
-
   const name = property.name;
-  if (isValidValue(name)) {
-    return name;
-  }
-
+  if (isValidValue(name)) return name;
+  
   if (property.slug) {
     let displayName = property.slug
       .replace(/-/g, " ")
@@ -86,31 +84,22 @@ function getDisplayName(property: any): string {
       .replace(/\bIn\b/g, "in")
       .replace(/\bOf\b/g, "of")
       .trim();
-
-    displayName = displayName.replace(/\b\w/g, (char: string) =>
-      char.toUpperCase()
-    );
-
+    displayName = displayName.replace(/\b\w/g, (char: string) => char.toUpperCase());
     displayName = displayName.replace(/\s+/g, " ").trim();
-
     return displayName || `Property ${property.id}`;
   }
-
   return `Property ${property.id}`;
 }
 
 function getDisplayLocation(property: any): string {
   if (!property) return "Dubai";
-
   const community = property.location?.community;
   const subCommunity = property.location?.sub_community;
   const city = property.location?.city || "Dubai";
-
   const parts: string[] = [];
   if (isValidValue(subCommunity)) parts.push(subCommunity);
   if (isValidValue(community)) parts.push(community);
   parts.push(city);
-
   return parts.join(", ");
 }
 
@@ -124,30 +113,22 @@ function stripHtml(html: string): string {
 }
 
 function generateDescription(property: PropertyDetail): string {
-  // If real description exists, use it
   if (isValidValue(property.description)) {
     return stripHtml(property.description!);
   }
 
-  // Otherwise, build a smart description from available data
   const parts: string[] = [];
-
-  const propertyType =
-    property.bedrooms && property.bedrooms.toLowerCase().includes("studio")
-      ? "studio residence"
-      : property.bedrooms
-      ? `${property.bedrooms} residence`
-      : "elegant residence";
-
-  const listingType =
-    property.listing_type?.toLowerCase() === "off plan"
-      ? "off-plan"
-      : "ready-to-move";
-
+  const propertyType = property.bedrooms?.toLowerCase().includes("studio")
+    ? "studio residence"
+    : property.bedrooms
+    ? `${property.bedrooms} residence`
+    : "elegant residence";
+  const listingType = property.listing_type?.toLowerCase() === "off plan"
+    ? "off-plan"
+    : "ready-to-move";
   const developer = isValidValue(property.developer?.name)
     ? ` by ${property.developer!.name}`
     : "";
-
   const location = getDisplayLocation(property);
 
   parts.push(
@@ -181,6 +162,7 @@ export default function FeaturedProperty() {
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     fetchFeaturedProperty();
@@ -214,12 +196,21 @@ export default function FeaturedProperty() {
     }
   }
 
-  const mainImage =
-    property?.featured_image || property?.gallery_urls?.[0] || null;
+  const mainImage = property?.featured_image || property?.gallery_urls?.[0] || null;
   const isOffPlan = property?.status === 5;
   const isReady = property?.status === 1;
   const displayName = property ? getDisplayName(property) : "";
   const displayLocation = property ? getDisplayLocation(property) : "";
+  const description = property ? generateDescription(property) : "";
+  const shouldTruncate = description.length > 200;
+
+  const completionStatus = isOffPlan
+    ? property?.completion_date
+      ? `Completion ${property.completion_date}`
+      : "Off Plan"
+    : isReady
+    ? "Ready to move"
+    : "N/A";
 
   if (loading) {
     return (
@@ -255,27 +246,20 @@ export default function FeaturedProperty() {
     );
   }
 
-  const description = generateDescription(property);
-
-  const completionStatus = isOffPlan
-    ? property.completion_date
-      ? `Completion ${property.completion_date}`
-      : "Off Plan"
-    : isReady
-    ? "Ready to move"
-    : "N/A";
-
   return (
     <section className="w-full bg-white py-10 px-4 md:px-12 lg:px-20">
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-          {/* Left - Image */}
-          <div className="relative w-full aspect-[3/4] lg:aspect-auto lg:h-[500px] overflow-hidden bg-gray-100">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+          {/* Left - Image with click navigation */}
+          <Link 
+            href={`/featured-explore-properties/${property.slug}`}
+            className="relative w-full aspect-[4/3] lg:aspect-[4/3] overflow-hidden bg-gray-100 block cursor-pointer group"
+          >
             {mainImage ? (
               <img
                 src={mainImage}
                 alt={displayName}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
             ) : (
               <div className="flex items-center justify-center h-full">
@@ -290,7 +274,14 @@ export default function FeaturedProperty() {
                 </span>
               </div>
             )}
-          </div>
+
+            {/* Overlay hint on hover */}
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300 flex items-center justify-center">
+              <span className="text-white text-sm font-inter opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/50 px-4 py-2">
+                View Details
+              </span>
+            </div>
+          </Link>
 
           {/* Right - Content */}
           <div className="flex flex-col">
@@ -307,17 +298,31 @@ export default function FeaturedProperty() {
             {/* Divider */}
             <div className="border-t border-gray-200 my-5" />
 
-            {/* Description */}
+            {/* Description with Read More toggle */}
             {description && (
-              <p className="text-sm text-gray-600 leading-relaxed font-inter line-clamp-5">
-                {description}
-              </p>
+              <div className="relative">
+                <p className={`text-sm text-gray-600 leading-relaxed font-inter ${!isExpanded && shouldTruncate ? 'line-clamp-4' : ''}`}>
+                  {description}
+                </p>
+                
+                {shouldTruncate && (
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="mt-2 text-sm text-[#0A2540] font-medium flex items-center gap-1 hover:opacity-70 transition-opacity"
+                  >
+                    {isExpanded ? (
+                      <>
+                        Show Less <ChevronUp className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Read More <ChevronDown className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             )}
-
-            {/* Read More (mobile only inline) */}
-            <button className="lg:hidden text-sm text-[#0A2540] underline mt-2 self-start font-inter">
-              Read More
-            </button>
 
             {/* Divider */}
             <div className="border-t border-gray-200 my-5" />
@@ -327,8 +332,8 @@ export default function FeaturedProperty() {
               <div className="flex items-start gap-3">
                 <Bed className="h-5 w-5 text-[#0A2540] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[10px] tracking-widest text-gray-500 font-inter">
-                    BEDS
+                  <p className="text-[10px] tracking-widest text-gray-500 font-inter uppercase">
+                    Beds
                   </p>
                   <p className="text-sm text-gray-900 font-inter mt-0.5">
                     {property.bedrooms || "Studio"}
@@ -344,8 +349,8 @@ export default function FeaturedProperty() {
               <div className="flex items-start gap-3">
                 <Ruler className="h-5 w-5 text-[#0A2540] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[10px] tracking-widest text-gray-500 font-inter">
-                    SIZE
+                  <p className="text-[10px] tracking-widest text-gray-500 font-inter uppercase">
+                    Size
                   </p>
                   <p className="text-sm text-gray-900 font-inter mt-0.5">
                     {property.area?.display || "N/A"}
@@ -356,8 +361,8 @@ export default function FeaturedProperty() {
               <div className="flex items-start gap-3">
                 <CheckCircle className="h-5 w-5 text-[#0A2540] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[10px] tracking-widest text-gray-500 font-inter">
-                    COMPLETION
+                  <p className="text-[10px] tracking-widest text-gray-500 font-inter uppercase">
+                    Status
                   </p>
                   <p className="text-sm text-gray-900 font-inter mt-0.5">
                     {completionStatus}
@@ -368,10 +373,10 @@ export default function FeaturedProperty() {
               <div className="flex items-start gap-3">
                 <Tag className="h-5 w-5 text-[#0A2540] mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-[10px] tracking-widest text-gray-500 font-inter">
-                    PRICE STARTING
+                  <p className="text-[10px] tracking-widest text-gray-500 font-inter uppercase">
+                    Price
                   </p>
-                  <p className="text-sm text-gray-900 font-inter mt-0.5">
+                  <p className="text-sm text-gray-900 font-inter mt-0.5 font-semibold">
                     {property.price.is_price_on_request
                       ? "Price on Request"
                       : property.price.display}

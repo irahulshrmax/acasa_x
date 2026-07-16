@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FiArrowLeft, FiArrowRight, FiX, FiImage } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 type ProjectImage = {
   src: string;
@@ -16,7 +17,59 @@ type FeaturedProject = {
   slug: string;
   image: string;
   images: ProjectImage[];
-  fullGallery: ProjectImage[]; // 🔥 Extended gallery for popup
+  fullGallery: ProjectImage[];
+};
+
+// API Response Types
+type ApiPropertyImage = {
+  id: number;
+  url: string;
+  title: string;
+  description: string | null;
+  featured: number;
+};
+
+type ApiProperty = {
+  id: number;
+  name: string;
+  slug: string;
+  listing_type: string;
+  featured: boolean;
+  featured_image: string;
+  images: ApiPropertyImage[];
+  gallery_urls: string[];
+  gallery_preview: string[];
+  video_url: string | null;
+  developer: {
+    id: number;
+    name: string;
+    logo_url: string;
+  } | null;
+  location: {
+    community: string | null;
+    city: string;
+  };
+  price: {
+    display: string;
+    amount: number | null;
+  };
+  bedrooms: string;
+  bathrooms: string;
+  area: {
+    display: string;
+    value: number | null;
+  };
+};
+
+type ApiResponse = {
+  success: boolean;
+  data: ApiProperty[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 };
 
 const THEME = {
@@ -24,152 +77,7 @@ const THEME = {
   accent: "#C8AA78",
 };
 
-// 🔥 EXTERNAL FALLBACK URL - agar internal page na ho toh
-const EXTERNAL_BASE_URL = "https://www.acasa.ae/properties";
-
-const PROJECTS: FeaturedProject[] = [
-  {
-    id: 1,
-    eyebrow: "FEATURED PROJECT",
-    title: "The Rings, Jumeirah 2",
-    slug: "the-rings-jumeirah-2",
-    image:
-      "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1600&h=900&fit=crop&q=85",
-    images: [
-      {
-        src: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=500&h=360&fit=crop&q=80",
-        label: "LIVING ROOM",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600566753151-384129cf4e3e?w=500&h=360&fit=crop&q=80",
-        label: "AMENITIES AREA",
-      },
-    ],
-    fullGallery: [
-      {
-        src: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1600&h=1000&fit=crop&q=85",
-        label: "EXTERIOR VIEW",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=1600&h=1000&fit=crop&q=85",
-        label: "LIVING ROOM",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600566753151-384129cf4e3e?w=1600&h=1000&fit=crop&q=85",
-        label: "AMENITIES AREA",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&h=1000&fit=crop&q=85",
-        label: "MASTER BEDROOM",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=1600&h=1000&fit=crop&q=85",
-        label: "KITCHEN",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1600&h=1000&fit=crop&q=85",
-        label: "BATHROOM",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1600&h=1000&fit=crop&q=85",
-        label: "TERRACE",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600585152915-d208bec867a1?w=1600&h=1000&fit=crop&q=85",
-        label: "POOL",
-      },
-    ],
-  },
-  {
-    id: 2,
-    eyebrow: "FEATURED PROJECT",
-    title: "Palm Jumeirah Residences",
-    slug: "palm-jumeirah-residences",
-    image:
-      "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=1600&h=900&fit=crop&q=85",
-    images: [
-      {
-        src: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=500&h=360&fit=crop&q=80",
-        label: "INTERIOR",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600585152915-d208bec867a1?w=500&h=360&fit=crop&q=80",
-        label: "POOL AREA",
-      },
-    ],
-    fullGallery: [
-      {
-        src: "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=1600&h=1000&fit=crop&q=85",
-        label: "FRONT VIEW",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1600&h=1000&fit=crop&q=85",
-        label: "INTERIOR",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600585152915-d208bec867a1?w=1600&h=1000&fit=crop&q=85",
-        label: "POOL AREA",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=1600&h=1000&fit=crop&q=85",
-        label: "LIVING SPACE",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&h=1000&fit=crop&q=85",
-        label: "BEDROOM",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1600&h=1000&fit=crop&q=85",
-        label: "OCEAN VIEW",
-      },
-    ],
-  },
-  {
-    id: 3,
-    eyebrow: "FEATURED PROJECT",
-    title: "Dubai Hills Mansion",
-    slug: "dubai-hills-mansion",
-    image:
-      "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1600&h=900&fit=crop&q=85",
-    images: [
-      {
-        src: "https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=500&h=360&fit=crop&q=80",
-        label: "LOUNGE",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600607688969-a5bfcd646154?w=500&h=360&fit=crop&q=80",
-        label: "ENTRANCE",
-      },
-    ],
-    fullGallery: [
-      {
-        src: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=1600&h=1000&fit=crop&q=85",
-        label: "EXTERIOR",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=1600&h=1000&fit=crop&q=85",
-        label: "LOUNGE",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600607688969-a5bfcd646154?w=1600&h=1000&fit=crop&q=85",
-        label: "ENTRANCE",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&h=1000&fit=crop&q=85",
-        label: "BEDROOM",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1600&h=1000&fit=crop&q=85",
-        label: "DINING AREA",
-      },
-      {
-        src: "https://images.unsplash.com/photo-1600566753151-384129cf4e3e?w=1600&h=1000&fit=crop&q=85",
-        label: "GARDEN",
-      },
-    ],
-  },
-];
-
+const API_URL = "http://localhost:5173/api/v1/properties";
 const SLIDE_DURATION = 6500;
 const FALLBACK_IMG =
   "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&h=900&fit=crop&q=85";
@@ -180,10 +88,14 @@ function ImageWithFallback({
   src,
   alt,
   className = "",
+  onClick,
+  isClickable = false,
 }: {
   src: string;
   alt: string;
   className?: string;
+  onClick?: () => void;
+  isClickable?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
   const [imgSrc, setImgSrc] = useState(src);
@@ -194,7 +106,12 @@ function ImageWithFallback({
   }, [src]);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#101827]">
+    <div 
+      className={`relative h-full w-full overflow-hidden bg-[#101827] ${
+        isClickable ? "cursor-pointer" : ""
+      }`}
+      onClick={onClick}
+    >
       {!loaded && (
         <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-800 to-slate-900" />
       )}
@@ -247,7 +164,7 @@ function ButtonSpinner() {
   );
 }
 
-// ─── GOLDEN BUTTON (UPDATED WITH onClick) ───────────────────────────────
+// ─── GOLDEN BUTTON ─────────────────────────────────────────────────────
 
 function GoldenProjectButton({
   children,
@@ -259,7 +176,7 @@ function GoldenProjectButton({
   children: string;
   loadingText: string;
   variant?: "outline" | "solid";
-  onClick: () => void;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
   isProcessing?: boolean;
 }) {
   const [hover, setHover] = useState(false);
@@ -269,8 +186,9 @@ function GoldenProjectButton({
     <motion.button
       onClick={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         if (isProcessing) return;
-        onClick();
+        onClick(e);
       }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -335,7 +253,7 @@ function GoldenProjectButton({
   );
 }
 
-// ─── 🔥 PHOTO GALLERY POPUP (Premium Full-Screen) ───────────────────────
+// ─── PHOTO GALLERY POPUP ──────────────────────────────────────────────
 
 function PhotoGalleryPopup({
   isOpen,
@@ -353,7 +271,6 @@ function PhotoGalleryPopup({
   const [currentIndex, setCurrentIndex] = useState(startIndex);
   const [imgLoading, setImgLoading] = useState(true);
 
-  // Reset to startIndex when opening
   useEffect(() => {
     if (isOpen) {
       setCurrentIndex(startIndex);
@@ -361,7 +278,6 @@ function PhotoGalleryPopup({
     }
   }, [isOpen, startIndex]);
 
-  // Keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
 
@@ -406,6 +322,7 @@ function PhotoGalleryPopup({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
           className="fixed inset-0 z-[999] flex flex-col bg-black/97 backdrop-blur-md"
+          onClick={onClose}
         >
           {/* HEADER BAR */}
           <div className="flex items-center justify-between border-b border-white/10 bg-black/50 px-4 py-4 md:px-8 md:py-5">
@@ -422,15 +339,16 @@ function PhotoGalleryPopup({
             </div>
 
             <div className="flex items-center gap-4">
-              {/* Counter */}
               <span className="text-[11px] font-medium tracking-widest text-white/70">
                 {String(currentIndex + 1).padStart(2, "0")} /{" "}
                 {String(images.length).padStart(2, "0")}
               </span>
 
-              {/* Close */}
               <motion.button
-                onClick={onClose}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
                 whileTap={{ scale: 0.9 }}
                 whileHover={{ rotate: 90 }}
                 className="flex h-10 w-10 items-center justify-center border border-white/25 text-white transition-colors hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334]"
@@ -442,8 +360,10 @@ function PhotoGalleryPopup({
           </div>
 
           {/* MAIN IMAGE AREA */}
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-6 md:px-16">
-            {/* Loader overlay */}
+          <div 
+            className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-6 md:px-16"
+            onClick={(e) => e.stopPropagation()}
+          >
             <AnimatePresence>
               {imgLoading && (
                 <motion.div
@@ -471,7 +391,6 @@ function PhotoGalleryPopup({
               )}
             </AnimatePresence>
 
-            {/* Image */}
             <motion.img
               key={currentIndex}
               initial={{ opacity: 0, scale: 0.96 }}
@@ -485,16 +404,17 @@ function PhotoGalleryPopup({
               style={{ maxHeight: "calc(100vh - 260px)" }}
             />
 
-            {/* Image label */}
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 px-4 py-2 backdrop-blur-sm">
               <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-white">
                 {images[currentIndex]?.label}
               </p>
             </div>
 
-            {/* Prev button */}
             <motion.button
-              onClick={handlePrev}
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrev();
+              }}
               whileTap={{ scale: 0.9 }}
               className="absolute left-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center border border-white/25 bg-black/40 text-white backdrop-blur-sm transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334] md:h-14 md:w-14"
               aria-label="Previous image"
@@ -502,9 +422,11 @@ function PhotoGalleryPopup({
               <FiArrowLeft size={20} />
             </motion.button>
 
-            {/* Next button */}
             <motion.button
-              onClick={handleNext}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNext();
+              }}
               whileTap={{ scale: 0.9 }}
               className="absolute right-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center border border-white/25 bg-black/40 text-white backdrop-blur-sm transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334] md:h-14 md:w-14"
               aria-label="Next image"
@@ -545,7 +467,6 @@ function PhotoGalleryPopup({
             </div>
           </div>
 
-          {/* Bottom instruction bar */}
           <div className="hidden border-t border-white/10 bg-black/70 px-8 py-2 md:block">
             <p className="text-center text-[9px] tracking-[0.24em] text-white/40">
               USE ARROW KEYS TO NAVIGATE • PRESS ESC TO CLOSE
@@ -557,9 +478,77 @@ function PhotoGalleryPopup({
   );
 }
 
+// ─── LOADING COMPONENT ─────────────────────────────────────────────────
+
+function LoadingState() {
+  return (
+    <section className="bg-white py-10 md:py-16">
+      <div className="mx-auto max-w-[1320px] px-4 md:px-6">
+        <div
+          className="relative overflow-hidden bg-[#101827]"
+          style={{
+            minHeight: "420px",
+            height: "min(72vw, 620px)",
+          }}
+        >
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="relative h-16 w-16">
+              <motion.div
+                className="absolute inset-0 rounded-full border-4 border-transparent"
+                style={{
+                  borderTopColor: THEME.accent,
+                  borderRightColor: THEME.accent,
+                }}
+                animate={{ rotate: 360 }}
+                transition={{
+                  duration: 1,
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── ERROR COMPONENT ───────────────────────────────────────────────────
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <section className="bg-white py-10 md:py-16">
+      <div className="mx-auto max-w-[1320px] px-4 md:px-6">
+        <div
+          className="relative overflow-hidden bg-[#101827]"
+          style={{
+            minHeight: "420px",
+            height: "min(72vw, 620px)",
+          }}
+        >
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+            <p className="text-lg font-medium text-[#C8AA78]">{message}</p>
+            <p className="mt-2 text-sm text-white/60">
+              Please check back later for updates
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────
 
 export default function FeaturedProjectSection() {
+  const router = useRouter();
+
+  // ─── ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS ──────
+
+  const [projects, setProjects] = useState<FeaturedProject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const [discoverLoading, setDiscoverLoading] = useState(false);
@@ -569,17 +558,156 @@ export default function FeaturedProjectSection() {
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const project = PROJECTS[active];
-
-  const next = useCallback(() => {
-    setActive((prev) => (prev + 1) % PROJECTS.length);
-  }, []);
-
-  const prev = useCallback(() => {
-    setActive((prev) => (prev - 1 + PROJECTS.length) % PROJECTS.length);
-  }, []);
+  // ─── FETCH PROPERTIES FROM API ──────────────────────────────────────
 
   useEffect(() => {
+    async function fetchFeaturedProperties() {
+      try {
+        setLoading(true);
+        const response = await fetch(`${API_URL}?limit=50`);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result: ApiResponse = await response.json();
+
+        if (!result.success) {
+          throw new Error("API returned unsuccessful response");
+        }
+
+        console.log("Total properties from API:", result.data.length);
+
+        // 🔥 MORE FLEXIBLE FILTERING - Get ANY properties that have images
+        const validProperties = result.data.filter((property) => {
+          // Check if name is valid (not "Null" or empty)
+          const hasValidName = 
+            property.name && 
+            property.name.trim() !== "" && 
+            property.name.toLowerCase() !== "null";
+
+          // Check if has featured image OR any images
+          const hasFeaturedImage = 
+            property.featured_image && 
+            property.featured_image.length > 0;
+
+          // Check if has any gallery images
+          const hasGalleryImages = 
+            property.gallery_urls && 
+            property.gallery_urls.length > 0;
+
+          // Check if has images array with at least one image
+          const hasImages = 
+            property.images && 
+            property.images.length > 0;
+
+          // 🔥 LESS STRICT - Don't require featured flag, just require images
+          return hasValidName && (hasFeaturedImage || hasGalleryImages || hasImages);
+        });
+
+        console.log("Valid properties after filtering:", validProperties.length);
+
+        if (validProperties.length === 0) {
+          // If no valid properties found, try with even less strict filtering
+          const fallbackProperties = result.data.filter((property) => {
+            return property.gallery_urls && property.gallery_urls.length > 0;
+          });
+          
+          console.log("Fallback properties (any with gallery):", fallbackProperties.length);
+          
+          if (fallbackProperties.length === 0) {
+            setError("No properties with images found in the API");
+            setProjects([]);
+            setLoading(false);
+            return;
+          }
+          
+          // Use fallback
+          const topThree = fallbackProperties.slice(0, 3);
+          const transformed = transformProperties(topThree);
+          setProjects(transformed);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+
+        // Take first 3 valid properties
+        const topThree = validProperties.slice(0, 3);
+        const transformed = transformProperties(topThree);
+        setProjects(transformed);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching featured properties:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load properties"
+        );
+        setProjects([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Helper function to transform properties
+    function transformProperties(properties: ApiProperty[]): FeaturedProject[] {
+      return properties.map((property) => {
+        // Get all gallery images from various sources
+        let allImages: string[] = [];
+        
+        // Priority: gallery_urls > images array > featured_image
+        if (property.gallery_urls && property.gallery_urls.length > 0) {
+          allImages = property.gallery_urls;
+        } else if (property.images && property.images.length > 0) {
+          allImages = property.images.map(img => img.url);
+        } else if (property.featured_image) {
+          allImages = [property.featured_image];
+        }
+
+        // If no images at all, use fallback
+        if (allImages.length === 0) {
+          allImages = [FALLBACK_IMG];
+        }
+
+        // Create ProjectImage array
+        const galleryImages: ProjectImage[] = allImages.map((url, index) => ({
+          src: url,
+          label: `${property.name || "Property"} - Image ${index + 1}`,
+        }));
+
+        // First 2 images for thumbnails
+        const thumbnailImages = galleryImages.slice(0, 2);
+
+        // Featured image (use first image if no featured_image)
+        const featuredImage = property.featured_image || allImages[0] || FALLBACK_IMG;
+
+        return {
+          id: property.id,
+          eyebrow: property.listing_type || "FEATURED PROJECT",
+          title: property.name || "Property",
+          slug: property.slug || `property-${property.id}`,
+          image: featuredImage,
+          images: thumbnailImages,
+          fullGallery: galleryImages,
+        };
+      });
+    }
+
+    fetchFeaturedProperties();
+  }, []);
+
+  // ─── AUTO-SLIDE ──────────────────────────────────────────────────────
+
+  const next = useCallback(() => {
+    if (projects.length === 0) return;
+    setActive((prev) => (prev + 1) % projects.length);
+  }, [projects.length]);
+
+  const prev = useCallback(() => {
+    if (projects.length === 0) return;
+    setActive((prev) => (prev - 1 + projects.length) % projects.length);
+  }, [projects.length]);
+
+  useEffect(() => {
+    if (projects.length === 0) return;
     if (isHovered || galleryOpen) return;
 
     timerRef.current = setTimeout(() => {
@@ -589,44 +717,67 @@ export default function FeaturedProjectSection() {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [active, isHovered, galleryOpen, next]);
+  }, [active, isHovered, galleryOpen, next, projects.length]);
 
-  // 🔥 DISCOVER MORE HANDLER — ✅ Updated to /new-projects-in-dubai
-  const handleDiscoverMore = useCallback(() => {
-    if (discoverLoading) return;
+  // ─── DEFINE currentProject BEFORE useCallback THAT USE IT ──────────
+
+  const currentProject = projects[active] || projects[0] || null;
+
+  // ─── NAVIGATION HANDLERS ────────────────────────────────────────────
+
+  // Navigate to individual property page (slug page)
+  const navigateToProperty = useCallback((slug: string) => {
+    router.push(`/featured-explore-properties/${slug}`);
+  }, [router]);
+
+  // Navigate to featured-explore-properties page
+  const navigateToFeaturedExplore = useCallback(() => {
+    router.push('/featured-explore-properties');
+  }, [router]);
+
+  const handleDiscoverMore = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (discoverLoading || !currentProject) return;
     setDiscoverLoading(true);
 
     setTimeout(() => {
-      // ✅ Updated: Changed from /buy-properties to /new-projects-in-dubai
-      window.location.href = "/new-projects-in-dubai";
-    }, 900);
-  }, [discoverLoading]);
+      navigateToFeaturedExplore();
+      setDiscoverLoading(false);
+    }, 500);
+  }, [discoverLoading, currentProject, navigateToFeaturedExplore]);
 
-  // 🔥 VIEW ALL PHOTOS HANDLER — Open Gallery Popup
+  const handleImageClick = useCallback((slug: string) => {
+    navigateToProperty(slug);
+  }, [navigateToProperty]);
+
   const handleViewAllPhotos = useCallback(
-    (startIdx: number = 0) => {
-      if (photosLoading) return;
+    (e: React.MouseEvent<HTMLButtonElement>, startIdx: number = 0) => {
+      e.stopPropagation();
+      if (photosLoading || projects.length === 0) return;
       setPhotosLoading(true);
 
-      // Small delay for loader UX
       setTimeout(() => {
         setGalleryStartIndex(startIdx);
         setGalleryOpen(true);
         setPhotosLoading(false);
       }, 500);
     },
-    [photosLoading]
+    [photosLoading, projects.length]
   );
 
-  const thumbnails = useMemo(() => project.images.slice(0, 2), [project]);
+  // ─── useMemo HOOKS ───────────────────────────────────────────────────
 
-  // Get all images for gallery
+  const thumbnails = useMemo(() => {
+    if (!currentProject) return [];
+    return currentProject.images.slice(0, 2);
+  }, [currentProject]);
+
   const allGalleryImages = useMemo(() => {
-    // Combine main + thumbnails + full gallery, remove duplicates
+    if (!currentProject) return [];
     const combined = [
-      { src: project.image, label: project.title.toUpperCase() },
-      ...project.images,
-      ...project.fullGallery,
+      { src: currentProject.image, label: currentProject.title.toUpperCase() },
+      ...currentProject.images,
+      ...currentProject.fullGallery,
     ];
 
     const seen = new Set<string>();
@@ -635,27 +786,44 @@ export default function FeaturedProjectSection() {
       seen.add(img.src);
       return true;
     });
-  }, [project]);
+  }, [currentProject]);
+
+  // ─── CONDITIONAL RETURNS ────────────────────────────────────────────
+
+  if (loading) {
+    return <LoadingState />;
+  }
+
+  if (error || projects.length === 0 || !currentProject) {
+    return <ErrorState message={error || "No featured properties available"} />;
+  }
+
+  // ─── RENDER CONTENT ──────────────────────────────────────────────────
+
+  const project = currentProject;
 
   return (
     <>
       <section className="bg-white py-10 md:py-16">
         <div className="mx-auto max-w-[1320px] px-4 md:px-6">
+          {/* MAIN BANNER CONTAINER - FULL CLICKABLE */}
           <div
-            className="relative overflow-hidden bg-[#101827]"
+            className="relative overflow-hidden bg-[#101827] cursor-pointer"
             style={{
               minHeight: "420px",
               height: "min(72vw, 620px)",
             }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
+            onClick={() => handleImageClick(project.slug)}
           >
-            {/* Background */}
+            {/* Background Image */}
             <ImageWithFallback
               key={project.id}
               src={project.image}
               alt={project.title}
-              className="absolute inset-0"
+              className="absolute inset-0 transition-transform duration-700 hover:scale-105"
+              isClickable={false}
             />
 
             {/* Dark overlays */}
@@ -665,17 +833,23 @@ export default function FeaturedProjectSection() {
             {/* Top decorative line */}
             <div className="absolute left-6 right-6 top-10 hidden h-px bg-gradient-to-r from-white/15 via-white/45 to-white/15 md:block" />
 
-            {/* Arrows */}
+            {/* Arrows - with stopPropagation */}
             <div className="absolute right-6 top-8 z-20 flex items-center">
               <button
-                onClick={prev}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  prev();
+                }}
                 aria-label="Previous project"
                 className="flex h-10 w-12 items-center justify-center border border-white/35 text-white/80 transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334]"
               >
                 <FiArrowLeft size={15} />
               </button>
               <button
-                onClick={next}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  next();
+                }}
                 aria-label="Next project"
                 className="-ml-px flex h-10 w-12 items-center justify-center border border-white/35 text-white/80 transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334]"
               >
@@ -683,17 +857,21 @@ export default function FeaturedProjectSection() {
               </button>
             </div>
 
-            {/* Content */}
+            {/* Content - with stopPropagation on buttons */}
             <div className="absolute bottom-8 left-6 z-20 max-w-[520px] md:bottom-16 md:left-16">
               <p className="mb-3 text-[9px] font-medium uppercase tracking-[0.24em] text-white/60">
                 {project.eyebrow}
               </p>
 
               <h2
-                className="text-[28px] leading-tight text-white md:text-[38px]"
+                className="text-[28px] leading-tight text-white md:text-[38px] cursor-pointer hover:text-[#C8AA78] transition-colors"
                 style={{
                   fontFamily: "'Playfair Display', Georgia, serif",
                   textShadow: "0 3px 18px rgba(0,0,0,0.45)",
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleImageClick(project.slug);
                 }}
               >
                 {project.title}
@@ -701,7 +879,7 @@ export default function FeaturedProjectSection() {
 
               <div className="mt-8 flex flex-wrap items-center gap-2">
                 <GoldenProjectButton
-                  loadingText="Opening"
+                  loadingText="Loading..."
                   variant="solid"
                   onClick={handleDiscoverMore}
                   isProcessing={discoverLoading}
@@ -710,9 +888,9 @@ export default function FeaturedProjectSection() {
                 </GoldenProjectButton>
 
                 <GoldenProjectButton
-                  loadingText="Loading"
+                  loadingText="Loading..."
                   variant="outline"
-                  onClick={() => handleViewAllPhotos(0)}
+                  onClick={(e) => handleViewAllPhotos(e, 0)}
                   isProcessing={photosLoading}
                 >
                   View All Photos
@@ -725,7 +903,7 @@ export default function FeaturedProjectSection() {
               {thumbnails.map((img, thumbIdx) => (
                 <motion.button
                   key={img.label}
-                  onClick={() => handleViewAllPhotos(thumbIdx + 1)}
+                  onClick={(e) => handleViewAllPhotos(e, thumbIdx + 1)}
                   whileHover={{ y: -3 }}
                   className="group/thumb block w-[150px] cursor-pointer"
                 >
@@ -735,7 +913,6 @@ export default function FeaturedProjectSection() {
                       alt={img.label}
                       className="transition-transform duration-500 group-hover/thumb:scale-105"
                     />
-                    {/* Hover overlay with icon */}
                     <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-300 group-hover/thumb:bg-black/40 group-hover/thumb:opacity-100">
                       <FiImage size={22} className="text-white" />
                     </div>
@@ -749,10 +926,13 @@ export default function FeaturedProjectSection() {
 
             {/* Dots mobile */}
             <div className="absolute bottom-4 right-5 z-20 flex items-center gap-2 md:hidden">
-              {PROJECTS.map((_, idx) => (
+              {projects.map((_, idx) => (
                 <button
                   key={idx}
-                  onClick={() => setActive(idx)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActive(idx);
+                  }}
                   aria-label={`Go to project ${idx + 1}`}
                   className="h-[3px] rounded-full transition-all"
                   style={{
@@ -767,7 +947,7 @@ export default function FeaturedProjectSection() {
         </div>
       </section>
 
-      {/* 🔥 PHOTO GALLERY POPUP */}
+      {/* Photo Gallery Popup */}
       <PhotoGalleryPopup
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}

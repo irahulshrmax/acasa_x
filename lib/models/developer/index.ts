@@ -1,13 +1,16 @@
-// models/developer.ts
+// lib/models/developer.ts
 import { db } from '@/lib/database';
 import {
     getDeveloperImageUrl,
     getDeveloperImageVariations,
     getDeveloperImageCandidates,
+    getDeveloperImageThumb,
     UPLOAD_BASE_URL,
 } from '@/lib/image-resolver';
 
-export interface Developer {
+// ─── TYPES ──────────────────────────────────────────────────────────────
+
+export interface InternationalDeveloper {
     id: number;
     name: string | null;
     year_established: string | null;
@@ -32,23 +35,110 @@ export interface Developer {
     status: number;
 }
 
-export interface DeveloperWithRelations extends Developer {
-    project_count?: number;
-    property_count?: number;
-    image_url?: string;
-    image_variations?: string[];
-    image_candidates?: string[];
-    upload_base_url?: string;
-    projects?: any[];
-    properties?: any[];
+export interface DeveloperProject {
+    id: number;
+    name: string;
+    slug: string;
+    featured_image: string | null;
+    price: string | null;
+    location: string | null;
+    property_type: string | null;
+    status: number;
+    bedrooms: string | null;
+    bathrooms: string | null;
+    area: string | null;
+    developer_id: number;
+    created_at: Date | null;
+    updated_at: Date | null;
+}
+
+export interface DeveloperProperty {
+    id: number;
+    name: string;
+    slug: string;
+    featured_image: string | null;
+    price: number | null;
+    location: string | null;
+    property_type: string | null;
+    status: number;
+    bedrooms: string | null;
+    bathrooms: string | null;
+    area: string | null;
+    developer_id: number;
+    created_at: Date | null;
+    updated_at: Date | null;
+}
+
+export interface DeveloperWithFullDetails extends InternationalDeveloper {
+    // Stats
+    project_count: number;
+    property_count: number;
+    total_properties_count: number;
+    active_properties_count: number;
+    inactive_properties_count: number;
+
+    // Image
+    image_url: string | null;
+    image_thumb: string | null;        // ✅ Added
+    image_variations: string[];
+    image_candidates: string[];
+    upload_base_url: string;
+
+    // Related Data
+    projects: DeveloperProject[];
+    properties: DeveloperProperty[];
+    featured_projects: DeveloperProject[];
+    featured_properties: DeveloperProperty[];
+
+    // SEO
+    seo_data: {
+        title: string | null;
+        description: string | null;
+        keywords: string | null;
+        slug: string | null;
+    };
+
+    // Contact
+    contact_info: {
+        email: string | null;
+        mobile: string | null;
+        website: string | null;
+        address: string | null;
+        ceo_name: string | null;
+        responsible_agent: string | null;
+    };
+
+    // Metadata
+    meta: {
+        established_years_ago: number | null;
+        has_website: boolean;
+        has_contact: boolean;
+        has_social: boolean;
+        is_active: boolean;
+        completeness_score: number;
+    };
 }
 
 export interface DeveloperFilters {
     status?: number;
     keyword?: string;
-    sort_by?: 'name_asc' | 'name_desc' | 'newest' | 'oldest' | 'project_count';
+    country?: string;
+    has_projects?: boolean;
+    has_properties?: boolean;
+    sort_by?: 'name_asc' | 'name_desc' | 'newest' | 'oldest' | 'project_count' | 'property_count';
     page?: number;
     limit?: number;
+}
+
+export interface DeveloperStats {
+    total: number;
+    active: number;
+    inactive: number;
+    developers_with_projects: number;
+    developers_with_properties: number;
+    top_countries: Array<{ country: string; count: number }>;
+    total_projects: number;
+    total_properties: number;
 }
 
 // ─── HELPER FUNCTIONS ──────────────────────────────────────────────────
@@ -58,21 +148,74 @@ function toNumber(value: string | number | undefined | null): number {
     return typeof value === 'number' ? value : parseInt(String(value), 10) || 0;
 }
 
-function transformDeveloper(row: any): DeveloperWithRelations {
-    // Get primary image URL with proper extension
+function calculateCompleteness(developer: any): number {
+    let score = 0;
+    const fields = [
+        developer.name,
+        developer.informations,
+        developer.image,
+        developer.email,
+        developer.mobile,
+        developer.website,
+        developer.address,
+        developer.ceo_name,
+        developer.year_established,
+        developer.country,
+        developer.seo_title,
+        developer.seo_description,
+    ];
+
+    fields.forEach((field) => {
+        if (
+            field &&
+            field !== '' &&
+            field !== 'null' &&
+            field !== 'NULL' &&
+            field !== 'undefined'
+        ) {
+            score += 8.33;
+        }
+    });
+
+    return Math.min(Math.round(score), 100);
+}
+
+function transformDeveloper(
+    row: any,
+    projects: any[] = [],
+    properties: any[] = []
+): DeveloperWithFullDetails {
+    // ✅ Image URLs
     const imageUrl = getDeveloperImageUrl(row.image);
-    
-    // Get all image variations (thumbnails, sizes, etc.)
+    const imageThumb = getDeveloperImageThumb(row.image);
     const variations = getDeveloperImageVariations(row.image);
-    
-    // Get all possible image candidates for fallback
     const candidates = getDeveloperImageCandidates(row.image);
 
+    const establishedYear = row.year_established
+        ? parseInt(row.year_established, 10)
+        : null;
+    const currentYear = new Date().getFullYear();
+
+    const featuredProjects = projects
+        .filter((p) => p.status === 1 && p.featured_image)
+        .slice(0, 6);
+
+    const featuredProperties = properties
+        .filter((p) => p.status === 5 && p.featured_image)
+        .slice(0, 6);
+
+    const activeProps = properties.filter((p) => p.status === 5).length;
+    const inactiveProps = properties.filter((p) => p.status !== 5).length;
+
+    const hasWebsite = !!(row.website && row.website !== '');
+    const hasContact = !!(row.email || row.mobile);
+
     return {
+        // ─── Base Fields ───────────────────────────────────────────
         id: row.id,
         name: row.name,
         year_established: row.year_established,
-        country: row.country,
+        country: row.country || 'United Arab Emirates',
         website: row.website,
         responsible_agent: row.responsible_agent,
         ceo_name: row.ceo_name,
@@ -91,28 +234,78 @@ function transformDeveloper(row: any): DeveloperWithRelations {
         created_at: row.created_at,
         updated_at: row.updated_at,
         status: row.status,
-        project_count: row.project_count || 0,
-        property_count: row.property_count || 0,
+
+        // ─── Stats ─────────────────────────────────────────────────
+        project_count: projects.length,
+        property_count: properties.length,
+        total_properties_count: properties.length,
+        active_properties_count: activeProps,
+        inactive_properties_count: inactiveProps,
+
+        // ─── Image ─────────────────────────────────────────────────
         image_url: imageUrl,
+        image_thumb: imageThumb,    // ✅ Fixed
         image_variations: variations,
         image_candidates: candidates,
         upload_base_url: UPLOAD_BASE_URL,
+
+        // ─── Related Data ──────────────────────────────────────────
+        projects: projects,
+        properties: properties,
+        featured_projects: featuredProjects,
+        featured_properties: featuredProperties,
+
+        // ─── SEO ───────────────────────────────────────────────────
+        seo_data: {
+            title: row.seo_title || row.name,
+            description:
+                row.seo_description ||
+                (row.informations
+                    ? row.informations.substring(0, 160)
+                    : null),
+            keywords: row.seo_keywork,
+            slug: row.seo_slug || row.total_url,
+        },
+
+        // ─── Contact ───────────────────────────────────────────────
+        contact_info: {
+            email: row.email,
+            mobile: row.mobile,
+            website: row.website,
+            address: row.address,
+            ceo_name: row.ceo_name,
+            responsible_agent: row.responsible_agent,
+        },
+
+        // ─── Meta ──────────────────────────────────────────────────
+        meta: {
+            established_years_ago: establishedYear
+                ? currentYear - establishedYear
+                : null,
+            has_website: hasWebsite,
+            has_contact: hasContact,
+            has_social: false,
+            is_active: row.status === 1,
+            completeness_score: calculateCompleteness(row),
+        },
     };
 }
 
 // ─── BASE QUERY BUILDER ──────────────────────────────────────────────
 
 function buildBaseQuery(knex: any, filters: DeveloperFilters = {}) {
-    const { status = 1, keyword } = filters;
-    
+    const { status = 1, keyword, country } = filters;
+
     const query = knex('internationaldevelopers as d');
 
-    // Status filter
     if (status !== undefined && status !== null) {
         query.where('d.status', status);
     }
 
-    // Keyword search
+    if (country) {
+        query.where('d.country', country);
+    }
+
     if (keyword?.trim()) {
         const searchTerm = `%${keyword.trim()}%`;
         query.where(function (this: any) {
@@ -120,7 +313,9 @@ function buildBaseQuery(knex: any, filters: DeveloperFilters = {}) {
                 .orWhere('d.informations', 'like', searchTerm)
                 .orWhere('d.seo_keywork', 'like', searchTerm)
                 .orWhere('d.ceo_name', 'like', searchTerm)
-                .orWhere('d.country', 'like', searchTerm);
+                .orWhere('d.country', 'like', searchTerm)
+                .orWhere('d.email', 'like', searchTerm)
+                .orWhere('d.mobile', 'like', searchTerm);
         });
     }
 
@@ -144,105 +339,153 @@ function applySorting(query: any, sort_by: string = 'name_asc') {
         case 'project_count':
             query.orderBy('d.total_project', 'desc');
             break;
+        case 'property_count':
+            query.orderBy('d.total_project_withus', 'desc');
+            break;
         default:
             query.orderBy('d.name', 'asc');
     }
     return query;
 }
 
-async function getDeveloperCounts(knex: any, developerIds: number[]) {
+// ─── GET RELATED DATA ──────────────────────────────────────────────────
+
+async function getDeveloperRelatedData(knex: any, developerIds: number[]) {
     if (!developerIds.length) {
         return { projectMap: new Map(), propertyMap: new Map() };
     }
 
-    const [projectCounts, propertyCounts] = await Promise.all([
+    const [projects, properties] = await Promise.all([
         knex('project_listing')
             .whereIn('developer_id', developerIds)
-            .where('status', 1)
-            .select('developer_id')
-            .count('* as count')
-            .groupBy('developer_id'),
+            .select(
+                'id',
+                'developer_id',
+                'ProjectName as name',
+                'project_slug as slug',
+                'featured_image',
+                'price',
+                'location',
+                'property_type',
+                'status',
+                'bedrooms',
+                'bathrooms',
+                'area',
+                'created_at',
+                'updated_at'
+            ),
         knex('properties')
             .whereIn('developer_id', developerIds)
-            .where('status', 5)
-            .select('developer_id')
-            .count('* as count')
-            .groupBy('developer_id'),
+            .whereNotNull('developer_id')
+            .select(
+                'id',
+                'developer_id',
+                'property_name as name',
+                'property_slug as slug',
+                'featured_image',
+                'price',
+                'location',
+                'property_type',
+                'status',
+                'bedroom as bedrooms',
+                'bathrooms',
+                'area',
+                'created_at',
+                'updated_at'
+            ),
     ]);
 
-    const projectMap = new Map<number, number>();
-    projectCounts.forEach((pc: any) => {
-        projectMap.set(pc.developer_id, toNumber(pc.count));
+    const projectMap = new Map<number, any[]>();
+    const propertyMap = new Map<number, any[]>();
+
+    projects.forEach((p: any) => {
+        const devId = p.developer_id;
+        if (!projectMap.has(devId)) projectMap.set(devId, []);
+        projectMap.get(devId)!.push(p);
     });
 
-    const propertyMap = new Map<number, number>();
-    propertyCounts.forEach((pc: any) => {
-        propertyMap.set(pc.developer_id, toNumber(pc.count));
+    properties.forEach((p: any) => {
+        const devId = p.developer_id;
+        if (!propertyMap.has(devId)) propertyMap.set(devId, []);
+        propertyMap.get(devId)!.push(p);
     });
 
     return { projectMap, propertyMap };
 }
 
-// ─── GET INTERNATIONAL DEVELOPERS ─────────────────────────────────────
+// ─── SELECT FIELDS ─────────────────────────────────────────────────────
 
-export async function getDevelopers(filters: DeveloperFilters = {}) {
+const DEVELOPER_SELECT_FIELDS = [
+    'd.id',
+    'd.name',
+    'd.year_established',
+    'd.country',
+    'd.website',
+    'd.responsible_agent',
+    'd.ceo_name',
+    'd.email',
+    'd.mobile',
+    'd.address',
+    'd.image',
+    'd.total_project',
+    'd.total_project_withus',
+    'd.total_url',
+    'd.informations',
+    'd.seo_slug',
+    'd.seo_title',
+    'd.seo_keywork',
+    'd.seo_description',
+    'd.created_at',
+    'd.updated_at',
+    'd.status',
+];
+
+// ─── GET ALL DEVELOPERS ─────────────────────────────────────────────────
+
+export async function getInternationalDevelopers(
+    filters: DeveloperFilters = {}
+) {
     const {
         status = 1,
         keyword,
+        country,
         sort_by = 'name_asc',
         page = 1,
         limit = 20,
+        has_projects,
+        has_properties,
     } = filters;
 
     const knex = await db();
-    const query = buildBaseQuery(knex, { status, keyword });
-    applySorting(query, sort_by);
+    const query = buildBaseQuery(knex, { status, keyword, country });
 
-    // Count total
     const countQuery = query.clone();
     const [{ total }] = await countQuery.count('* as total');
 
-    // Apply pagination
+    applySorting(query, sort_by);
+
     const offset = (page - 1) * limit;
     query.limit(limit).offset(offset);
 
-    // Select fields
-    const developers = await query.select(
-        'd.id',
-        'd.name',
-        'd.year_established',
-        'd.country',
-        'd.website',
-        'd.responsible_agent',
-        'd.ceo_name',
-        'd.email',
-        'd.mobile',
-        'd.address',
-        'd.image',
-        'd.total_project',
-        'd.total_project_withus',
-        'd.total_url',
-        'd.informations',
-        'd.seo_slug',
-        'd.seo_title',
-        'd.seo_keywork',
-        'd.seo_description',
-        'd.created_at',
-        'd.updated_at',
-        'd.status'
+    const developers = await query.select(DEVELOPER_SELECT_FIELDS);
+
+    const developerIds = developers.map((d: any) => d.id);
+    const { projectMap, propertyMap } = await getDeveloperRelatedData(
+        knex,
+        developerIds
     );
 
-    // Get counts for developers
-    const developerIds = developers.map((d: any) => d.id);
-    const { projectMap, propertyMap } = await getDeveloperCounts(knex, developerIds);
+    const transformed = developers
+        .map((d: any) => {
+            const projects = projectMap.get(d.id) || [];
+            const properties = propertyMap.get(d.id) || [];
 
-    // Attach counts to developers
-    developers.forEach((d: any) => {
-        d.project_count = projectMap.get(d.id) || 0;
-        d.property_count = propertyMap.get(d.id) || 0;
-    });
+            if (has_projects && projects.length === 0) return null;
+            if (has_properties && properties.length === 0) return null;
 
-    const transformed = developers.map(transformDeveloper);
+            return transformDeveloper(d, projects, properties);
+        })
+        .filter(Boolean);
 
     return {
         data: transformed,
@@ -251,126 +494,100 @@ export async function getDevelopers(filters: DeveloperFilters = {}) {
             page,
             limit,
             totalPages: Math.ceil(Number(total) / limit),
+            has_more: page * limit < Number(total),
         },
     };
 }
 
-// ─── GET INTERNATIONAL DEVELOPER BY ID ──────────────────────────────
+// ─── GET DEVELOPER BY ID ───────────────────────────────────────────────
 
-export async function getDeveloperById(id: number): Promise<DeveloperWithRelations | null> {
+export async function getInternationalDeveloperById(
+    id: number
+): Promise<DeveloperWithFullDetails | null> {
     try {
         const knex = await db();
 
         const developer = await knex('internationaldevelopers as d')
             .where('d.id', id)
             .first()
-            .select(
-                'd.id',
-                'd.name',
-                'd.year_established',
-                'd.country',
-                'd.website',
-                'd.responsible_agent',
-                'd.ceo_name',
-                'd.email',
-                'd.mobile',
-                'd.address',
-                'd.image',
-                'd.total_project',
-                'd.total_project_withus',
-                'd.total_url',
-                'd.informations',
-                'd.seo_slug',
-                'd.seo_title',
-                'd.seo_keywork',
-                'd.seo_description',
-                'd.created_at',
-                'd.updated_at',
-                'd.status'
-            );
+            .select(DEVELOPER_SELECT_FIELDS);
 
         if (!developer) return null;
 
-        // Get counts and related data
-        const [projectCount, propertyCount, projects, properties] = await Promise.all([
-            knex('project_listing')
-                .where('developer_id', developer.id)
-                .where('status', 1)
-                .count('* as count')
-                .first(),
-            knex('properties')
-                .where('developer_id', developer.id)
-                .where('status', 5)
-                .count('* as count')
-                .first(),
-            knex('project_listing')
-                .where('developer_id', developer.id)
-                .where('status', 1)
-                .select('id', 'ProjectName as name', 'project_slug as slug', 'featured_image', 'price')
-                .limit(10),
-            knex('properties')
-                .where('developer_id', developer.id)
-                .where('status', 5)
-                .select('id', 'property_name as name', 'property_slug as slug', 'featured_image', 'price')
-                .limit(10),
-        ]);
+        const { projectMap, propertyMap } = await getDeveloperRelatedData(
+            knex,
+            [developer.id]
+        );
 
-        developer.project_count = toNumber(projectCount?.count);
-        developer.property_count = toNumber(propertyCount?.count);
-        developer.projects = projects;
-        developer.properties = properties;
+        const projects = projectMap.get(developer.id) || [];
+        const properties = propertyMap.get(developer.id) || [];
 
-        return transformDeveloper(developer);
+        return transformDeveloper(developer, projects, properties);
     } catch (error) {
-        console.error('getDeveloperById error:', error);
+        console.error('getInternationalDeveloperById error:', error);
         throw error;
     }
 }
 
-// ─── GET INTERNATIONAL DEVELOPER BY SLUG ─────────────────────────────
+// ─── GET DEVELOPER BY SLUG ─────────────────────────────────────────────
 
-export async function getDeveloperBySlug(slug: string): Promise<DeveloperWithRelations | null> {
+export async function getInternationalDeveloperBySlug(
+    slug: string
+): Promise<DeveloperWithFullDetails | null> {
     try {
         const knex = await db();
         const id = parseInt(slug, 10);
 
         if (!isNaN(id)) {
-            return getDeveloperById(id);
+            return getInternationalDeveloperById(id);
         }
 
         const developer = await knex('internationaldevelopers')
-            .where('name', 'like', `%${slug}%`)
+            .where('seo_slug', slug)
+            .orWhere('total_url', slug)
+            .orWhere('name', 'like', `%${slug}%`)
             .orWhere('seo_title', 'like', `%${slug}%`)
-            .orWhere('seo_slug', 'like', `%${slug}%`)
             .first()
             .select('id');
 
         if (!developer) return null;
-        return getDeveloperById(developer.id);
+        return getInternationalDeveloperById(developer.id);
     } catch (error) {
-        console.error('getDeveloperBySlug error:', error);
+        console.error('getInternationalDeveloperBySlug error:', error);
         throw error;
     }
 }
 
-// ─── GET FEATURED INTERNATIONAL DEVELOPERS ────────────────────────────
+// ─── GET FEATURED DEVELOPERS ────────────────────────────────────────────
 
-export async function getFeaturedDevelopers(limit: number = 6) {
-    return getDevelopers({
+export async function getFeaturedInternationalDevelopers(
+    limit: number = 6
+) {
+    return getInternationalDevelopers({
         status: 1,
         sort_by: 'project_count',
         limit,
+        has_projects: true,
     });
 }
 
-// ─── GET INTERNATIONAL DEVELOPER STATISTICS ───────────────────────────
+// ─── GET STATISTICS ─────────────────────────────────────────────────────
 
-export async function getDeveloperStatistics() {
+export async function getInternationalDeveloperStatistics(): Promise<DeveloperStats> {
     const knex = await db();
 
-    const [totalResult, activeResult, projectStats, propertyStats] = await Promise.all([
+    const [
+        totalResult,
+        activeResult,
+        projectStats,
+        propertyStats,
+        countryStats,
+    ] = await Promise.all([
         knex('internationaldevelopers').count('* as total').first(),
-        knex('internationaldevelopers').where('status', 1).count('* as active').first(),
+        knex('internationaldevelopers')
+            .where('status', 1)
+            .count('* as active')
+            .first(),
         knex('project_listing')
             .where('status', 1)
             .select('developer_id')
@@ -381,10 +598,25 @@ export async function getDeveloperStatistics() {
             .select('developer_id')
             .count('* as count')
             .groupBy('developer_id'),
+        knex('internationaldevelopers')
+            .select('country')
+            .count('* as count')
+            .whereNotNull('country')
+            .where('country', '!=', '')
+            .groupBy('country')
+            .orderBy('count', 'desc')
+            .limit(10),
     ]);
 
     const total = toNumber(totalResult?.total);
     const active = toNumber(activeResult?.active);
+
+    const typedCountryStats: { country: string; count: number }[] = (
+        countryStats || []
+    ).map((item: any) => ({
+        country: String(item.country || 'Unknown'),
+        count: toNumber(item.count),
+    }));
 
     return {
         total,
@@ -392,12 +624,69 @@ export async function getDeveloperStatistics() {
         inactive: total - active,
         developers_with_projects: projectStats?.length || 0,
         developers_with_properties: propertyStats?.length || 0,
+        top_countries: typedCountryStats,
+        total_projects:
+            projectStats?.reduce(
+                (sum: number, p: any) => sum + toNumber(p.count),
+                0
+            ) || 0,
+        total_properties:
+            propertyStats?.reduce(
+                (sum: number, p: any) => sum + toNumber(p.count),
+                0
+            ) || 0,
     };
 }
 
-// ─── CREATE INTERNATIONAL DEVELOPER ──────────────────────────────────
+// ─── GET DEVELOPERS BY COUNTRY ─────────────────────────────────────────
 
-export async function createDeveloper(data: Partial<Developer>): Promise<DeveloperWithRelations> {
+export async function getInternationalDevelopersByCountry(
+    country: string,
+    limit: number = 20
+) {
+    return getInternationalDevelopers({ country, status: 1, limit });
+}
+
+// ─── GET DEVELOPERS WITH PROJECTS ──────────────────────────────────────
+
+export async function getInternationalDevelopersWithProjects(
+    limit: number = 20
+) {
+    return getInternationalDevelopers({
+        status: 1,
+        has_projects: true,
+        sort_by: 'project_count',
+        limit,
+    });
+}
+
+// ─── GET DEVELOPERS WITH PROPERTIES ────────────────────────────────────
+
+export async function getInternationalDevelopersWithProperties(
+    limit: number = 20
+) {
+    return getInternationalDevelopers({
+        status: 1,
+        has_properties: true,
+        sort_by: 'property_count',
+        limit,
+    });
+}
+
+// ─── SEARCH DEVELOPERS ──────────────────────────────────────────────────
+
+export async function searchInternationalDevelopers(
+    keyword: string,
+    limit: number = 20
+) {
+    return getInternationalDevelopers({ keyword, status: 1, limit });
+}
+
+// ─── CREATE DEVELOPER ──────────────────────────────────────────────────
+
+export async function createInternationalDeveloper(
+    data: Partial<InternationalDeveloper>
+): Promise<DeveloperWithFullDetails> {
     const knex = await db();
 
     const [id] = await knex('internationaldevelopers').insert({
@@ -407,17 +696,17 @@ export async function createDeveloper(data: Partial<Developer>): Promise<Develop
         updated_at: new Date(),
     });
 
-    const developer = await getDeveloperById(id);
+    const developer = await getInternationalDeveloperById(id);
     if (!developer) throw new Error('Failed to create developer');
     return developer;
 }
 
-// ─── UPDATE INTERNATIONAL DEVELOPER ──────────────────────────────────
+// ─── UPDATE DEVELOPER ──────────────────────────────────────────────────
 
-export async function updateDeveloperById(
+export async function updateInternationalDeveloperById(
     id: number,
-    data: Partial<Developer>
-): Promise<DeveloperWithRelations> {
+    data: Partial<InternationalDeveloper>
+): Promise<DeveloperWithFullDetails> {
     const knex = await db();
 
     const existing = await knex('internationaldevelopers')
@@ -425,82 +714,196 @@ export async function updateDeveloperById(
         .first()
         .select('id');
 
-    if (!existing) {
-        throw new Error('Developer not found');
-    }
+    if (!existing) throw new Error('Developer not found');
 
     await knex('internationaldevelopers')
         .where('id', id)
-        .update({
-            ...data,
-            updated_at: new Date(),
-        });
+        .update({ ...data, updated_at: new Date() });
 
-    const developer = await getDeveloperById(id);
+    const developer = await getInternationalDeveloperById(id);
     if (!developer) throw new Error('Developer not found');
     return developer;
 }
 
-// ─── DELETE INTERNATIONAL DEVELOPER (Soft Delete) ────────────────────
+// ─── SOFT DELETE DEVELOPER ─────────────────────────────────────────────
 
-export async function deleteDeveloperById(id: number): Promise<{ id: number; deleted: boolean }> {
-    const knex = await db();
-    
-    const existing = await knex('internationaldevelopers')
-        .where('id', id)
-        .first()
-        .select('id');
-
-    if (!existing) {
-        throw new Error('Developer not found');
-    }
-
-    await knex('internationaldevelopers')
-        .where('id', id)
-        .update({ status: 0 });
-    
-    return { id, deleted: true };
-}
-
-// ─── PERMANENT DELETE INTERNATIONAL DEVELOPER ────────────────────────
-
-export async function permanentDeleteDeveloperById(
+export async function deleteInternationalDeveloperById(
     id: number
 ): Promise<{ id: number; deleted: boolean }> {
     const knex = await db();
-    
+
     const existing = await knex('internationaldevelopers')
         .where('id', id)
         .first()
         .select('id');
 
-    if (!existing) {
-        throw new Error('Developer not found');
+    if (!existing) throw new Error('Developer not found');
+
+    await knex('internationaldevelopers')
+        .where('id', id)
+        .update({ status: 0, updated_at: new Date() });
+
+    return { id, deleted: true };
+}
+
+// ─── PERMANENT DELETE DEVELOPER ────────────────────────────────────────
+
+export async function permanentDeleteInternationalDeveloperById(
+    id: number
+): Promise<{ id: number; deleted: boolean }> {
+    const knex = await db();
+
+    const existing = await knex('internationaldevelopers')
+        .where('id', id)
+        .first()
+        .select('id');
+
+    if (!existing) throw new Error('Developer not found');
+
+    const [projectCount, propertyCount] = await Promise.all([
+        knex('project_listing')
+            .where('developer_id', id)
+            .count('* as count')
+            .first(),
+        knex('properties')
+            .where('developer_id', id)
+            .count('* as count')
+            .first(),
+    ]);
+
+    const hasProjects = toNumber(projectCount?.count) > 0;
+    const hasProperties = toNumber(propertyCount?.count) > 0;
+
+    if (hasProjects || hasProperties) {
+        throw new Error(
+            `Cannot delete developer with ${hasProjects ? 'projects' : ''}${
+                hasProjects && hasProperties ? ' and ' : ''
+            }${hasProperties ? 'properties' : ''}. Archive first.`
+        );
     }
 
     await knex('internationaldevelopers').where('id', id).delete();
     return { id, deleted: true };
 }
 
-// ─── RESTORE INTERNATIONAL DEVELOPER ──────────────────────────────────
+// ─── RESTORE DEVELOPER ──────────────────────────────────────────────────
 
-export async function restoreDeveloperById(id: number): Promise<DeveloperWithRelations> {
+export async function restoreInternationalDeveloperById(
+    id: number
+): Promise<DeveloperWithFullDetails> {
     const knex = await db();
-    
+
     const existing = await knex('internationaldevelopers')
         .where('id', id)
         .first()
         .select('id', 'status');
 
-    if (!existing) {
-        throw new Error('Developer not found');
-    }
+    if (!existing) throw new Error('Developer not found');
 
     await knex('internationaldevelopers')
         .where('id', id)
-        .update({ status: 1 });
-    
-    const developer = await getDeveloperById(id);
+        .update({ status: 1, updated_at: new Date() });
+
+    const developer = await getInternationalDeveloperById(id);
     if (!developer) throw new Error('Developer not found');
     return developer;
 }
+
+// ─── BULK OPERATIONS ────────────────────────────────────────────────────
+
+export async function bulkUpdateDeveloperStatus(
+    ids: number[],
+    status: number
+): Promise<{ updated: number }> {
+    const knex = await db();
+
+    if (!ids.length) return { updated: 0 };
+
+    await knex('internationaldevelopers')
+        .whereIn('id', ids)
+        .update({ status, updated_at: new Date() });
+
+    return { updated: ids.length };
+}
+
+export async function bulkDeleteDevelopers(
+    ids: number[]
+): Promise<{ deleted: number }> {
+    const knex = await db();
+
+    if (!ids.length) return { deleted: 0 };
+
+    await knex('internationaldevelopers')
+        .whereIn('id', ids)
+        .update({ status: 0, updated_at: new Date() });
+
+    return { deleted: ids.length };
+}
+
+// ─── SYNC DEVELOPER COUNTS ─────────────────────────────────────────────
+
+export async function syncDeveloperCounts(): Promise<{ synced: number }> {
+    const knex = await db();
+
+    const developers = await knex('internationaldevelopers')
+        .select('id', 'total_project', 'total_project_withus')
+        .where('status', 1);
+
+    let synced = 0;
+
+    for (const developer of developers) {
+        const [projectCount, propertyCount] = await Promise.all([
+            knex('project_listing')
+                .where('developer_id', developer.id)
+                .where('status', 1)
+                .count('* as count')
+                .first(),
+            knex('properties')
+                .where('developer_id', developer.id)
+                .where('status', 5)
+                .count('* as count')
+                .first(),
+        ]);
+
+        const totalProject = toNumber(projectCount?.count);
+        const totalProperty = toNumber(propertyCount?.count);
+
+        if (
+            String(totalProject) !== developer.total_project ||
+            String(totalProperty) !== developer.total_project_withus
+        ) {
+            await knex('internationaldevelopers')
+                .where('id', developer.id)
+                .update({
+                    total_project: String(totalProject),
+                    total_project_withus: String(totalProperty),
+                    updated_at: new Date(),
+                });
+            synced++;
+        }
+    }
+
+    return { synced };
+}
+
+// ─── EXPORT DEFAULT ─────────────────────────────────────────────────────
+
+export default {
+    getInternationalDevelopers,
+    getInternationalDeveloperById,
+    getInternationalDeveloperBySlug,
+    getFeaturedInternationalDevelopers,
+    getInternationalDeveloperStatistics,
+    getInternationalDevelopersByCountry,
+    getInternationalDevelopersWithProjects,
+    getInternationalDevelopersWithProperties,
+    searchInternationalDevelopers,
+    createInternationalDeveloper,
+    updateInternationalDeveloperById,
+    deleteInternationalDeveloperById,
+    permanentDeleteInternationalDeveloperById,
+    restoreInternationalDeveloperById,
+    bulkUpdateDeveloperStatus,
+    bulkDeleteDevelopers,
+    syncDeveloperCounts,
+};

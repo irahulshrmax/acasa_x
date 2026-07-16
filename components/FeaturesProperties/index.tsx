@@ -186,11 +186,9 @@ function PropertyCard({
   isCompared: boolean;
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   const location = getLocation(property);
-  const isPriceOnRequest =
-    property.price?.is_price_on_request || !property.price?.amount;
+  const isPriceOnRequest = property.price?.is_price_on_request || !property.price?.amount;
   const priceDisplay = property.price?.display || "Price on Request";
   const specs = getSpecsString(property);
   const displayName = getDisplayName(property);
@@ -201,199 +199,118 @@ function PropertyCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.5, delay: Math.min(index * 0.1, 0.3) }}
-      className="group perspective-1000"
+      className="group bg-white hover:shadow-lg transition-shadow duration-300"
       style={{ fontFamily: FONT_BODY }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
-      <div
-        className={`relative transition-all duration-700 preserve-3d ${
-          isHovered ? "rotate-y-180" : ""
-        }`}
-        style={{ transformStyle: "preserve-3d" }}
-      >
-        {/* FRONT SIDE */}
-        <div
-          className="relative w-full backface-hidden bg-white"
-          style={{ backfaceVisibility: "hidden" }}
-        >
-          <Link href={`/featured-explore-properties/${property.slug}`}>
-            <div className="relative aspect-[4/3] overflow-hidden">
-              <SmartImage
-                src={getActualImageUrl(property)}
-                alt={displayName}
-                className="transition-transform duration-700 group-hover:scale-[1.04]"
-              />
+      <Link href={`/featured-explore-properties/${property.slug}`}>
+        <div className="relative aspect-[4/3] overflow-hidden cursor-pointer">
+          <SmartImage
+            src={getActualImageUrl(property)}
+            alt={displayName}
+            className="transition-transform duration-700 group-hover:scale-[1.04]"
+          />
 
-              {(property.featured || property.listing_type === "Off plan") && (
-                <span
-                  className="absolute left-3 top-3 z-10 rounded-[3px] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white"
-                  style={{
-                    backgroundColor: "rgba(25,35,52,0.9)",
-                    fontFamily: FONT_BODY,
-                  }}
-                >
-                  {property.featured ? "Featured" : property.listing_type}
-                </span>
-              )}
-
-              <div className="absolute right-3 top-3 z-10">
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onCompare(property.id);
-                  }}
-                  onMouseEnter={() => setShowTooltip(true)}
-                  onMouseLeave={() => setShowTooltip(false)}
-                  aria-label="Add to compare"
-                  className={`flex h-7 w-7 items-center justify-center rounded-[3px] border transition-all ${
-                    isCompared
-                      ? "border-[#192334] bg-[#192334] text-white"
-                      : "border-[#192334]/30 bg-white/90 text-[#192334] hover:border-[#192334]"
-                  }`}
-                >
-                  <HiPlus className="h-4 w-4" />
-                </button>
-
-                <AnimatePresence>
-                  {showTooltip && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="absolute right-0 top-9 z-10 whitespace-nowrap rounded-[3px] bg-white px-2.5 py-1.5 text-[10px] font-medium shadow-md"
-                      style={{ color: THEME.primary }}
-                    >
-                      {isCompared ? "Remove from compare" : "Add to compare"}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          </Link>
-
-          <div className="pt-4 pb-4">
-            <Link href={`/featured-explore-properties/${property.slug}`}>
-              <div className="block w-full text-left">
-                <h3
-                  className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em]"
-                  style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
-                >
-                  {displayName}
-                </h3>
-                <p
-                  className="mt-0.5 text-[11px]"
-                  style={{ color: THEME.muted, fontFamily: FONT_BODY }}
-                >
-                  {location}
-                </p>
-              </div>
-            </Link>
-
-            <div
-              className="mt-3 h-px w-full"
-              style={{ backgroundColor: THEME.border }}
-            />
-
-            <div className="mt-3 flex items-end justify-between gap-3">
-              <div>
-                <p
-                  className="text-[9px] font-medium uppercase tracking-[0.14em]"
-                  style={{ color: THEME.muted, fontFamily: FONT_BODY }}
-                >
-                  Price
-                </p>
-                <p
-                  className="text-[14px] font-bold leading-tight"
-                  style={{ color: THEME.primary, fontFamily: FONT_BODY }}
-                >
-                  {isPriceOnRequest ? "AED On Request" : priceDisplay}
-                </p>
-              </div>
-              {property.ref_number && (
-                <p
-                  className="shrink-0 text-[11px]"
-                  style={{ color: THEME.muted, fontFamily: FONT_BODY }}
-                >
-                  Ref: {property.ref_number}
-                </p>
-              )}
-            </div>
-
-            <p
-              className="mt-3 text-[11px]"
-              style={{ color: "#4A5462", fontFamily: FONT_BODY }}
+          {(property.featured || property.listing_type === "Off plan") && (
+            <span
+              className="absolute left-3 top-3 z-10 rounded-[3px] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white"
+              style={{
+                backgroundColor: "rgba(25,35,52,0.9)",
+                fontFamily: FONT_BODY,
+              }}
             >
-              {specs || "\u00A0"}
+              {property.featured ? "Featured" : property.listing_type}
+            </span>
+          )}
+        </div>
+      </Link>
+
+      <div className="pt-4 pb-4 px-1">
+        <Link href={`/featured-explore-properties/${property.slug}`}>
+          <div className="block w-full text-left cursor-pointer">
+            <h3
+              className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] hover:text-[#C8AA78] transition-colors"
+              style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
+            >
+              {displayName}
+            </h3>
+            <p
+              className="mt-0.5 text-[11px]"
+              style={{ color: THEME.muted, fontFamily: FONT_BODY }}
+            >
+              {location}
             </p>
           </div>
+        </Link>
+
+        <div
+          className="mt-3 h-px w-full"
+          style={{ backgroundColor: THEME.border }}
+        />
+
+        <div className="mt-3 flex items-end justify-between gap-3">
+          <div>
+            <p
+              className="text-[9px] font-medium uppercase tracking-[0.14em]"
+              style={{ color: THEME.muted, fontFamily: FONT_BODY }}
+            >
+              Price
+            </p>
+            <p
+              className="text-[14px] font-bold leading-tight"
+              style={{ color: THEME.primary, fontFamily: FONT_BODY }}
+            >
+              {isPriceOnRequest ? "AED On Request" : priceDisplay}
+            </p>
+          </div>
+          {property.ref_number && (
+            <p
+              className="shrink-0 text-[11px]"
+              style={{ color: THEME.muted, fontFamily: FONT_BODY }}
+            >
+              Ref: {property.ref_number}
+            </p>
+          )}
         </div>
 
-        {/* BACK SIDE */}
-        <div
-          className="absolute inset-0 w-full backface-hidden rotate-y-180 bg-[#192334] rounded-none"
-          style={{ backfaceVisibility: "hidden" }}
-        >
-          <div className="h-full w-full p-6 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[8px] uppercase tracking-[0.15em] text-[#C8AA78] font-semibold bg-[#C8AA78]/10 px-2.5 py-1 rounded-full">
-                  {property.listing_type || "Property"}
-                </span>
-              </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p
+            className="text-[11px]"
+            style={{ color: "#4A5462", fontFamily: FONT_BODY }}
+          >
+            {specs || "\u00A0"}
+          </p>
 
-              <h3
-                className="text-lg font-semibold text-white mb-2 leading-tight"
-                style={{ fontFamily: FONT_DISPLAY }}
-              >
-                {displayName}
-              </h3>
-              
-              <p className="text-xs text-gray-300 leading-relaxed line-clamp-3">
-                {property.description || `Discover this exceptional property in ${location}.`}
-              </p>
-
-              <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
-                <span>{property.bedrooms || "Studio"}</span>
-                <span>•</span>
-                <span>{property.bathrooms || "1 Bath"}</span>
-                <span>•</span>
-                <span>{property.area?.display || "Various Sizes"}</span>
-              </div>
-
-              {property.amenities && property.amenities.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-[#C8AA78] font-semibold mb-1.5">
-                    Amenities
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {property.amenities.slice(0, 4).map((amenity, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[7px] bg-white/10 text-gray-300 px-2.5 py-1 rounded-full"
-                      >
-                        {amenity}
-                      </span>
-                    ))}
-                    {property.amenities.length > 4 && (
-                      <span className="text-[7px] bg-white/10 text-gray-300 px-2.5 py-1 rounded-full">
-                        +{property.amenities.length - 4} more
-                      </span>
-                    )}
-                  </div>
-                </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onCompare(property.id);
+            }}
+            onMouseEnter={() => setShowTooltip(true)}
+            onMouseLeave={() => setShowTooltip(false)}
+            aria-label="Add to compare"
+            className={`relative flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
+              isCompared
+                ? "border-[#192334] bg-[#192334] text-white"
+                : "border-[#192334]/20 bg-white text-[#192334] hover:border-[#192334] hover:bg-[#192334] hover:text-white"
+            }`}
+          >
+            <HiPlus className="h-4 w-4" />
+            
+            <AnimatePresence>
+              {showTooltip && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute -top-8 right-0 z-10 whitespace-nowrap rounded-[3px] bg-white px-2.5 py-1.5 text-[10px] font-medium shadow-md"
+                  style={{ color: THEME.primary }}
+                >
+                  {isCompared ? "Remove" : "Compare"}
+                </motion.div>
               )}
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-white/10">
-              <Link href={`/featured-explore-properties/${property.slug}`}>
-                <span className="text-[10px] text-[#C8AA78] hover:text-white transition-colors font-medium">
-                  View Details →
-                </span>
-              </Link>
-            </div>
-          </div>
+            </AnimatePresence>
+          </button>
         </div>
       </div>
     </motion.div>
@@ -439,7 +356,7 @@ function FloatingCompareBar({
                 <SmartImage src={getActualImageUrl(p)} alt={p.name} />
                 <button
                   onClick={() => onRemove(p.id)}
-                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#192334] text-white"
+                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#192334] text-white hover:bg-[#C8AA78] transition-colors"
                 >
                   <HiOutlineXMark className="h-2.5 w-2.5" />
                 </button>
@@ -454,12 +371,12 @@ function FloatingCompareBar({
             className="text-[10px] uppercase tracking-widest transition-colors hover:text-[#192334]"
             style={{ color: THEME.muted }}
           >
-            Clear
+            Clear All
           </button>
           {canCompare ? (
             <Link
               href={`/properties/compare?ids=${ids}`}
-              className="px-5 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition-opacity hover:opacity-90"
+              className="px-5 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition-all hover:opacity-90 hover:shadow-md"
               style={{ backgroundColor: THEME.primary }}
             >
               Compare Now
@@ -495,18 +412,12 @@ export default function FeaturesProperties() {
     setLoading(true);
     setError(null);
     try {
-      // ✅ REMOVED status=1 filter
       const res = await fetch("/api/v1/properties?featured=true&limit=6&show_all=true");
       const data = await res.json();
       
-      console.log("📦 [FeaturesProperties] Response:", data);
-      
       if (data.success && data.data && data.data.length > 0) {
-        console.log("✅ [FeaturesProperties] Found:", data.data.length, "properties");
         setProperties(data.data);
       } else {
-        // ✅ Fallback: get all properties
-        console.log("🔄 [FeaturesProperties] Fallback - fetching all properties");
         const fallbackRes = await fetch("/api/v1/properties?limit=6&show_all=true");
         const fallbackData = await fallbackRes.json();
         if (fallbackData.success && fallbackData.data) {
@@ -516,7 +427,6 @@ export default function FeaturesProperties() {
         }
       }
     } catch (err) {
-      console.error("❌ [FeaturesProperties] Error:", err);
       setError("Failed to load properties");
     } finally {
       setLoading(false);
@@ -546,8 +456,7 @@ export default function FeaturesProperties() {
   );
 
   const visibleProperties = properties.slice(0, 3);
-  const effectiveSlide =
-    activeSlide >= visibleProperties.length ? 0 : activeSlide;
+  const effectiveSlide = activeSlide >= visibleProperties.length ? 0 : activeSlide;
 
   if (error) {
     return (
@@ -611,7 +520,7 @@ export default function FeaturesProperties() {
             <div className="md:hidden">
               <div className="mx-auto max-w-xs sm:max-w-sm overflow-hidden">
                 <div
-                  className="flex transition-transform duration-500"
+                  className="flex transition-transform duration-500 ease-in-out"
                   style={{
                     transform: `translateX(-${effectiveSlide * 100}%)`,
                   }}
@@ -619,7 +528,7 @@ export default function FeaturesProperties() {
                   {visibleProperties.map((property, index) => (
                     <div
                       key={`${property.id}-${property.slug}-mobile`}
-                      className="w-full flex-shrink-0"
+                      className="w-full flex-shrink-0 px-2"
                     >
                       <PropertyCard
                         property={property}
@@ -632,16 +541,17 @@ export default function FeaturesProperties() {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-center gap-2">
+              <div className="mt-6 flex items-center justify-center gap-2">
                 {visibleProperties.map((_, idx) => (
                   <button
                     key={idx}
                     onClick={() => setActiveSlide(idx)}
-                    className={`h-1.5 rounded-full transition-all ${
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
                       idx === effectiveSlide
-                        ? "w-4 bg-[#192334]"
-                        : "w-1.5 bg-gray-300"
+                        ? "w-6 bg-[#192334]"
+                        : "w-1.5 bg-gray-300 hover:bg-gray-400"
                     }`}
+                    aria-label={`Go to slide ${idx + 1}`}
                   />
                 ))}
               </div>
@@ -661,14 +571,12 @@ export default function FeaturesProperties() {
               style={{
                 backgroundColor: THEME.primary,
                 fontFamily: FONT_BODY,
-                boxShadow:
-                  buttonHover && !isNavigating
-                    ? "0 12px 32px rgba(25,35,52,0.25)"
-                    : "0 4px 12px rgba(25,35,52,0.1)",
-                transform:
-                  buttonHover && !isNavigating
-                    ? "translateY(-2px)"
-                    : "translateY(0)",
+                boxShadow: buttonHover && !isNavigating
+                  ? "0 12px 32px rgba(25,35,52,0.25)"
+                  : "0 4px 12px rgba(25,35,52,0.1)",
+                transform: buttonHover && !isNavigating
+                  ? "translateY(-2px)"
+                  : "translateY(0)",
                 transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)",
                 minWidth: "240px",
                 justifyContent: "center",
@@ -678,8 +586,7 @@ export default function FeaturesProperties() {
                 className="absolute inset-0 origin-left"
                 style={{
                   background: `linear-gradient(90deg, ${THEME.accent} 0%, #D4B888 100%)`,
-                  transform:
-                    buttonHover && !isNavigating ? "scaleX(1)" : "scaleX(0)",
+                  transform: buttonHover && !isNavigating ? "scaleX(1)" : "scaleX(0)",
                   transition: "transform 0.5s cubic-bezier(0.4,0,0.2,1)",
                 }}
               />
@@ -688,8 +595,7 @@ export default function FeaturesProperties() {
                 <motion.span
                   className="absolute inset-0"
                   style={{
-                    background:
-                      "linear-gradient(90deg, transparent, rgba(200,170,120,0.4), transparent)",
+                    background: "linear-gradient(90deg, transparent, rgba(200,170,120,0.4), transparent)",
                   }}
                   animate={{ x: ["-100%", "100%"] }}
                   transition={{
@@ -703,8 +609,7 @@ export default function FeaturesProperties() {
               <span
                 className="relative z-10 transition-colors"
                 style={{
-                  color:
-                    buttonHover && !isNavigating ? THEME.primary : "#fff",
+                  color: buttonHover && !isNavigating ? THEME.primary : "#fff",
                 }}
               >
                 {isNavigating ? "Loading Properties" : "View All Properties"}
@@ -713,8 +618,7 @@ export default function FeaturesProperties() {
               <span
                 className="relative z-10 flex items-center"
                 style={{
-                  color:
-                    buttonHover && !isNavigating ? THEME.primary : "#fff",
+                  color: buttonHover && !isNavigating ? THEME.primary : "#fff",
                 }}
               >
                 {isNavigating ? (
@@ -768,29 +672,11 @@ export default function FeaturesProperties() {
         {compareList.length > 0 && (
           <FloatingCompareBar
             compareList={compareList}
-            onRemove={(id) =>
-              setCompareIds((p) => p.filter((x) => x !== id))
-            }
+            onRemove={(id) => setCompareIds((p) => p.filter((x) => x !== id))}
             onClear={() => setCompareIds([])}
           />
         )}
       </AnimatePresence>
-
-      <style jsx global>{`
-        .perspective-1000 {
-          perspective: 1000px;
-        }
-        .preserve-3d {
-          transform-style: preserve-3d;
-        }
-        .backface-hidden {
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-        }
-        .rotate-y-180 {
-          transform: rotateY(180deg);
-        }
-      `}</style>
     </section>
   );
 }

@@ -48,6 +48,7 @@ interface Developer {
   project_count: number;
   property_count: number;
   status: number;
+  seo_slug: string | null;
   seo_title: string | null;
   seo_keywork: string | null;
   seo_description: string | null;
@@ -420,7 +421,10 @@ const EmptyState = memo(function EmptyState() {
 const DeveloperLogoItem = memo(function DeveloperLogoItem({ dev }: { dev: Developer }) {
   const [isOpening, setIsOpening] = useState(false);
   const imageUrls = useMemo(() => getDeveloperImageUrls(dev), [dev]);
-  const href = `/developers/${dev.id}`;
+  
+  // ✅ FIX: seo_slug use karo, agar nahi hai toh id
+  const slug = dev.seo_slug || String(dev.id);
+  const href = `/developers/${slug}`;
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -467,7 +471,10 @@ const DeveloperLogoItem = memo(function DeveloperLogoItem({ dev }: { dev: Develo
 const MobileDeveloperCard = memo(function MobileDeveloperCard({ dev }: { dev: Developer }) {
   const [isOpening, setIsOpening] = useState(false);
   const imageUrls = useMemo(() => getDeveloperImageUrls(dev), [dev]);
-  const href = `/developers/${dev.id}`;
+  
+  // ✅ FIX: seo_slug use karo, agar nahi hai toh id
+  const slug = dev.seo_slug || String(dev.id);
+  const href = `/developers/${slug}`;
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLAnchorElement>) => {

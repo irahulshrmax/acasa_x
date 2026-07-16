@@ -151,16 +151,34 @@ function uniqueStrings(values: string[]): string[] {
     return [...new Set(values.filter(Boolean))];
 }
 
+function isInvalidValue(value: string): boolean {
+    const lower = value.toLowerCase().trim();
+    return (
+        lower === 'null' ||
+        lower === 'undefined' ||
+        lower === 'NULL' ||
+        lower === '' ||
+        lower === 'no-image' ||
+        lower === 'none'
+    );
+}
+
+// ─── CORE CANDIDATE BUILDER ───────────────────────────────────────────────
+
 function buildCandidates(rawPath: string | null, dirs: string[]): string[] {
     if (!rawPath) return [];
 
     const original = rawPath.trim();
     if (!original) return [];
 
+    // Already full URL
     if (isFullUrl(original)) return [original];
 
     const clean = stripUploadPrefix(original);
     if (!clean) return [];
+
+    // Invalid string check
+    if (isInvalidValue(clean)) return [];
 
     const alreadyHasFolder = clean.includes('/');
     const alreadyHasExt = hasExtension(clean);
@@ -168,8 +186,10 @@ function buildCandidates(rawPath: string | null, dirs: string[]): string[] {
 
     if (alreadyHasFolder) {
         if (alreadyHasExt) {
+            // Exact path with extension — direct use
             candidates.push(`${UPLOAD_BASE_URL}/${clean}`);
         } else {
+            // Has folder but no extension — try all extensions
             for (const ext of IMAGE_EXTENSIONS) {
                 candidates.push(`${UPLOAD_BASE_URL}/${clean}${ext}`);
             }
@@ -177,23 +197,65 @@ function buildCandidates(rawPath: string | null, dirs: string[]): string[] {
         return uniqueStrings(candidates);
     }
 
+    // No folder in path
     if (alreadyHasExt) {
+        // Has extension but no folder — try all dirs
         for (const dir of dirs) {
             candidates.push(`${UPLOAD_BASE_URL}/${dir}/${clean}`);
         }
+        // Also try root
         candidates.push(`${UPLOAD_BASE_URL}/${clean}`);
     } else {
+        // ✅ No folder, no extension — try all dirs + all extensions
+        // webp first (most common modern format)
         for (const dir of dirs) {
             for (const ext of IMAGE_EXTENSIONS) {
                 candidates.push(`${UPLOAD_BASE_URL}/${dir}/${clean}${ext}`);
             }
         }
+        // Also try root with extensions
         for (const ext of IMAGE_EXTENSIONS) {
             candidates.push(`${UPLOAD_BASE_URL}/${clean}${ext}`);
         }
     }
 
     return uniqueStrings(candidates);
+}
+
+// ─── THUMB URL BUILDER ───────────────────────────────────────────────────
+
+function buildThumbUrl(filename: string | null, dirs: string[]): string {
+    if (!filename) return `${UPLOAD_BASE_URL}/no-image.png`;
+
+    const original = filename.trim();
+    if (!original) return `${UPLOAD_BASE_URL}/no-image.png`;
+
+    if (isFullUrl(original)) return original;
+
+    const clean = stripUploadPrefix(original);
+    if (!clean || isInvalidValue(clean)) return `${UPLOAD_BASE_URL}/no-image.png`;
+
+    const primaryDir = dirs[0];
+
+    if (clean.includes('/')) {
+        // Has folder path
+        const parts = clean.split('/');
+        const basename = parts[parts.length - 1];
+        const folder = parts.slice(0, -1).join('/');
+
+        if (hasExtension(basename)) {
+            return `${UPLOAD_BASE_URL}/${folder}/thumb_${basename}`;
+        }
+        return `${UPLOAD_BASE_URL}/${folder}/thumb_${basename}.webp`;
+    }
+
+    // No folder
+    if (hasExtension(clean)) {
+        return `${UPLOAD_BASE_URL}/${primaryDir}/thumb_${clean}`;
+    }
+
+    // ✅ No extension — add .webp (most common)
+    return `${UPLOAD_BASE_URL}/${primaryDir}/thumb_${clean}.webp`;
 }
 
 // ─── PROPERTY IMAGES ─────────────────────────────────────────────────────
@@ -212,7 +274,14 @@ export function getImageUrlVariations(filename: string | null): string[] {
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
-export function getFeaturedImage(featuredImage: string | null, galleryPaths: string[] = []): string {
+export function getImageThumbUrl(filename: string | null): string {
+    return buildThumbUrl(filename, PROPERTY_IMAGE_DIRS);
+}
+
+export function getFeaturedImage(
+    featuredImage: string | null,
+    galleryPaths: string[] = []
+): string {
     const featuredCandidates = getPropertyImageCandidates(featuredImage);
     if (featuredCandidates.length > 0) return featuredCandidates[0];
     if (galleryPaths.length > 0) return galleryPaths[0];
@@ -235,7 +304,14 @@ export function getDeveloperImageVariations(filename: string | null): string[] {
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
-export function getDeveloperLogoUrl(image: string | null, developerId?: number): string[] {
+export function getDeveloperImageThumb(filename: string | null): string {
+    return buildThumbUrl(filename, DEVELOPER_IMAGE_DIRS);
+}
+
+export function getDeveloperLogoUrl(
+    image: string | null,
+    developerId?: number
+): string[] {
     const urls = buildCandidates(image, DEVELOPER_IMAGE_DIRS);
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
@@ -256,7 +332,14 @@ export function getProjectImageVariations(filename: string | null): string[] {
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
-export function getProjectImageWithSize(rawPath: string | null, size: 'thumbnail' | 'medium' | 'large' | 'original' = 'original'): string {
+export function getProjectImageThumb(filename: string | null): string {
+    return buildThumbUrl(filename, PROJECT_IMAGE_DIRS);
+}
+
+export function getProjectImageWithSize(
+    rawPath: string | null,
+    size: 'thumbnail' | 'medium' | 'large' | 'original' = 'original'
+): string {
     const baseUrl = getProjectImageUrl(rawPath);
     if (baseUrl.includes('no-image')) return baseUrl;
     if (size === 'original') return baseUrl;
@@ -281,7 +364,9 @@ export function getProjectGalleryImageUrl(filename: string | null): string {
     return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
 }
 
-export function getProjectGalleryImages(galleryRecords: { Url: string | null }[]): string[] {
+export function getProjectGalleryImages(
+    galleryRecords: { Url: string | null }[]
+): string[] {
     return uniqueStrings(
         galleryRecords
             .map((record) => getProjectGalleryImageUrl(record.Url))
@@ -298,7 +383,10 @@ export function getProjectLogoUrl(filename: string | null): string {
     return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
 }
 
-export function getProjectFeaturedImage(featuredImage: string | null, galleryPaths: string[] = []): string {
+export function getProjectFeaturedImage(
+    featuredImage: string | null,
+    galleryPaths: string[] = []
+): string {
     const featuredCandidates = getProjectImageCandidates(featuredImage);
     if (featuredCandidates.length > 0) return featuredCandidates[0];
 
@@ -351,7 +439,10 @@ export function buildProjectImageSet(params: {
 
 // ─── USER / AGENT IMAGES ────────────────────────────────────────────────
 
-export function getUserPhotoUrl(photo: string | null, userId?: number): string[] {
+export function getUserPhotoUrl(
+    photo: string | null,
+    userId?: number
+): string[] {
     const urls = buildCandidates(photo, USER_IMAGE_DIRS);
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
@@ -363,6 +454,10 @@ export function getUserImageCandidates(rawPath: string | null): string[] {
 export function getUserImageUrl(filename: string | null): string {
     const urls = getUserImageCandidates(filename);
     return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
+}
+
+export function getUserImageThumb(filename: string | null): string {
+    return buildThumbUrl(filename, USER_IMAGE_DIRS);
 }
 
 export function getAgentImageCandidates(rawPath: string | null): string[] {
@@ -379,24 +474,33 @@ export function getAgentImageVariations(filename: string | null): string[] {
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
+export function getAgentImageThumb(filename: string | null): string {
+    return buildThumbUrl(filename, AGENT_IMAGE_DIRS);
+}
+
 // ─── COMMUNITY IMAGES ────────────────────────────────────────────────────
 
-export function getCommunityImageUrl(image: string | null, communityId?: number): string[] {
+export function getCommunityImageUrl(
+    image: string | null,
+    communityId?: number
+): string[] {
     if (image) {
         const clean = stripUploadPrefix(image);
-        if (clean) {
+        if (clean && !isInvalidValue(clean)) {
             const urls = [
                 `${UPLOAD_BASE_URL}/locations/${clean}`,
                 `${UPLOAD_BASE_URL}/locations/medium/${clean}`,
                 `${UPLOAD_BASE_URL}/locations/menu/${clean}`,
                 `${UPLOAD_BASE_URL}/locations/thumbnail/${clean}`,
-            ];
-            const validUrls = urls.filter(url => !url.includes('null') && !url.includes('undefined'));
-            if (validUrls.length > 0) {
-                return validUrls;
-            }
+            ].filter(
+                (url) =>
+                    !url.includes('null') && !url.includes('undefined')
+            );
+
+            if (urls.length > 0) return urls;
         }
     }
+
     const urls = buildCandidates(image, COMMUNITY_IMAGE_DIRS);
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
@@ -404,19 +508,21 @@ export function getCommunityImageUrl(image: string | null, communityId?: number)
 export function getCommunityImageCandidates(rawPath: string | null): string[] {
     if (rawPath) {
         const clean = stripUploadPrefix(rawPath);
-        if (clean) {
+        if (clean && !isInvalidValue(clean)) {
             const urls = [
                 `${UPLOAD_BASE_URL}/locations/${clean}`,
                 `${UPLOAD_BASE_URL}/locations/medium/${clean}`,
                 `${UPLOAD_BASE_URL}/locations/menu/${clean}`,
                 `${UPLOAD_BASE_URL}/locations/thumbnail/${clean}`,
-            ];
-            const validUrls = urls.filter(url => !url.includes('null') && !url.includes('undefined'));
-            if (validUrls.length > 0) {
-                return validUrls;
-            }
+            ].filter(
+                (url) =>
+                    !url.includes('null') && !url.includes('undefined')
+            );
+
+            if (urls.length > 0) return urls;
         }
     }
+
     return buildCandidates(rawPath, COMMUNITY_IMAGE_DIRS);
 }
 
@@ -441,30 +547,37 @@ export function getBlogImageVariations(filename: string | null): string[] {
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
+export function getBlogImageThumb(filename: string | null): string {
+    return buildThumbUrl(filename, BLOG_IMAGE_DIRS);
+}
+
 // ─── MEDIA / GALLERY ────────────────────────────────────────────────────
 
 export function getMediaImageUrl(path: string | null): string {
     if (!path) return `${UPLOAD_BASE_URL}/no-image.png`;
 
-    // Remove any upload/ prefix
     const cleanPath = path
         .replace(/^upload\//i, '')
         .replace(/^\/+/, '')
         .trim();
 
-    if (!cleanPath) return `${UPLOAD_BASE_URL}/no-image.png`;
+    if (!cleanPath || isInvalidValue(cleanPath)) {
+        return `${UPLOAD_BASE_URL}/no-image.png`;
+    }
 
-    // If path already has directory structure
+    if (isFullUrl(path)) return path;
+
+    // Already has directory structure
     if (cleanPath.includes('/')) {
         return `${UPLOAD_BASE_URL}/${cleanPath}`;
     }
 
-    // If path has extension, return as is
+    // Has extension
     if (/\.(webp|jpg|jpeg|png|gif|svg|avif)$/i.test(cleanPath)) {
         return `${UPLOAD_BASE_URL}/media/${cleanPath}`;
     }
 
-    // If no extension, add .webp
+    // No extension — add .webp
     return `${UPLOAD_BASE_URL}/media/${cleanPath}.webp`;
 }
 
@@ -476,7 +589,9 @@ export function getMediaImageUrls(paths: (string | null)[]): string[] {
     );
 }
 
-export function getGalleryImages(mediaRecords: { path: string | null }[]): string[] {
+export function getGalleryImages(
+    mediaRecords: { path: string | null }[]
+): string[] {
     return uniqueStrings(
         mediaRecords
             .map((record) => getMediaImageUrl(record.path))
@@ -493,6 +608,10 @@ export function getTestimonialImageCandidates(rawPath: string | null): string[] 
 export function getTestimonialImageUrl(filename: string | null): string {
     const urls = getTestimonialImageCandidates(filename);
     return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
+}
+
+export function getTestimonialImageThumb(filename: string | null): string {
+    return buildThumbUrl(filename, TESTIMONIAL_IMAGE_DIRS);
 }
 
 // ─── UTILITY FUNCTIONS ──────────────────────────────────────────────────
@@ -552,7 +671,11 @@ export function processImageBatch(
     return result;
 }
 
-export function extractImageUrls(data: any[], pathKey: string = 'image', idKey: string = 'id'): { [key: string]: string } {
+export function extractImageUrls(
+    data: any[],
+    pathKey: string = 'image',
+    idKey: string = 'id'
+): { [key: string]: string } {
     const result: { [key: string]: string } = {};
 
     for (const item of data) {
@@ -620,16 +743,19 @@ export default {
     getPropertyImageCandidates,
     getImageUrl,
     getImageUrlVariations,
+    getImageThumbUrl,
     getFeaturedImage,
 
     getDeveloperImageCandidates,
     getDeveloperImageUrl,
     getDeveloperImageVariations,
+    getDeveloperImageThumb,
     getDeveloperLogoUrl,
 
     getProjectImageCandidates,
     getProjectImageUrl,
     getProjectImageVariations,
+    getProjectImageThumb,
     getProjectImageWithSize,
     getProjectGalleryImageCandidates,
     getProjectGalleryImageUrl,
@@ -642,9 +768,11 @@ export default {
     getUserPhotoUrl,
     getUserImageCandidates,
     getUserImageUrl,
+    getUserImageThumb,
     getAgentImageCandidates,
     getAgentImageUrl,
     getAgentImageVariations,
+    getAgentImageThumb,
 
     getCommunityImageUrl,
     getCommunityImageCandidates,
@@ -653,6 +781,7 @@ export default {
     getBlogImageCandidates,
     getBlogImageUrl,
     getBlogImageVariations,
+    getBlogImageThumb,
 
     getMediaImageUrl,
     getMediaImageUrls,
@@ -660,6 +789,7 @@ export default {
 
     getTestimonialImageCandidates,
     getTestimonialImageUrl,
+    getTestimonialImageThumb,
 
     getNoImageUrl,
     isValidImageUrl,

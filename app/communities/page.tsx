@@ -11,7 +11,10 @@ import {
   MapPin,
   ArrowRight,
   X,
-  Sparkles,     
+  DollarSign,
+  Layers,
+  Sparkles,
+  Plus,
   Grid3x3,
   List,
   Calendar,
@@ -20,15 +23,17 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
+  Heart,
   Eye,
   ImageOff,
   Star,
   Home,
   TrendingUp,
   Clock,
-  Globe,
-  Briefcase,
   Users,
+  Award,
+  Globe,
+  Shield,
 } from "lucide-react";
 
 const FONT_DISPLAY = "'Display Pro', 'Playfair Display', Georgia, serif";
@@ -43,26 +48,30 @@ const THEME = {
   accent: "#0A2540",
 };
 
-interface Developer {
+interface Community {
   id: number;
+  community_id: number;
   name: string;
+  country_id: number;
+  state_id: number;
+  city_id: number;
   slug: string;
-  seo_slug: string | null;
-  image: string | null;
-  image_url: string | null;
-  image_thumb: string | null;
-  country: string | null;
-  website: string | null;
-  year_established: string | null;
-  ceo_name: string | null;
-  total_project: string | null;
-  total_project_withus: string | null;
-  informations: string | null;
-  project_count: number;
-  property_count: number;
+  latitude: string;
+  longitude: string;
+  img: string | null;
+  description: string | null;
+  featured: number;
   status: number;
-  featured: boolean;
-  created_at: string;
+  city_name: string;
+  city_slug: string;
+  state_name: string;
+  country_name: string;
+  property_count: number;
+  image_url: string | null;
+  image_variations: string[];
+  seo_title: string | null;
+  seo_slug: string | null;
+  seo_description: string | null;
 }
 
 interface PaginationData {
@@ -70,7 +79,6 @@ interface PaginationData {
   page: number;
   limit: number;
   totalPages: number;
-  hasMore: boolean;
 }
 
 interface FilterOption {
@@ -79,25 +87,21 @@ interface FilterOption {
 }
 
 const SORT_OPTIONS: FilterOption[] = [
-  { value: "name_asc", label: "Name: A → Z" },
-  { value: "name_desc", label: "Name: Z → A" },
-  { value: "project_count", label: "Most Projects" },
+  { value: "featured_desc", label: "Featured" },
+  { value: "name_asc", label: "Name: A to Z" },
+  { value: "name_desc", label: "Name: Z to A" },
+  { value: "property_count_desc", label: "Most Properties" },
   { value: "newest", label: "Newest" },
 ];
 
-const STATUS_OPTIONS: FilterOption[] = [
-  { value: "1", label: "Active" },
-  { value: "0", label: "Inactive" },
-];
+// ─── COMMUNITY CARD ───────────────────────────────────────────────────────
 
-// ─── DEVELOPER CARD ───────────────────────────────────────────────────────
-
-function DeveloperCard({
-  developer,
+function CommunityCard({
+  community,
   viewMode = "grid",
   badge = null,
 }: {
-  developer: Developer;
+  community: Community;
   viewMode?: string;
   badge?: "featured" | "popular" | "new" | null;
 }) {
@@ -105,31 +109,41 @@ function DeveloperCard({
 
   const imageUrl = useMemo(() => {
     if (imageError) return null;
-    if (developer.image_url) return developer.image_url;
-    if (developer.image) return `https://acasa.ae/upload/developers/${developer.image}`;
+    if (community.image_url) return community.image_url;
     return null;
-  }, [developer, imageError]);
+  }, [community, imageError]);
 
+  const location = community.city_name || "Dubai";
+  const isFeatured = community.featured === 1;
   const isListMode = viewMode === "list";
   const hasImage = !!imageUrl;
-  const projectCount = developer.project_count || parseInt(developer.total_project || "0") || 0;
-  const propertyCount = developer.property_count || 0;
-  const isFeatured = developer.featured || developer.total_project_withus && parseInt(developer.total_project_withus) > 2;
 
   const getBadgeConfig = () => {
     if (badge === "featured" || isFeatured) {
       return { label: "Featured", bg: "bg-[#0A2540]", icon: <Star className="h-3 w-3" /> };
     }
-    if (badge === "popular" && projectCount > 5) {
+    if (badge === "popular") {
       return { label: "Popular", bg: "bg-[#1B3A5F]", icon: <Users className="h-3 w-3" /> };
     }
     if (badge === "new") {
       return { label: "New", bg: "bg-emerald-600", icon: <Sparkles className="h-3 w-3" /> };
     }
+    if (community.property_count > 50) {
+      return { label: "Popular", bg: "bg-[#1B3A5F]", icon: <Users className="h-3 w-3" /> };
+    }
     return null;
   };
 
   const badgeConfig = getBadgeConfig();
+
+  // Extract short description
+  const getShortDescription = () => {
+    if (!community.description) return null;
+    const text = community.description.replace(/<[^>]*>/g, '');
+    return text.length > 120 ? text.substring(0, 120) + '...' : text;
+  };
+
+  const shortDesc = getShortDescription();
 
   return (
     <motion.div
@@ -144,14 +158,14 @@ function DeveloperCard({
     >
       <div
         className={`relative overflow-hidden bg-gray-100 ${
-          isListMode ? "sm:w-[200px] sm:flex-shrink-0" : "aspect-[4/3]"
+          isListMode ? "sm:w-[320px] sm:flex-shrink-0" : "aspect-[4/3]"
         }`}
       >
-        <Link href={`/developers/${developer.seo_slug || developer.id}`} className="block h-full w-full">
+        <Link href={`/communities/${community.slug}`} className="block h-full w-full">
           {hasImage ? (
             <img
               src={imageUrl}
-              alt={developer.name}
+              alt={community.name}
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
               onError={() => setImageError(true)}
@@ -173,16 +187,17 @@ function DeveloperCard({
           </span>
         )}
 
-        {developer.status === 1 && (
-          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-emerald-600/90 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white">
-            Active
+        {community.property_count > 0 && (
+          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/70 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white">
+            <Building2 className="h-3 w-3" />
+            {community.property_count} Properties
           </div>
         )}
 
-        {developer.country && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/70 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white">
-            <Globe className="h-3 w-3" />
-            {developer.country}
+        {community.status === 1 && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-emerald-600/90 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white">
+            <Shield className="h-3 w-3" />
+            Active
           </div>
         )}
       </div>
@@ -190,65 +205,53 @@ function DeveloperCard({
       <div className={`flex flex-1 flex-col ${isListMode ? "py-2 pr-2" : "pt-4"}`}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <Link href={`/developers/${developer.seo_slug || developer.id}`}>
+            <Link href={`/communities/${community.slug}`}>
               <h3
                 className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-opacity hover:opacity-70"
                 style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
               >
-                {developer.name}
+                {community.name}
               </h3>
             </Link>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#8A94A3]">
-              <Briefcase className="h-3 w-3" />
-              <span>{projectCount} {projectCount === 1 ? "Project" : "Projects"}</span>
-              {propertyCount > 0 && (
-                <>
-                  <span className="h-1 w-1 rounded-full bg-[#8A94A3]" />
-                  <Home className="h-3 w-3" />
-                  <span>{propertyCount} Properties</span>
-                </>
-              )}
+              <MapPin className="h-3 w-3" />
+              <span>{location}, {community.country_name || "UAE"}</span>
             </div>
           </div>
 
-          {developer.year_established && (
-            <div className="shrink-0 text-right">
-              <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#8A94A3]">Established</p>
-              <p className="text-[13px] font-medium leading-tight text-[#0A2540]">
-                {developer.year_established}
-              </p>
-            </div>
-          )}
+          <div className="shrink-0 text-right">
+            <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#8A94A3]">Properties</p>
+            <p className="text-[14px] font-bold leading-tight text-[#0A2540]">
+              {community.property_count || 0}
+            </p>
+          </div>
         </div>
 
-        <div className="my-3 h-px w-full bg-[#E8E6E1]" />
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {developer.informations && (
-            <p className="line-clamp-2 text-[11px] text-[#4A5462]">
-              {developer.informations.replace(/<[^>]*>/g, '').slice(0, 120)}
-              {developer.informations.length > 120 ? '...' : ''}
+        {shortDesc && (
+          <>
+            <div className="my-3 h-px w-full bg-[#E8E6E1]" />
+            <p className="line-clamp-2 text-[12px] leading-relaxed text-[#4A5462]">
+              {shortDesc}
             </p>
-          )}
+          </>
+        )}
+
+        {!shortDesc && (
+          <div className="my-3 h-px w-full bg-[#E8E6E1]" />
+        )}
+
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
           <div className="flex items-center gap-2">
-            {developer.total_project_withus && parseInt(developer.total_project_withus) > 0 && (
+            {community.seo_slug && (
               <span className="flex items-center gap-1 rounded-full bg-[#0A2540]/5 px-2 py-0.5 text-[9px] font-medium text-[#0A2540]">
-                <Star className="h-3 w-3" />
-                {developer.total_project_withus} with us
+                <Globe className="h-3 w-3" />
+                {community.seo_slug}
               </span>
             )}
-            {developer.website && (
-              <a
-                href={developer.website}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-[10px] text-[#8A94A3] hover:text-[#0A2540]"
-              >
-                🌐
-              </a>
-            )}
           </div>
+          <span className="text-[10px] text-[#8A94A3]">
+            ID: {community.community_id || community.id}
+          </span>
         </div>
       </div>
     </motion.div>
@@ -263,19 +266,20 @@ function SkeletonCard({ viewMode = "grid" }: { viewMode?: string }) {
     <div className={`bg-white ${isListMode ? "flex flex-col sm:flex-row gap-4" : ""}`}>
       <div
         className={`animate-pulse bg-gray-200 ${
-          isListMode ? "sm:w-[200px] sm:aspect-[4/3]" : "aspect-[4/3]"
+          isListMode ? "sm:w-[320px] sm:aspect-[4/3]" : "aspect-[4/3]"
         }`}
       />
       <div className={`flex-1 space-y-3 ${isListMode ? "py-2" : "py-4"}`}>
         <div className="flex justify-between">
           <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
-          <div className="h-4 w-20 animate-pulse rounded bg-gray-200" />
+          <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
         </div>
-        <div className="h-3 w-32 animate-pulse rounded bg-gray-200" />
+        <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
         <div className="h-px w-full bg-gray-100" />
+        <div className="h-3 w-full animate-pulse rounded bg-gray-200" />
         <div className="flex justify-between">
-          <div className="h-3 w-48 animate-pulse rounded bg-gray-200" />
           <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+          <div className="h-3 w-16 animate-pulse rounded bg-gray-200" />
         </div>
       </div>
     </div>
@@ -368,50 +372,6 @@ function FilterDropdown({
   );
 }
 
-// ─── SEARCH BAR ──────────────────────────────────────────────────────────
-
-function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [localValue, setLocalValue] = useState(value);
-  const timerRef = useRef<NodeJS.Timeout | null>(null); // ✅ Fix here
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setLocalValue(val);
-    clearTimeout(timerRef.current || undefined);
-    timerRef.current = setTimeout(() => onChange(val), 500);
-  };
-
-  const handleClear = () => {
-    setLocalValue("");
-    onChange("");
-  };
-
-  return (
-    <div className="relative flex-1 max-w-xs">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A94A3]" />
-      <input
-        type="text"
-        value={localValue}
-        onChange={handleChange}
-        placeholder="Search developers..."
-        className="w-full rounded-[4px] bg-gray-50 border border-gray-200 pl-9 pr-8 py-2 text-[11px] text-gray-700 placeholder-gray-400 outline-none focus:border-[#0A2540] focus:bg-white focus:shadow-sm transition-all"
-      />
-      {localValue && (
-        <button
-          onClick={handleClear}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 // ─── PAGINATION ─────────────────────────────────────────────────────────
 
 function Pagination({
@@ -485,8 +445,10 @@ function Pagination({
 
 // ─── MAIN PAGE ──────────────────────────────────────────────────────────
 
-export default function DevelopersListingPage() {
-  const [developers, setDevelopers] = useState<Developer[]>([]);
+export default function CommunitiesPage() {
+  const [allCommunities, setAllCommunities] = useState<Community[]>([]);
+  const [featuredCommunities, setFeaturedCommunities] = useState<Community[]>([]);
+  const [popularCommunities, setPopularCommunities] = useState<Community[]>([]);
   const [pagination, setPagination] = useState<PaginationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -499,20 +461,21 @@ export default function DevelopersListingPage() {
   const [filters, setFilters] = useState({
     page: 1,
     limit: 12,
-    sort_by: "name_asc",
+    sort_by: "featured_desc",
     status: "1",
     keyword: "",
-    has_projects: "",
   });
 
-  const hasActiveFilters = filters.keyword !== "" || filters.status !== "1" || filters.has_projects !== "";
+  const hasActiveFilters = filters.keyword !== "" || filters.sort_by !== "featured_desc";
 
-  // ─── FETCH DEVELOPERS ──────────────────────────────────────────────────
-  const fetchDevelopers = useCallback(
+  // ─── FETCH COMMUNITIES ──────────────────────────────────────────────────
+  const fetchCommunities = useCallback(
     async (page: number, isReset: boolean = true) => {
       if (isReset) {
         setLoading(true);
-        setDevelopers([]);
+        setAllCommunities([]);
+        setFeaturedCommunities([]);
+        setPopularCommunities([]);
       }
       setError(null);
 
@@ -521,20 +484,32 @@ export default function DevelopersListingPage() {
         params.append("page", String(page));
         params.append("limit", String(filters.limit));
         params.append("sort_by", filters.sort_by);
-        params.append("status", filters.status);
+        if (filters.status) params.append("status", filters.status);
         if (filters.keyword) params.append("keyword", filters.keyword);
-        if (filters.has_projects === "true") params.append("has_projects", "true");
 
-        const response = await fetch(`/api/v1/developers?${params.toString()}`);
+        const response = await fetch(`/api/v1/communities?${params.toString()}`);
         const data = await response.json();
 
         if (!data.success) throw new Error(data.error || "Failed to fetch");
 
-        setDevelopers(data.data || []);
+        const communities = data.data || [];
+
+        const featured = communities.filter((c: Community) => c.featured === 1);
+        const popular = [...communities]
+          .sort((a, b) => (b.property_count || 0) - (a.property_count || 0))
+          .slice(0, 6);
+
+        setAllCommunities(communities);
+        setFeaturedCommunities(featured);
+        setPopularCommunities(popular);
         setPagination(data.meta || null);
       } catch (err: any) {
         setError(err.message);
-        if (isReset) setDevelopers([]);
+        if (isReset) {
+          setAllCommunities([]);
+          setFeaturedCommunities([]);
+          setPopularCommunities([]);
+        }
       } finally {
         if (isReset) setLoading(false);
       }
@@ -542,10 +517,98 @@ export default function DevelopersListingPage() {
     [filters]
   );
 
+  // ─── FETCH FEATURED ONLY ──────────────────────────────────────────────
+  const fetchFeaturedOnly = useCallback(
+    async (page: number) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams();
+        params.append("page", String(page));
+        params.append("limit", String(filters.limit));
+        params.append("featured", "true");
+        if (filters.status) params.append("status", filters.status);
+
+        const response = await fetch(`/api/v1/communities?${params.toString()}`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error || "Failed to fetch");
+
+        const communities = data.data || [];
+        setFeaturedCommunities(communities);
+        setPagination(data.meta || null);
+      } catch (err: any) {
+        setError(err.message);
+        setFeaturedCommunities([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters]
+  );
+
+  // ─── FETCH POPULAR ONLY ───────────────────────────────────────────────
+  const fetchPopularOnly = useCallback(
+    async (page: number) => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const params = new URLSearchParams();
+        params.append("page", String(page));
+        params.append("limit", String(filters.limit));
+        params.append("sort_by", "property_count_desc");
+        if (filters.status) params.append("status", filters.status);
+
+        const response = await fetch(`/api/v1/communities?${params.toString()}`);
+        const data = await response.json();
+
+        if (!data.success) throw new Error(data.error || "Failed to fetch");
+
+        const communities = data.data || [];
+        setPopularCommunities(communities);
+        setPagination(data.meta || null);
+      } catch (err: any) {
+        setError(err.message);
+        setPopularCommunities([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters]
+  );
+
   // ─── MAIN FETCH LOGIC ─────────────────────────────────────────────────
   useEffect(() => {
-    fetchDevelopers(filters.page, true);
-  }, [filters.page, filters.sort_by, filters.status, filters.keyword, filters.has_projects]);
+    const fetchData = async () => {
+      switch (activeTab) {
+        case "featured":
+          await fetchFeaturedOnly(filters.page);
+          break;
+        case "popular":
+          await fetchPopularOnly(filters.page);
+          break;
+        case "new":
+          await fetchCommunities(filters.page, true);
+          break;
+        default:
+          await fetchCommunities(filters.page, true);
+          break;
+      }
+    };
+
+    fetchData();
+  }, [activeTab, filters.page, filters.sort_by, filters.status, filters.keyword]);
+
+  // ─── SEARCH ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters(prev => ({ ...prev, keyword: searchKeyword, page: 1 }));
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchKeyword]);
 
   // ─── SCROLL TO TOP ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -563,10 +626,9 @@ export default function DevelopersListingPage() {
     setFilters({
       page: 1,
       limit: 12,
-      sort_by: "name_asc",
+      sort_by: "featured_desc",
       status: "1",
       keyword: "",
-      has_projects: "",
     });
     setSearchKeyword("");
   }, []);
@@ -576,31 +638,33 @@ export default function DevelopersListingPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  // ─── GET CURRENT DEVELOPERS ────────────────────────────────────────────
-  const getCurrentDevelopers = () => {
-    let filtered = [...developers];
-    
-    if (activeTab === "featured") {
-      filtered = filtered.filter(d => d.total_project_withus && parseInt(d.total_project_withus) > 2);
-    } else if (activeTab === "popular") {
-      filtered = filtered.filter(d => (d.project_count || parseInt(d.total_project || "0")) > 3);
-    } else if (activeTab === "new") {
-      filtered = filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 6);
+  const getCurrentCommunities = () => {
+    switch (activeTab) {
+      case "featured":
+        return featuredCommunities;
+      case "popular":
+        return popularCommunities;
+      case "new":
+        return allCommunities;
+      default:
+        return allCommunities;
     }
-    
-    return filtered;
   };
 
   const getTabBadge = () => {
     switch (activeTab) {
-      case "featured": return "featured";
-      case "popular": return "popular";
-      case "new": return "new";
-      default: return null;
+      case "featured":
+        return "featured";
+      case "popular":
+        return "popular";
+      case "new":
+        return "new";
+      default:
+        return null;
     }
   };
 
-  const currentDevelopers = getCurrentDevelopers();
+  const currentCommunities = getCurrentCommunities();
   const currentBadge = getTabBadge();
 
   return (
@@ -614,7 +678,7 @@ export default function DevelopersListingPage() {
             className="text-[32px] font-normal leading-tight md:text-[40px]"
             style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
           >
-            Real Estate Developers
+            Communities
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 10 }}
@@ -625,8 +689,8 @@ export default function DevelopersListingPage() {
             {loading
               ? "Loading..."
               : pagination
-              ? `${pagination.total.toLocaleString()} DEVELOPERS AVAILABLE`
-              : `${developers.length} developers`}
+              ? `${pagination.total.toLocaleString()} COMMUNITIES AVAILABLE`
+              : `${currentCommunities.length} communities`}
           </motion.p>
         </div>
       </div>
@@ -638,7 +702,7 @@ export default function DevelopersListingPage() {
             {/* Tabs */}
             <div className="flex items-center gap-1 overflow-x-auto">
               {[
-                { key: "all", label: "All Developers", icon: Building2 },
+                { key: "all", label: "All Communities", icon: Building2 },
                 { key: "featured", label: "Featured", icon: Star },
                 { key: "popular", label: "Popular", icon: Users },
                 { key: "new", label: "New", icon: Sparkles },
@@ -657,6 +721,11 @@ export default function DevelopersListingPage() {
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {tab.label}
+                    {tab.key === "featured" && featuredCommunities.length > 0 && (
+                      <span className="ml-1 rounded-full bg-[#1B3A5F] px-1.5 text-[8px] text-white">
+                        {featuredCommunities.length}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -664,21 +733,17 @@ export default function DevelopersListingPage() {
 
             <div className="ml-auto flex items-center gap-1">
               <div className="hidden items-center gap-1 lg:flex">
-                <SearchBar
-                  value={searchKeyword}
-                  onChange={(v) => {
-                    setSearchKeyword(v);
-                    updateFilter("keyword", v);
-                  }}
-                />
-
-                <FilterDropdown
-                  label="Status"
-                  value={filters.status}
-                  onChange={(v) => updateFilter("status", v)}
-                  options={STATUS_OPTIONS}
-                  icon={Building2}
-                />
+                {/* Search */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search communities..."
+                    value={searchKeyword}
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    className="h-9 w-48 border border-gray-200 bg-white px-3 pl-8 text-[11px] placeholder:text-gray-400 focus:border-[#0A2540] focus:outline-none"
+                  />
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                </div>
 
                 <FilterDropdown
                   label="Sort"
@@ -744,22 +809,11 @@ export default function DevelopersListingPage() {
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="text"
+                  placeholder="Search..."
                   value={searchKeyword}
-                  onChange={(e) => {
-                    setSearchKeyword(e.target.value);
-                    updateFilter("keyword", e.target.value);
-                  }}
-                  placeholder="Search developers..."
+                  onChange={(e) => setSearchKeyword(e.target.value)}
                   className="col-span-2 h-9 border border-gray-200 bg-white px-3 text-[11px] placeholder:text-gray-400 focus:border-[#0A2540] focus:outline-none"
                 />
-                <select
-                  value={filters.status}
-                  onChange={(e) => updateFilter("status", e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
-                >
-                  <option value="1">Active</option>
-                  <option value="0">Inactive</option>
-                </select>
                 <select
                   value={filters.sort_by}
                   onChange={(e) => updateFilter("sort_by", e.target.value)}
@@ -790,7 +844,19 @@ export default function DevelopersListingPage() {
             <AlertCircle className="h-5 w-5 shrink-0" />
             <span>{error}</span>
             <button
-              onClick={() => fetchDevelopers(filters.page, true)}
+              onClick={() => {
+                switch (activeTab) {
+                  case "featured":
+                    fetchFeaturedOnly(filters.page);
+                    break;
+                  case "popular":
+                    fetchPopularOnly(filters.page);
+                    break;
+                  default:
+                    fetchCommunities(filters.page, true);
+                    break;
+                }
+              }}
               className="ml-auto underline hover:no-underline"
             >
               Retry
@@ -798,20 +864,20 @@ export default function DevelopersListingPage() {
           </div>
         )}
 
-        {/* Developers Grid */}
+        {/* Communities Grid */}
         <div
           className={`grid gap-x-6 gap-y-10 ${
             viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
           }`}
         >
-          {loading && developers.length === 0
+          {loading && currentCommunities.length === 0
             ? Array.from({ length: 6 }).map((_, i) => (
                 <SkeletonCard key={`skeleton-${i}`} viewMode={viewMode} />
               ))
-            : currentDevelopers.map((developer) => (
-                <DeveloperCard
-                  key={`${developer.id}`}
-                  developer={developer}
+            : currentCommunities.map((community) => (
+                <CommunityCard
+                  key={`${community.id}-${community.slug}`}
+                  community={community}
                   viewMode={viewMode}
                   badge={currentBadge}
                 />
@@ -828,7 +894,7 @@ export default function DevelopersListingPage() {
         )}
 
         {/* End Message */}
-        {!loading && !hasActiveFilters && developers.length === 0 && !error && (
+        {!loading && !hasActiveFilters && currentCommunities.length === 0 && !error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -836,7 +902,7 @@ export default function DevelopersListingPage() {
           >
             <Building2 className="mx-auto h-14 w-14 text-gray-300" />
             <h3 className="mt-4 text-[22px] text-[#0A2540]" style={{ fontFamily: FONT_DISPLAY }}>
-              No developers found
+              No communities found
             </h3>
             <p className="mx-auto mt-2 max-w-md text-[13px] text-[#8A94A3]">
               Try adjusting your filters or search terms.
@@ -852,7 +918,7 @@ export default function DevelopersListingPage() {
         )}
 
         {/* No results for tab */}
-        {!loading && activeTab !== "all" && currentDevelopers.length === 0 && !error && (
+        {!loading && activeTab !== "all" && currentCommunities.length === 0 && !error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -868,21 +934,21 @@ export default function DevelopersListingPage() {
               )}
             </div>
             <h3 className="mt-4 text-[22px] text-[#0A2540]" style={{ fontFamily: FONT_DISPLAY }}>
-              No {activeTab} developers found
+              No {activeTab} communities found
             </h3>
             <p className="mx-auto mt-2 max-w-md text-[13px] text-[#8A94A3]">
               {activeTab === "featured"
-                ? "No featured developers available. Check back later!"
+                ? "No featured communities available. Check back later!"
                 : activeTab === "popular"
-                ? "No popular developers available. Check back later!"
-                : "No new developers available. Check back later!"}
+                ? "No popular communities available. Check back later!"
+                : "No new communities available. Check back later!"}
             </p>
             <button
               onClick={() => setActiveTab("all")}
               className="mt-6 px-8 py-3 text-[10px] uppercase tracking-[0.16em] text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: THEME.primary }}
             >
-              View All Developers
+              View All Communities
             </button>
           </motion.div>
         )}
