@@ -1,682 +1,466 @@
 "use client";
 
-import Link from "next/link";
-import { useState, useCallback, useEffect } from "react";
-import { HiOutlineXMark, HiOutlineScale, HiPlus } from "react-icons/hi2";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { FiImage, FiArrowRight, FiPlus, FiMapPin, FiHome, FiMaximize2 } from "react-icons/fi";
 
-interface Property {
+type PriceObject = {
+  amount?: number;
+  amount_end?: number;
+  display?: string;
+  display_end?: string;
+  currency?: string;
+  symbol?: string;
+  is_price_on_request?: boolean;
+  sale_price?: number;
+  listing_price?: number;
+  rental_price?: number;
+  [key: string]: any;
+};
+
+type Property = {
   id: number;
   name: string;
   slug: string;
-  listing_type: string;
-  price: {
-    amount: number | null;
-    display: string | null;
-    currency: string;
-    is_price_on_request: boolean;
-  };
-  bedrooms: string;
-  bathrooms: string;
-  area: { value: number | null; display: string };
-  location: {
-    community: string | null;
-    city: string | null;
-    sub_community: string | null;
-  } | null;
-  status: number;
-  featured: boolean;
-  created_at: string;
-  ref_number: string | null;
   featured_image: string;
+  images: { url: string }[];
   gallery_urls: string[];
-  description: string | null;
-  amenities: string[];
-  developer: { name: string | null };
-}
-
-const FONT_DISPLAY = "'Display Pro', 'Playfair Display', Georgia, serif";
-const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
-
-const THEME = {
-  primary: "#192334",
-  secondary: "#577C8E",
-  muted: "#8A94A3",
-  border: "#E8E6E1",
-  accent: "#C8AA78",
+  price?: PriceObject | string | number;
+  location?: string | object;
+  bedrooms?: number;
+  bathrooms?: number;
+  area?: string | number;
+  reference?: string;
+  property_type?: string;
+  description?: string;
+  is_featured?: boolean;
+  community?: {
+    name?: string;
+    slug?: string;
+    [key: string]: any;
+  };
+  [key: string]: any;
 };
 
-function getDisplayName(property: any): string {
-  if (!property) return 'Property';
-  if (property.name && property.name !== 'Null' && property.name !== 'null' && property.name.trim() !== '') {
-    return property.name;
+type ApiResponse = {
+  success: boolean;
+  data: Property[];
+};
+
+// Properties to exclude (already shown in featured section)
+const EXCLUDED_PROPERTIES = [
+  'Studio Apartment in Peninsula One',
+  'SO/ Uptown Dubai',
+  'Mr.C Residences Dubai'
+];
+
+function isValidImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (trimmed === "" || trimmed.toLowerCase() === "null" || trimmed.toLowerCase() === "undefined") {
+    return false;
   }
-  if (property.slug) {
-    return property.slug
-      .replace(/-/g, ' ')
-      .replace(/\b\w/g, (char: string) => char.toUpperCase())
-      .replace(/\bLn\d+\b/g, '')
-      .replace(/\bFor\b/g, 'for')
-      .replace(/\bIn\b/g, 'in')
-      .replace(/\bOf\b/g, 'of')
-      .trim() || `Property ${property.id}`;
-  }
-  return `Property ${property.id}`;
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://");
 }
 
-function getLocation(property: Property): string {
-  const loc = property.location;
-  if (loc?.community && loc.community !== 'Null' && loc.community !== 'null') {
-    return loc.community;
-  }
-  return loc?.city || "Dubai";
-}
-
-function getActualImageUrl(property: Property): string {
-  if (!property) return '';
-  if (property.featured_image && property.featured_image !== 'Null' && property.featured_image !== 'null') {
-    return property.featured_image;
-  }
-  if (property.gallery_urls?.length > 0) {
-    return property.gallery_urls[0];
-  }
-  return '';
-}
-
-function getSpecsString(property: Property): string {
-  const parts: string[] = [];
-  if (property.bedrooms) parts.push(property.bedrooms);
-  if (property.bathrooms && property.bathrooms !== "0 Bath") {
-    parts.push(property.bathrooms);
-  }
-  if (property.area?.display && property.area.display !== "Area on Request") {
-    parts.push(property.area.display);
-  }
-  return parts.join(" | ");
-}
-
-function SmartImage({
-  src,
-  alt,
-  className = "",
-}: {
-  src: string;
-  alt: string;
-  className?: string;
-}) {
-  const [imgSrc, setImgSrc] = useState(src);
+function ImageWithFallback({ src, alt, className = "" }: { src: string; alt: string; className?: string }) {
   const [loaded, setLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
-    setImgSrc(src);
-    setLoaded(false);
-    setHasError(false);
-  }, [src]);
-
-  if (!src || hasError) {
-    return (
-      <div className="relative h-full w-full overflow-hidden bg-[#F2F0EC]">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <div className="mx-auto h-12 w-12 rounded-full bg-[#E8E6E1] flex items-center justify-center">
-              <svg className="h-6 w-6 text-[#8A94A3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <p className="mt-2 text-[10px] text-[#8A94A3] font-medium">No Image</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#F2F0EC]">
-      {!loaded && (
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-gray-100 to-gray-200" />
+    <div className="relative h-full w-full overflow-hidden bg-neutral-100">
+      {!loaded && !hasError && (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-neutral-200 to-neutral-100" />
       )}
-      <img
-        src={imgSrc}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        className={`h-full w-full object-cover transition-opacity duration-500 ${
-          loaded ? "opacity-100" : "opacity-0"
-        } ${className}`}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          setHasError(true);
-          setLoaded(true);
-        }}
-      />
-    </div>
-  );
-}
-
-function PropertyCardSkeleton() {
-  return (
-    <div className="bg-white">
-      <div className="aspect-[4/3] animate-pulse bg-gray-200" />
-      <div className="space-y-3 py-4">
-        <div className="flex justify-between">
-          <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
-          <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
-        </div>
-        <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
-        <div className="h-px w-full bg-gray-100" />
-        <div className="flex justify-between">
-          <div className="h-3 w-48 animate-pulse rounded bg-gray-200" />
-          <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PropertyCard({
-  property,
-  index,
-  onCompare,
-  isCompared,
-}: {
-  property: Property;
-  index: number;
-  onCompare: (id: number) => void;
-  isCompared: boolean;
-}) {
-  const [showTooltip, setShowTooltip] = useState(false);
-
-  const location = getLocation(property);
-  const isPriceOnRequest = property.price?.is_price_on_request || !property.price?.amount;
-  const priceDisplay = property.price?.display || "Price on Request";
-  const specs = getSpecsString(property);
-  const displayName = getDisplayName(property);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.5, delay: Math.min(index * 0.1, 0.3) }}
-      className="group bg-white hover:shadow-lg transition-shadow duration-300"
-      style={{ fontFamily: FONT_BODY }}
-    >
-      <Link href={`/featured-explore-properties/${property.slug}`}>
-        <div className="relative aspect-[4/3] overflow-hidden cursor-pointer">
-          <SmartImage
-            src={getActualImageUrl(property)}
-            alt={displayName}
-            className="transition-transform duration-700 group-hover:scale-[1.04]"
-          />
-
-          {(property.featured || property.listing_type === "Off plan") && (
-            <span
-              className="absolute left-3 top-3 z-10 rounded-[3px] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white"
-              style={{
-                backgroundColor: "rgba(25,35,52,0.9)",
-                fontFamily: FONT_BODY,
-              }}
-            >
-              {property.featured ? "Featured" : property.listing_type}
-            </span>
-          )}
-        </div>
-      </Link>
-
-      <div className="pt-4 pb-4 px-1">
-        <Link href={`/featured-explore-properties/${property.slug}`}>
-          <div className="block w-full text-left cursor-pointer">
-            <h3
-              className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] hover:text-[#C8AA78] transition-colors"
-              style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
-            >
-              {displayName}
-            </h3>
-            <p
-              className="mt-0.5 text-[11px]"
-              style={{ color: THEME.muted, fontFamily: FONT_BODY }}
-            >
-              {location}
-            </p>
-          </div>
-        </Link>
-
-        <div
-          className="mt-3 h-px w-full"
-          style={{ backgroundColor: THEME.border }}
+      {!hasError && (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          className={`h-full w-full object-cover transition-opacity duration-700 ${
+            loaded ? "opacity-100" : "opacity-0"
+          } ${className}`}
+          onLoad={() => setLoaded(true)}
+          onError={() => setHasError(true)}
         />
-
-        <div className="mt-3 flex items-end justify-between gap-3">
-          <div>
-            <p
-              className="text-[9px] font-medium uppercase tracking-[0.14em]"
-              style={{ color: THEME.muted, fontFamily: FONT_BODY }}
-            >
-              Price
-            </p>
-            <p
-              className="text-[14px] font-bold leading-tight"
-              style={{ color: THEME.primary, fontFamily: FONT_BODY }}
-            >
-              {isPriceOnRequest ? "AED On Request" : priceDisplay}
-            </p>
-          </div>
-          {property.ref_number && (
-            <p
-              className="shrink-0 text-[11px]"
-              style={{ color: THEME.muted, fontFamily: FONT_BODY }}
-            >
-              Ref: {property.ref_number}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-3 flex items-center justify-between">
-          <p
-            className="text-[11px]"
-            style={{ color: "#4A5462", fontFamily: FONT_BODY }}
-          >
-            {specs || "\u00A0"}
-          </p>
-
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onCompare(property.id);
-            }}
-            onMouseEnter={() => setShowTooltip(true)}
-            onMouseLeave={() => setShowTooltip(false)}
-            aria-label="Add to compare"
-            className={`relative flex h-7 w-7 items-center justify-center rounded-full border transition-all ${
-              isCompared
-                ? "border-[#192334] bg-[#192334] text-white"
-                : "border-[#192334]/20 bg-white text-[#192334] hover:border-[#192334] hover:bg-[#192334] hover:text-white"
-            }`}
-          >
-            <HiPlus className="h-4 w-4" />
-            
-            <AnimatePresence>
-              {showTooltip && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute -top-8 right-0 z-10 whitespace-nowrap rounded-[3px] bg-white px-2.5 py-1.5 text-[10px] font-medium shadow-md"
-                  style={{ color: THEME.primary }}
-                >
-                  {isCompared ? "Remove" : "Compare"}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </button>
-        </div>
-      </div>
-    </motion.div>
+      )}
+    </div>
   );
 }
 
-function FloatingCompareBar({
-  compareList,
-  onRemove,
-  onClear,
-}: {
-  compareList: Property[];
-  onRemove: (id: number) => void;
-  onClear: () => void;
-}) {
-  if (compareList.length === 0) return null;
-  const ids = compareList.map((p) => p.id).join(",");
-  const canCompare = compareList.length >= 2;
-
+function LoadingCard() {
   return (
-    <motion.div
-      initial={{ y: 100 }}
-      animate={{ y: 0 }}
-      exit={{ y: 100 }}
-      className="fixed bottom-0 left-0 right-0 z-[100] border-t bg-white shadow-[0_-4px_20px_rgba(25,35,52,0.08)]"
-      style={{ borderColor: THEME.border, fontFamily: FONT_BODY }}
-    >
-      <div className="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-4 px-6 py-3">
-        <div className="flex items-center gap-3">
-          <HiOutlineScale
-            className="h-4 w-4"
-            style={{ color: THEME.primary }}
-          />
-          <span
-            className="text-[11px] font-medium tracking-wide"
-            style={{ color: THEME.primary }}
-          >
-            {compareList.length}/4 Selected
-          </span>
-          <div className="flex gap-2">
-            {compareList.map((p) => (
-              <div key={p.id} className="relative h-10 w-10">
-                <SmartImage src={getActualImageUrl(p)} alt={p.name} />
-                <button
-                  onClick={() => onRemove(p.id)}
-                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#192334] text-white hover:bg-[#C8AA78] transition-colors"
-                >
-                  <HiOutlineXMark className="h-2.5 w-2.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onClear}
-            className="text-[10px] uppercase tracking-widest transition-colors hover:text-[#192334]"
-            style={{ color: THEME.muted }}
-          >
-            Clear All
-          </button>
-          {canCompare ? (
-            <Link
-              href={`/properties/compare?ids=${ids}`}
-              className="px-5 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] text-white transition-all hover:opacity-90 hover:shadow-md"
-              style={{ backgroundColor: THEME.primary }}
-            >
-              Compare Now
-            </Link>
-          ) : (
-            <span
-              className="px-5 py-2.5 text-[10px] uppercase tracking-[0.16em]"
-              style={{ color: THEME.muted, backgroundColor: "#F0EEE9" }}
-            >
-              Add {2 - compareList.length} more
-            </span>
-          )}
+    <div className="bg-white rounded-sm overflow-hidden border border-neutral-200">
+      <div className="relative h-[240px] bg-neutral-100 animate-pulse" />
+      <div className="p-5 space-y-3">
+        <div className="h-6 bg-neutral-200 rounded w-3/4 animate-pulse" />
+        <div className="h-4 bg-neutral-100 rounded w-1/2 animate-pulse" />
+        <div className="h-5 bg-neutral-200 rounded w-1/3 animate-pulse" />
+        <div className="border-t border-neutral-200 pt-3">
+          <div className="h-3 bg-neutral-100 rounded w-2/3 animate-pulse" />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-export default function FeaturesProperties() {
+export default function ExploreFinestProperties() {
+  const router = useRouter();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [compareIds, setCompareIds] = useState<number[]>([]);
-  const [isNavigating, setIsNavigating] = useState(false);
-  const [buttonHover, setButtonHover] = useState(false);
-  const [activeSlide, setActiveSlide] = useState(0);
+  const [compareList, setCompareList] = useState<number[]>([]);
 
   useEffect(() => {
+    async function fetchProperties() {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/v1/properties?limit=20");
+        if (!res.ok) throw new Error("Failed to fetch");
+        const result: ApiResponse = await res.json();
+
+        if (!result.success || !result.data.length) {
+          setProperties([]);
+          setLoading(false);
+          return;
+        }
+
+        const valid = result.data.filter((p) => {
+          const hasValidName = p.name && p.name.trim() !== "";
+          if (!hasValidName) return false;
+
+          // Exclude properties already shown
+          if (EXCLUDED_PROPERTIES.includes(p.name)) {
+            return false;
+          }
+
+          const hasValidImage =
+            isValidImageUrl(p.featured_image) ||
+            p.images?.some((i: any) => isValidImageUrl(i.url)) ||
+            p.gallery_urls?.some((u: string) => isValidImageUrl(u));
+
+          return hasValidImage;
+        });
+
+        setProperties(valid.slice(0, 6));
+      } catch (err) {
+        console.error("Error:", err);
+        setProperties([]);
+      } finally {
+        setLoading(false);
+      }
+    }
     fetchProperties();
   }, []);
 
-  async function fetchProperties() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/v1/properties?featured=true&limit=6&show_all=true");
-      const data = await res.json();
-      
-      if (data.success && data.data && data.data.length > 0) {
-        setProperties(data.data);
-      } else {
-        const fallbackRes = await fetch("/api/v1/properties?limit=6&show_all=true");
-        const fallbackData = await fallbackRes.json();
-        if (fallbackData.success && fallbackData.data) {
-          setProperties(fallbackData.data);
-        } else {
-          setError("No properties found");
-        }
-      }
-    } catch (err) {
-      setError("Failed to load properties");
-    } finally {
-      setLoading(false);
+  const getFirstImage = (property: Property): string => {
+    if (isValidImageUrl(property.featured_image)) return property.featured_image;
+    if (property.gallery_urls?.length) {
+      const valid = property.gallery_urls.find((u: string) => isValidImageUrl(u));
+      if (valid) return valid;
     }
+    if (property.images?.length) {
+      const valid = property.images.find((i: any) => isValidImageUrl(i.url));
+      if (valid) return valid.url;
+    }
+    return "";
+  };
+
+  const getLocation = (property: Property): string => {
+    if (typeof property.location === "string") return property.location;
+    if (property.community && typeof property.community === "object") {
+      return property.community.name || "";
+    }
+    return "";
+  };
+
+  const formatPrice = (price?: PriceObject | string | number): string | null => {
+    if (!price) return null;
+
+    if (typeof price === "object" && price !== null) {
+      if (price.display && typeof price.display === "string") return price.display;
+      if (price.amount !== undefined && price.currency) {
+        const symbol = price.symbol || price.currency || "AED";
+        return `${symbol} ${price.amount.toLocaleString()}`;
+      }
+      if (price.amount !== undefined) return `AED ${price.amount.toLocaleString()}`;
+      if (price.sale_price) return `AED ${price.sale_price.toLocaleString()}`;
+      if (price.listing_price) return `AED ${price.listing_price.toLocaleString()}`;
+      if (price.rental_price) return `AED ${price.rental_price.toLocaleString()}`;
+      if (price.is_price_on_request) return "Price on Request";
+      return null;
+    }
+
+    if (typeof price === "number") return `AED ${price.toLocaleString()}`;
+
+    const numPrice = parseFloat(price);
+    if (!isNaN(numPrice)) return `AED ${numPrice.toLocaleString()}`;
+
+    return price;
+  };
+
+  const navigateToProperty = (slug: string) => {
+    router.push(`/featured-explore-properties/${slug}`);
+  };
+
+  const toggleCompare = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    setCompareList((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  if (loading) {
+    return (
+      <section className="bg-white py-14 md:py-20">
+        <div className="mx-auto max-w-[1320px] px-4 md:px-6">
+          <div className="text-center mb-12">
+            <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-500 mb-3">
+              Featured Properties
+            </p>
+            <h2
+              className="text-3xl md:text-4xl lg:text-5xl text-neutral-900 font-normal"
+              style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+            >
+              Explore the finest properties in Dubai
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <LoadingCard key={i} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
   }
 
-  const handleCompare = useCallback((id: number) => {
-    setCompareIds((prev) => {
-      if (prev.includes(id)) return prev.filter((p) => p !== id);
-      if (prev.length >= 4) return prev;
-      return [...prev, id];
-    });
-  }, []);
-
-  const compareList = properties.filter((p) => compareIds.includes(p.id));
-
-  const handleViewAllClick = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      if (isNavigating) return;
-      setIsNavigating(true);
-      setTimeout(() => {
-        window.location.href = "/featured-explore-properties";
-      }, 900);
-    },
-    [isNavigating]
-  );
-
-  const visibleProperties = properties.slice(0, 3);
-  const effectiveSlide = activeSlide >= visibleProperties.length ? 0 : activeSlide;
-
-  if (error) {
+  if (properties.length === 0) {
     return (
-      <section className="bg-white py-10 md:py-20">
-        <div className="mx-auto max-w-[1200px] px-4 md:px-6 text-center">
-          <p className="text-gray-500 font-inter">{error}</p>
-          <button
-            onClick={fetchProperties}
-            className="mt-4 text-xs tracking-widest text-gray-600 hover:text-gray-900 border border-gray-300 px-6 py-2 hover:border-gray-900 transition-colors font-inter"
+      <section className="bg-white py-14 md:py-20">
+        <div className="mx-auto max-w-[1320px] px-4 md:px-6 text-center">
+          <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-500 mb-3">
+            Featured Properties
+          </p>
+          <h2
+            className="text-3xl md:text-4xl text-neutral-900 font-normal mb-8"
+            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
           >
-            RETRY
-          </button>
+            Explore the finest properties in Dubai
+          </h2>
+          <p className="text-neutral-500">No properties available at the moment.</p>
         </div>
       </section>
     );
   }
 
   return (
-    <section className="bg-white py-10 md:py-20">
-      <div className="mx-auto max-w-[1200px] px-4 md:px-6">
-        <div className="mb-8 text-center md:mb-12">
-          <p
-            className="mb-2 text-[10px] font-medium uppercase tracking-[0.26em]"
-            style={{ color: THEME.muted, fontFamily: FONT_BODY }}
-          >
+    <section className="bg-white py-14 md:py-20">
+      <div className="mx-auto max-w-[1320px] px-4 md:px-6">
+        {/* Header */}
+        <div className="text-center mb-12 md:mb-14">
+          <p className="text-[10px] font-medium uppercase tracking-[0.3em] text-neutral-500 mb-3">
             Featured Properties
           </p>
-          <motion.h2
-            initial={{ opacity: 0, y: 12 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-[22px] font-normal md:text-[32px]"
-            style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
+          <h2
+            className="text-3xl md:text-4xl lg:text-[42px] text-neutral-900 font-normal leading-tight"
+            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
           >
             Explore the finest properties in Dubai
-          </motion.h2>
+          </h2>
         </div>
 
-        {loading && (
-          <div className="grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <PropertyCardSkeleton key={i} />
-            ))}
-          </div>
-        )}
+        {/* Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+          {properties.map((property, index) => {
+            const imageUrl = getFirstImage(property);
+            const location = getLocation(property);
+            const formattedPrice = formatPrice(property.price);
+            const isCompared = compareList.includes(property.id);
 
-        {!loading && visibleProperties.length > 0 && (
-          <>
-            <div className="hidden md:grid grid-cols-1 gap-x-7 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleProperties.map((property, index) => (
-                <PropertyCard
-                  key={`${property.id}-${property.slug}`}
-                  property={property}
-                  index={index}
-                  onCompare={handleCompare}
-                  isCompared={compareIds.includes(property.id)}
-                />
-              ))}
-            </div>
+            const bedroomDisplay = property.bedrooms
+              ? `${property.bedrooms} ${property.bedrooms === 1 ? "Bed" : "Beds"}`
+              : null;
+            const bathroomDisplay = property.bathrooms
+              ? `${property.bathrooms} ${property.bathrooms === 1 ? "Bath" : "Baths"}`
+              : null;
+            const areaDisplay = property.area
+              ? typeof property.area === "string"
+                ? property.area
+                : `${property.area} sqft`
+              : null;
 
-            <div className="md:hidden">
-              <div className="mx-auto max-w-xs sm:max-w-sm overflow-hidden">
-                <div
-                  className="flex transition-transform duration-500 ease-in-out"
-                  style={{
-                    transform: `translateX(-${effectiveSlide * 100}%)`,
-                  }}
-                >
-                  {visibleProperties.map((property, index) => (
-                    <div
-                      key={`${property.id}-${property.slug}-mobile`}
-                      className="w-full flex-shrink-0 px-2"
-                    >
-                      <PropertyCard
-                        property={property}
-                        index={index}
-                        onCompare={handleCompare}
-                        isCompared={compareIds.includes(property.id)}
+            return (
+              <motion.div
+                key={property.id}
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.08 }}
+                onClick={() => navigateToProperty(property.slug)}
+                className="group relative bg-white rounded-sm overflow-hidden border border-neutral-200 hover:border-neutral-900 hover:shadow-xl transition-all duration-500 cursor-pointer"
+              >
+                {/* Image Container */}
+                <div className="relative h-[240px] md:h-[280px] overflow-hidden bg-neutral-100">
+                  {imageUrl ? (
+                    <>
+                      <ImageWithFallback
+                        src={imageUrl}
+                        alt={property.name}
+                        className="transition-transform duration-700 group-hover:scale-105"
                       />
+
+                      {/* Overlay on hover */}
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-500" />
+
+                      {/* Featured Badge */}
+                      {property.is_featured && (
+                        <div className="absolute top-3 left-3 bg-neutral-900 px-3 py-1.5">
+                          <span className="text-[9px] font-medium uppercase tracking-[0.15em] text-white">
+                            Featured
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Property Type Badge */}
+                      {property.property_type && (
+                        <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1.5 border border-neutral-200">
+                          <span className="text-[9px] font-medium uppercase tracking-[0.1em] text-neutral-900">
+                            {property.property_type}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Add to Compare Button */}
+                      <button
+                        onClick={(e) => toggleCompare(e, property.id)}
+                        className="absolute top-3 right-3 group/btn"
+                      >
+                        <div
+                          className={`flex items-center gap-2 ${
+                            isCompared ? "bg-neutral-900" : "bg-white"
+                          } border border-neutral-200 shadow-sm px-3 py-1.5 hover:bg-neutral-900 transition-all duration-300`}
+                        >
+                          <FiPlus
+                            size={14}
+                            className={`${
+                              isCompared ? "text-white" : "text-neutral-700"
+                            } group-hover/btn:text-white transition-colors`}
+                          />
+                          <span
+                            className={`text-[9px] font-medium whitespace-nowrap ${
+                              isCompared ? "text-white" : "text-neutral-700"
+                            } group-hover/btn:text-white transition-colors opacity-0 group-hover:opacity-100 max-w-0 group-hover:max-w-[100px] overflow-hidden`}
+                          >
+                            {isCompared ? "Added" : "Compare"}
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* View Details on hover */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+                        <div className="bg-white/90 backdrop-blur-sm px-6 py-2.5 border border-neutral-900 transform -translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                          <span className="text-[10px] font-medium uppercase tracking-[0.15em] text-neutral-900">
+                            View Details
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-neutral-100">
+                      <FiImage size={48} className="text-neutral-300" />
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
 
-              <div className="mt-6 flex items-center justify-center gap-2">
-                {visibleProperties.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveSlide(idx)}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                      idx === effectiveSlide
-                        ? "w-6 bg-[#192334]"
-                        : "w-1.5 bg-gray-300 hover:bg-gray-400"
-                    }`}
-                    aria-label={`Go to slide ${idx + 1}`}
-                  />
-                ))}
-              </div>
-            </div>
-          </>
-        )}
+                {/* Content */}
+                <div className="p-5 md:p-6">
+                  {/* Title & Price Row */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3
+                        className="text-base md:text-lg text-neutral-900 font-normal tracking-wide line-clamp-1"
+                        style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                      >
+                        {property.name}
+                      </h3>
+                      {location && typeof location === "string" && (
+                        <div className="flex items-center gap-1.5 mt-1 text-xs text-neutral-500">
+                          <FiMapPin size={12} />
+                          <span className="line-clamp-1">{location}</span>
+                        </div>
+                      )}
+                    </div>
 
-        {!loading && visibleProperties.length > 0 && (
-          <div className="mt-12 flex justify-center md:mt-14">
-            <motion.button
-              onClick={handleViewAllClick}
-              onMouseEnter={() => setButtonHover(true)}
-              onMouseLeave={() => setButtonHover(false)}
-              disabled={isNavigating}
-              whileTap={{ scale: 0.97 }}
-              className="group relative inline-flex items-center gap-3 overflow-hidden px-10 py-4 text-[10px] font-medium uppercase tracking-[0.22em] text-white transition-all disabled:cursor-wait"
-              style={{
-                backgroundColor: THEME.primary,
-                fontFamily: FONT_BODY,
-                boxShadow: buttonHover && !isNavigating
-                  ? "0 12px 32px rgba(25,35,52,0.25)"
-                  : "0 4px 12px rgba(25,35,52,0.1)",
-                transform: buttonHover && !isNavigating
-                  ? "translateY(-2px)"
-                  : "translateY(0)",
-                transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)",
-                minWidth: "240px",
-                justifyContent: "center",
-              }}
-            >
-              <span
-                className="absolute inset-0 origin-left"
-                style={{
-                  background: `linear-gradient(90deg, ${THEME.accent} 0%, #D4B888 100%)`,
-                  transform: buttonHover && !isNavigating ? "scaleX(1)" : "scaleX(0)",
-                  transition: "transform 0.5s cubic-bezier(0.4,0,0.2,1)",
-                }}
-              />
+                    {formattedPrice && (
+                      <div className="text-right shrink-0">
+                        <p className="text-[9px] font-medium uppercase tracking-[0.2em] text-neutral-400">
+                          Price
+                        </p>
+                        <p className="text-sm md:text-base font-semibold text-neutral-900 mt-0.5 leading-tight">
+                          {formattedPrice}
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
-              {isNavigating && (
-                <motion.span
-                  className="absolute inset-0"
-                  style={{
-                    background: "linear-gradient(90deg, transparent, rgba(200,170,120,0.4), transparent)",
-                  }}
-                  animate={{ x: ["-100%", "100%"] }}
-                  transition={{
-                    duration: 1.2,
-                    repeat: Infinity,
-                    ease: "linear",
-                  }}
-                />
-              )}
+                  {/* Divider */}
+                  <div className="border-t border-neutral-200 mt-4 pt-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-[11px] text-neutral-600 flex-wrap">
+                        {bedroomDisplay && (
+                          <span className="flex items-center gap-1">
+                            <FiHome size={12} className="text-neutral-400" />
+                            {bedroomDisplay}
+                          </span>
+                        )}
+                        {bathroomDisplay && (
+                          <>
+                            <span className="text-neutral-300">|</span>
+                            <span className="flex items-center gap-1">
+                              {bathroomDisplay}
+                            </span>
+                          </>
+                        )}
+                        {areaDisplay && (
+                          <>
+                            <span className="text-neutral-300">|</span>
+                            <span className="flex items-center gap-1">
+                              <FiMaximize2 size={11} className="text-neutral-400" />
+                              {areaDisplay}
+                            </span>
+                          </>
+                        )}
+                      </div>
 
-              <span
-                className="relative z-10 transition-colors"
-                style={{
-                  color: buttonHover && !isNavigating ? THEME.primary : "#fff",
-                }}
-              >
-                {isNavigating ? "Loading Properties" : "View All Properties"}
-              </span>
+                      {property.reference && (
+                        <span className="text-[9px] text-neutral-400 shrink-0">
+                          Ref: {property.reference}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
 
-              <span
-                className="relative z-10 flex items-center"
-                style={{
-                  color: buttonHover && !isNavigating ? THEME.primary : "#fff",
-                }}
-              >
-                {isNavigating ? (
-                  <motion.svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    animate={{ rotate: 360 }}
-                    transition={{
-                      duration: 0.9,
-                      repeat: Infinity,
-                      ease: "linear",
-                    }}
-                  >
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeDasharray="30 60"
-                      strokeLinecap="round"
-                    />
-                  </motion.svg>
-                ) : (
-                  <motion.svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    animate={buttonHover ? { x: 6 } : { x: 0 }}
-                    transition={{ duration: 0.4, ease: "easeOut" }}
-                  >
-                    <path
-                      d="M3 8h10M9 4l4 4-4 4"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </motion.svg>
-                )}
-              </span>
-            </motion.button>
-          </div>
-        )}
+        {/* View All Button */}
+        <div className="text-center mt-12 md:mt-16">
+          <button
+            onClick={() => router.push("/featured-explore-properties")}
+            className="group inline-flex items-center gap-3 px-8 py-3.5 border border-neutral-900 hover:bg-neutral-900 transition-all duration-300"
+          >
+            <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-neutral-900 group-hover:text-white transition-colors">
+              View All Properties
+            </span>
+            <FiArrowRight
+              size={16}
+              className="text-neutral-900 group-hover:text-white group-hover:translate-x-1 transition-all duration-300"
+            />
+          </button>
+        </div>
       </div>
-
-      <AnimatePresence>
-        {compareList.length > 0 && (
-          <FloatingCompareBar
-            compareList={compareList}
-            onRemove={(id) => setCompareIds((p) => p.filter((x) => x !== id))}
-            onClear={() => setCompareIds([])}
-          />
-        )}
-      </AnimatePresence>
     </section>
   );
 }

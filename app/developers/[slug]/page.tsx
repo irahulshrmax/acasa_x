@@ -275,6 +275,7 @@ function DeveloperEnquiryForm({ developerName }: { developerName: string }) {
     }, 6000);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const field = (key: keyof typeof form, label: string, type = "text", placeholder = "") => (
     <div>
       <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
@@ -332,7 +333,7 @@ function DeveloperEnquiryForm({ developerName }: { developerName: string }) {
                 Message Sent!
               </p>
               <p className="mt-1.5 text-[12px]" style={{ color: THEME.muted }}>
-                We'll get back to you within 24 hours.
+                We&apos;ll get back to you within 24 hours.
               </p>
             </motion.div>
           ) : (
@@ -626,9 +627,9 @@ function StatsCard({ icon: Icon, label, value, subtext }: {
 
 export default function DeveloperDetailPage() {
   const router = useRouter();
-  // ✅ Fix: params ko sahi se handle karo
-  const slug = window.location.pathname.split('/').pop() || '';
-
+  
+  // ✅ FIX 1: window is not defined - use router or useEffect
+  const [slug, setSlug] = useState<string>("");
   const [developer, setDeveloper] = useState<Developer | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -639,6 +640,17 @@ export default function DeveloperDetailPage() {
   const [similarDevelopers, setSimilarDevelopers] = useState<any[]>([]);
   const fetchedRef = useRef(false);
 
+  // ✅ FIX 1: Get slug from router or window (client-side only)
+  useEffect(() => {
+    // Try to get slug from router first
+    const pathParts = window.location.pathname.split('/');
+    const slugFromPath = pathParts.pop() || '';
+    if (slugFromPath) {
+      setSlug(slugFromPath);
+    }
+  }, []);
+
+  // ✅ FIX 2: Fetch only when slug is available
   useEffect(() => {
     if (!slug || fetchedRef.current) return;
     fetchedRef.current = true;
@@ -677,6 +689,7 @@ export default function DeveloperDetailPage() {
     fetchDeveloper();
   }, [slug]);
 
+  // ✅ FIX 3: Similar developers fetch - dependency fix
   useEffect(() => {
     if (!developer) return;
 
@@ -709,11 +722,15 @@ export default function DeveloperDetailPage() {
         setCopied(true);
         setTimeout(() => setCopied(false), 3000);
       }
-    } catch {}
+    } catch {
+      // User cancelled or error
+    }
   }, [developer]);
 
+  // ✅ FIX 4: Loading state
   if (loading) return <PageLoader />;
 
+  // ✅ FIX 5: Error state with proper retry
   if (error || !developer) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
@@ -729,7 +746,7 @@ export default function DeveloperDetailPage() {
                 fetchedRef.current = false;
                 setLoading(true);
                 setError(null);
-                window.location.reload();
+                setSlug(window.location.pathname.split('/').pop() || '');
               }}
               className="bg-[#0A2540] px-6 py-2.5 text-[11px] tracking-widest text-white hover:bg-[#1B3A5F]"
             >

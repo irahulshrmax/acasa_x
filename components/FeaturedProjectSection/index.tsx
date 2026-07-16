@@ -1,15 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FiArrowLeft, FiArrowRight, FiX, FiImage } from "react-icons/fi";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 
-type ProjectImage = {
-  src: string;
-  label: string;
-};
-
+type ProjectImage = { src: string; label: string };
 type FeaturedProject = {
   id: number;
   eyebrow: string;
@@ -20,122 +16,136 @@ type FeaturedProject = {
   fullGallery: ProjectImage[];
 };
 
-// API Response Types
-type ApiPropertyImage = {
-  id: number;
-  url: string;
-  title: string;
-  description: string | null;
-  featured: number;
-};
-
 type ApiProperty = {
   id: number;
   name: string;
   slug: string;
-  listing_type: string;
-  featured: boolean;
   featured_image: string;
-  images: ApiPropertyImage[];
+  images: { url: string; width?: number; height?: number; size?: number }[];
   gallery_urls: string[];
-  gallery_preview: string[];
-  video_url: string | null;
-  developer: {
-    id: number;
-    name: string;
-    logo_url: string;
-  } | null;
-  location: {
-    community: string | null;
-    city: string;
-  };
-  price: {
-    display: string;
-    amount: number | null;
-  };
-  bedrooms: string;
-  bathrooms: string;
-  area: {
-    display: string;
-    value: number | null;
-  };
 };
 
 type ApiResponse = {
   success: boolean;
   data: ApiProperty[];
-  meta: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
 };
 
-const THEME = {
-  primary: "#192334",
-  accent: "#C8AA78",
-};
-
-const API_URL = "http://localhost:5173/api/v1/properties";
 const SLIDE_DURATION = 6500;
-const FALLBACK_IMG =
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&h=900&fit=crop&q=85";
 
-// ─── IMAGE COMPONENT ────────────────────────────────────────────────────
+function isValidImageUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (
+    trimmed === "" ||
+    trimmed.toLowerCase() === "null" ||
+    trimmed.toLowerCase() === "undefined"
+  ) {
+    return false;
+  }
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://");
+}
+
+function isHighQualityImageUrl(url: string): boolean {
+  if (!isValidImageUrl(url)) return false;
+  const lower = url.toLowerCase();
+
+  const lowQualityPatterns = [
+    "thumb",
+    "thumbnail",
+    "-small",
+    "_small",
+    "-mini",
+    "_mini",
+    "-tiny",
+    "_tiny",
+    "-low",
+    "_low",
+    "placeholder",
+    "blurred",
+    "preview",
+    "icon",
+    "150x",
+    "100x",
+    "200x",
+    "300x",
+  ];
+  if (lowQualityPatterns.some((p) => lower.includes(p))) return false;
+
+  if (lower.endsWith(".svg") || lower.endsWith(".gif")) return false;
+
+  return true;
+}
+
+function upgradeImageQuality(url: string): string {
+  if (!url) return url;
+
+  if (url.includes("res.cloudinary.com") && url.includes("/upload/")) {
+    if (/\/upload\/[a-z0-9_,]*q_/i.test(url)) return url;
+    return url.replace("/upload/", "/upload/q_auto:best,f_auto,w_1920/");
+  }
+
+  if (url.includes("ik.imagekit.io")) {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}tr=q-90,w-1920`;
+  }
+
+  try {
+    const u = new URL(url);
+    if (u.searchParams.has("w")) u.searchParams.set("w", "1920");
+    if (u.searchParams.has("width")) u.searchParams.set("width", "1920");
+    if (u.searchParams.has("q")) u.searchParams.set("q", "90");
+    if (u.searchParams.has("quality")) u.searchParams.set("quality", "90");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+function scoreImage(img: {
+  url: string;
+  width?: number;
+  height?: number;
+  size?: number;
+}): number {
+  let score = 0;
+  if (img.width) score += img.width;
+  if (img.height) score += img.height;
+  if (img.size) score += img.size / 1000;
+  return score;
+}
 
 function ImageWithFallback({
   src,
   alt,
   className = "",
-  onClick,
-  isClickable = false,
 }: {
   src: string;
   alt: string;
   className?: string;
-  onClick?: () => void;
-  isClickable?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
-  const [imgSrc, setImgSrc] = useState(src);
-
-  useEffect(() => {
-    setLoaded(false);
-    setImgSrc(src);
-  }, [src]);
+  const [hasError, setHasError] = useState(false);
 
   return (
-    <div 
-      className={`relative h-full w-full overflow-hidden bg-[#101827] ${
-        isClickable ? "cursor-pointer" : ""
-      }`}
-      onClick={onClick}
-    >
-      {!loaded && (
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-800 to-slate-900" />
+    <div className="relative h-full w-full overflow-hidden bg-[#0A0F1A]">
+      {!loaded && !hasError && (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-800/50 to-slate-900/50" />
       )}
-
-      <img
-        src={imgSrc}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        className={`h-full w-full object-cover transition-opacity duration-700 ${
-          loaded ? "opacity-100" : "opacity-0"
-        } ${className}`}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          setImgSrc(FALLBACK_IMG);
-          setLoaded(true);
-        }}
-      />
+      {!hasError && (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          className={`h-full w-full object-cover transition-opacity duration-700 ${
+            loaded ? "opacity-100" : "opacity-0"
+          } ${className}`}
+          onLoad={() => setLoaded(true)}
+          onError={() => setHasError(true)}
+        />
+      )}
     </div>
   );
 }
-
-// ─── BUTTON SPINNER ─────────────────────────────────────────────────────
 
 function ButtonSpinner() {
   return (
@@ -145,11 +155,7 @@ function ButtonSpinner() {
       viewBox="0 0 24 24"
       fill="none"
       animate={{ rotate: 360 }}
-      transition={{
-        duration: 0.9,
-        repeat: Infinity,
-        ease: "linear",
-      }}
+      transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
     >
       <circle
         cx="12"
@@ -164,96 +170,56 @@ function ButtonSpinner() {
   );
 }
 
-// ─── GOLDEN BUTTON ─────────────────────────────────────────────────────
-
-function GoldenProjectButton({
+function FigmaButton({
   children,
-  loadingText,
-  variant = "outline",
   onClick,
   isProcessing = false,
 }: {
-  children: string;
-  loadingText: string;
-  variant?: "outline" | "solid";
-  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  children: React.ReactNode;
+  onClick?: (e: React.MouseEvent) => void;
   isProcessing?: boolean;
 }) {
   const [hover, setHover] = useState(false);
-  const isSolid = variant === "solid";
 
   return (
     <motion.button
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (isProcessing) return;
-        onClick(e);
-      }}
+      onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       whileTap={{ scale: 0.97 }}
       disabled={isProcessing}
-      className="relative inline-flex min-w-[132px] cursor-pointer items-center justify-center gap-2 overflow-hidden px-5 py-3 text-[9px] font-medium uppercase tracking-[0.18em] transition-all disabled:cursor-wait"
+      className="relative inline-flex cursor-pointer items-center justify-center gap-2 overflow-hidden px-5 py-2.5 text-[9px] font-medium uppercase tracking-[0.2em] transition-all disabled:cursor-wait md:px-6 md:py-3 md:text-[10px]"
       style={{
-        color: hover && !isProcessing ? THEME.primary : "#fff",
-        border: `1px solid ${
-          isSolid ? "rgba(200,170,120,0.65)" : "rgba(255,255,255,0.45)"
-        }`,
-        backgroundColor: isSolid ? "rgba(25,35,52,0.75)" : "transparent",
-        boxShadow:
-          hover && !isProcessing
-            ? "0 12px 30px rgba(200,170,120,0.22)"
-            : "0 4px 18px rgba(0,0,0,0.16)",
-        transform: hover && !isProcessing ? "translateY(-2px)" : "translateY(0)",
+        color: "#FFFFFF",
+        border: "1px solid rgba(255,255,255,0.3)",
+        backgroundColor: "transparent",
       }}
     >
       <span
         className="absolute inset-0 origin-left"
         style={{
-          background: `linear-gradient(90deg, ${THEME.accent} 0%, #D4B888 100%)`,
+          background: "#FFFFFF",
           transform: hover && !isProcessing ? "scaleX(1)" : "scaleX(0)",
-          transition: "transform 0.5s cubic-bezier(0.4,0,0.2,1)",
+          transition: "transform 0.4s cubic-bezier(0.4,0,0.2,1)",
         }}
       />
-
+      <span
+        className="relative z-10"
+        style={{ color: hover && !isProcessing ? "#0F172A" : "#FFFFFF" }}
+      >
+        {children}
+      </span>
       {isProcessing && (
-        <motion.span
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(200,170,120,0.4), transparent)",
-          }}
-          animate={{ x: ["-100%", "100%"] }}
-          transition={{
-            duration: 1.2,
-            repeat: Infinity,
-            ease: "linear",
-          }}
-        />
-      )}
-
-      <span className="relative z-10">
-        {isProcessing ? loadingText : children}
-      </span>
-
-      <span className="relative z-10 inline-flex items-center">
-        {isProcessing ? (
+        <span
+          className="relative z-10 inline-flex items-center"
+          style={{ color: hover ? "#0F172A" : "#FFFFFF" }}
+        >
           <ButtonSpinner />
-        ) : (
-          <motion.span
-            animate={hover ? { x: 4 } : { x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            {children === "View All Photos" ? <FiImage size={13} /> : "→"}
-          </motion.span>
-        )}
-      </span>
+        </span>
+      )}
     </motion.button>
   );
 }
-
-// ─── PHOTO GALLERY POPUP ──────────────────────────────────────────────
 
 function PhotoGalleryPopup({
   isOpen,
@@ -280,231 +246,160 @@ function PhotoGalleryPopup({
 
   useEffect(() => {
     if (!isOpen) return;
-
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowLeft")
-        setCurrentIndex((p) => (p - 1 + images.length) % images.length);
+        setCurrentIndex((p: number) => (p - 1 + images.length) % images.length);
       if (e.key === "ArrowRight")
-        setCurrentIndex((p) => (p + 1) % images.length);
+        setCurrentIndex((p: number) => (p + 1) % images.length);
     };
-
     window.addEventListener("keydown", handleKey);
     document.body.style.overflow = "hidden";
-
     return () => {
       window.removeEventListener("keydown", handleKey);
       document.body.style.overflow = "";
     };
   }, [isOpen, images.length, onClose]);
 
-  const handleNext = useCallback(() => {
-    setImgLoading(true);
-    setCurrentIndex((p) => (p + 1) % images.length);
-  }, [images.length]);
-
-  const handlePrev = useCallback(() => {
-    setImgLoading(true);
-    setCurrentIndex((p) => (p - 1 + images.length) % images.length);
-  }, [images.length]);
-
-  const handleThumbClick = useCallback((idx: number) => {
-    setImgLoading(true);
-    setCurrentIndex(idx);
-  }, []);
+  if (!isOpen) return null;
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="fixed inset-0 z-[999] flex flex-col bg-black/97 backdrop-blur-md"
-          onClick={onClose}
-        >
-          {/* HEADER BAR */}
-          <div className="flex items-center justify-between border-b border-white/10 bg-black/50 px-4 py-4 md:px-8 md:py-5">
-            <div className="flex flex-col">
-              <p className="text-[9px] font-medium uppercase tracking-[0.24em] text-[#C8AA78]">
-                Photo Gallery
-              </p>
-              <h3
-                className="mt-0.5 text-[15px] text-white md:text-[18px]"
-                style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
-              >
-                {projectTitle}
-              </h3>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <span className="text-[11px] font-medium tracking-widest text-white/70">
-                {String(currentIndex + 1).padStart(2, "0")} /{" "}
-                {String(images.length).padStart(2, "0")}
-              </span>
-
-              <motion.button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose();
-                }}
-                whileTap={{ scale: 0.9 }}
-                whileHover={{ rotate: 90 }}
-                className="flex h-10 w-10 items-center justify-center border border-white/25 text-white transition-colors hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334]"
-                aria-label="Close gallery"
-              >
-                <FiX size={18} />
-              </motion.button>
-            </div>
-          </div>
-
-          {/* MAIN IMAGE AREA */}
-          <div 
-            className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-6 md:px-16"
-            onClick={(e) => e.stopPropagation()}
+    <div
+      className="fixed inset-0 z-[999] flex flex-col bg-black/98 backdrop-blur-lg"
+      onClick={onClose}
+    >
+      <div className="flex items-center justify-between border-b border-white/10 bg-black/80 px-3 py-3 md:px-8 md:py-5">
+        <div className="flex flex-col">
+          <p className="text-[8px] font-medium uppercase tracking-[0.24em] text-white/60 md:text-[9px]">
+            Photo Gallery
+          </p>
+          <h3
+            className="mt-0.5 text-[14px] text-white md:text-[18px]"
+            style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
           >
-            <AnimatePresence>
-              {imgLoading && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 z-10 flex items-center justify-center"
-                >
-                  <div className="relative h-16 w-16">
-                    <motion.div
-                      className="absolute inset-0 rounded-full border-2 border-transparent"
-                      style={{
-                        borderTopColor: THEME.accent,
-                        borderRightColor: THEME.accent,
-                      }}
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        duration: 1,
-                        repeat: Infinity,
-                        ease: "linear",
-                      }}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <motion.img
-              key={currentIndex}
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: imgLoading ? 0.3 : 1, scale: 1 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
-              src={images[currentIndex]?.src}
-              alt={images[currentIndex]?.label}
-              onLoad={() => setImgLoading(false)}
-              onError={() => setImgLoading(false)}
-              className="max-h-full max-w-full object-contain shadow-2xl"
-              style={{ maxHeight: "calc(100vh - 260px)" }}
-            />
-
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 px-4 py-2 backdrop-blur-sm">
-              <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-white">
-                {images[currentIndex]?.label}
-              </p>
-            </div>
-
-            <motion.button
-              onClick={(e) => {
-                e.stopPropagation();
-                handlePrev();
-              }}
-              whileTap={{ scale: 0.9 }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center border border-white/25 bg-black/40 text-white backdrop-blur-sm transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334] md:h-14 md:w-14"
-              aria-label="Previous image"
-            >
-              <FiArrowLeft size={20} />
-            </motion.button>
-
-            <motion.button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleNext();
-              }}
-              whileTap={{ scale: 0.9 }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center border border-white/25 bg-black/40 text-white backdrop-blur-sm transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334] md:h-14 md:w-14"
-              aria-label="Next image"
-            >
-              <FiArrowRight size={20} />
-            </motion.button>
-          </div>
-
-          {/* THUMBNAIL STRIP */}
-          <div className="border-t border-white/10 bg-black/50 px-4 py-4 md:px-8">
-            <div className="scrollbar-hide flex gap-2 overflow-x-auto md:gap-3">
-              {images.map((img, idx) => (
-                <motion.button
-                  key={idx}
-                  onClick={() => handleThumbClick(idx)}
-                  whileHover={{ y: -3 }}
-                  className={`relative shrink-0 overflow-hidden border-2 transition-all ${
-                    idx === currentIndex
-                      ? "border-[#C8AA78] opacity-100"
-                      : "border-transparent opacity-50 hover:opacity-90"
-                  }`}
-                  style={{ width: "82px", height: "58px" }}
-                >
-                  <img
-                    src={img.src}
-                    alt={img.label}
-                    loading="lazy"
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = FALLBACK_IMG;
-                    }}
-                  />
-                  {idx === currentIndex && (
-                    <div className="absolute inset-0 border-2 border-[#C8AA78]" />
-                  )}
-                </motion.button>
-              ))}
+            {projectTitle}
+          </h3>
+        </div>
+        <div className="flex items-center gap-3 md:gap-4">
+          <span className="text-[10px] font-medium tracking-widest text-white/60 md:text-[11px]">
+            {String(currentIndex + 1).padStart(2, "0")} /{" "}
+            {String(images.length).padStart(2, "0")}
+          </span>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center border border-white/20 text-white hover:border-white hover:bg-white hover:text-[#0F172A] md:h-10 md:w-10"
+          >
+            <FiX size={16} />
+          </button>
+        </div>
+      </div>
+      <div
+        className="relative flex flex-1 items-center justify-center overflow-hidden px-2 py-4 md:px-16 md:py-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {imgLoading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <div className="relative h-12 w-12 md:h-16 md:w-16">
+              <motion.div
+                className="absolute inset-0 rounded-full border-2 border-transparent"
+                style={{
+                  borderTopColor: "#FFFFFF",
+                  borderRightColor: "#FFFFFF",
+                }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              />
             </div>
           </div>
-
-          <div className="hidden border-t border-white/10 bg-black/70 px-8 py-2 md:block">
-            <p className="text-center text-[9px] tracking-[0.24em] text-white/40">
-              USE ARROW KEYS TO NAVIGATE • PRESS ESC TO CLOSE
-            </p>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+        <img
+          key={currentIndex}
+          src={images[currentIndex]?.src}
+          alt={images[currentIndex]?.label}
+          onLoad={() => setImgLoading(false)}
+          onError={() => setImgLoading(false)}
+          className="max-h-full max-w-full object-contain shadow-2xl"
+          style={{
+            maxHeight: "calc(100vh - 200px)",
+            opacity: imgLoading ? 0.3 : 1,
+          }}
+        />
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 px-3 py-1.5 backdrop-blur-sm md:bottom-6 md:px-4 md:py-2">
+          <p className="text-[8px] font-medium uppercase tracking-[0.24em] text-white md:text-[10px]">
+            {images[currentIndex]?.label}
+          </p>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setCurrentIndex(
+              (p: number) => (p - 1 + images.length) % images.length
+            );
+            setImgLoading(true);
+          }}
+          className="absolute left-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center border border-white/20 bg-black/60 text-white hover:border-white hover:bg-white hover:text-[#0F172A] md:left-4 md:h-12 md:w-12"
+        >
+          <FiArrowLeft size={18} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setCurrentIndex((p: number) => (p + 1) % images.length);
+            setImgLoading(true);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center border border-white/20 bg-black/60 text-white hover:border-white hover:bg-white hover:text-[#0F172A] md:right-4 md:h-12 md:w-12"
+        >
+          <FiArrowRight size={18} />
+        </button>
+      </div>
+      <div className="border-t border-white/10 bg-black/80 px-3 py-3 md:px-8 md:py-4">
+        <div className="scrollbar-hide flex gap-2 overflow-x-auto md:gap-3">
+          {images.map((img, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                setCurrentIndex(idx);
+                setImgLoading(true);
+              }}
+              className={`relative shrink-0 overflow-hidden border-2 transition-all ${
+                idx === currentIndex
+                  ? "border-white opacity-100"
+                  : "border-transparent opacity-40 hover:opacity-80"
+              }`}
+              style={{ width: "60px", height: "42px" }}
+            >
+              <img
+                src={img.src}
+                alt={img.label}
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ─── LOADING COMPONENT ─────────────────────────────────────────────────
-
 function LoadingState() {
   return (
-    <section className="bg-white py-10 md:py-16">
-      <div className="mx-auto max-w-[1320px] px-4 md:px-6">
+    <section className="bg-[#0F172A] py-10 md:py-16">
+      <div className="mx-auto max-w-[100%] px-0">
         <div
-          className="relative overflow-hidden bg-[#101827]"
-          style={{
-            minHeight: "420px",
-            height: "min(72vw, 620px)",
-          }}
+          className="relative overflow-hidden bg-[#0A0F1A]"
+          style={{ minHeight: "380px", height: "min(70vw, 600px)" }}
         >
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="relative h-16 w-16">
+            <div className="relative h-14 w-14 md:h-16 md:w-16">
               <motion.div
                 className="absolute inset-0 rounded-full border-4 border-transparent"
                 style={{
-                  borderTopColor: THEME.accent,
-                  borderRightColor: THEME.accent,
+                  borderTopColor: "#FFFFFF",
+                  borderRightColor: "#FFFFFF",
                 }}
                 animate={{ rotate: 360 }}
-                transition={{
-                  duration: 1,
-                  repeat: Infinity,
-                  ease: "linear",
-                }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
               />
             </div>
           </div>
@@ -514,418 +409,276 @@ function LoadingState() {
   );
 }
 
-// ─── ERROR COMPONENT ───────────────────────────────────────────────────
-
-function ErrorState({ message }: { message: string }) {
-  return (
-    <section className="bg-white py-10 md:py-16">
-      <div className="mx-auto max-w-[1320px] px-4 md:px-6">
-        <div
-          className="relative overflow-hidden bg-[#101827]"
-          style={{
-            minHeight: "420px",
-            height: "min(72vw, 620px)",
-          }}
-        >
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-            <p className="text-lg font-medium text-[#C8AA78]">{message}</p>
-            <p className="mt-2 text-sm text-white/60">
-              Please check back later for updates
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── MAIN COMPONENT ─────────────────────────────────────────────────────
-
 export default function FeaturedProjectSection() {
   const router = useRouter();
-
-  // ─── ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS ──────
-
   const [projects, setProjects] = useState<FeaturedProject[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
-  const [discoverLoading, setDiscoverLoading] = useState(false);
-  const [photosLoading, setPhotosLoading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryStartIndex, setGalleryStartIndex] = useState(0);
-
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ─── FETCH PROPERTIES FROM API ──────────────────────────────────────
-
   useEffect(() => {
-    async function fetchFeaturedProperties() {
+    async function fetchData() {
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}?limit=50`);
+        const res = await fetch("/api/v1/properties?action=featured&limit=10");
+        if (!res.ok) throw new Error("Failed to fetch");
+        const result: ApiResponse = await res.json();
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result: ApiResponse = await response.json();
-
-        if (!result.success) {
-          throw new Error("API returned unsuccessful response");
-        }
-
-        console.log("Total properties from API:", result.data.length);
-
-        // 🔥 MORE FLEXIBLE FILTERING - Get ANY properties that have images
-        const validProperties = result.data.filter((property) => {
-          // Check if name is valid (not "Null" or empty)
-          const hasValidName = 
-            property.name && 
-            property.name.trim() !== "" && 
-            property.name.toLowerCase() !== "null";
-
-          // Check if has featured image OR any images
-          const hasFeaturedImage = 
-            property.featured_image && 
-            property.featured_image.length > 0;
-
-          // Check if has any gallery images
-          const hasGalleryImages = 
-            property.gallery_urls && 
-            property.gallery_urls.length > 0;
-
-          // Check if has images array with at least one image
-          const hasImages = 
-            property.images && 
-            property.images.length > 0;
-
-          // 🔥 LESS STRICT - Don't require featured flag, just require images
-          return hasValidName && (hasFeaturedImage || hasGalleryImages || hasImages);
-        });
-
-        console.log("Valid properties after filtering:", validProperties.length);
-
-        if (validProperties.length === 0) {
-          // If no valid properties found, try with even less strict filtering
-          const fallbackProperties = result.data.filter((property) => {
-            return property.gallery_urls && property.gallery_urls.length > 0;
-          });
-          
-          console.log("Fallback properties (any with gallery):", fallbackProperties.length);
-          
-          if (fallbackProperties.length === 0) {
-            setError("No properties with images found in the API");
-            setProjects([]);
-            setLoading(false);
-            return;
-          }
-          
-          // Use fallback
-          const topThree = fallbackProperties.slice(0, 3);
-          const transformed = transformProperties(topThree);
-          setProjects(transformed);
-          setError(null);
+        if (!result.success || !result.data.length) {
+          setProjects([]);
           setLoading(false);
           return;
         }
 
-        // Take first 3 valid properties
-        const topThree = validProperties.slice(0, 3);
-        const transformed = transformProperties(topThree);
+        const collectImages = (p: ApiProperty): string[] => {
+          const seen = new Set<string>();
+          const collected: { url: string; score: number }[] = [];
+
+          if (isHighQualityImageUrl(p.featured_image)) {
+            const upgraded = upgradeImageQuality(p.featured_image);
+            if (!seen.has(upgraded)) {
+              seen.add(upgraded);
+              collected.push({ url: upgraded, score: 999999 });
+            }
+          }
+
+          if (p.images?.length) {
+            const sorted = [...p.images]
+              .filter((i) => isHighQualityImageUrl(i.url))
+              .sort((a, b) => scoreImage(b) - scoreImage(a));
+
+            sorted.forEach((i) => {
+              const upgraded = upgradeImageQuality(i.url);
+              if (!seen.has(upgraded)) {
+                seen.add(upgraded);
+                collected.push({ url: upgraded, score: scoreImage(i) });
+              }
+            });
+          }
+
+          if (p.gallery_urls?.length) {
+            p.gallery_urls.forEach((u) => {
+              if (isHighQualityImageUrl(u)) {
+                const upgraded = upgradeImageQuality(u);
+                if (!seen.has(upgraded)) {
+                  seen.add(upgraded);
+                  collected.push({ url: upgraded, score: 0 });
+                }
+              }
+            });
+          }
+
+          return collected.sort((a, b) => b.score - a.score).map((c) => c.url);
+        };
+
+        const valid = result.data.filter((p) => {
+          if (!p.name || p.name.trim() === "") return false;
+          const imgs = collectImages(p);
+          return imgs.length >= 3;
+        });
+
+        if (valid.length === 0) {
+          setProjects([]);
+          setLoading(false);
+          return;
+        }
+
+        const topThree = valid.slice(0, 3);
+        const labels = [
+          "MAIN VIEW",
+          "LIVING ROOM",
+          "AMENITIES AREA",
+          "BEDROOM",
+          "BATHROOM",
+          "KITCHEN",
+        ];
+
+        const transformed: FeaturedProject[] = topThree.map((property) => {
+          const images = collectImages(property);
+          const gallery: ProjectImage[] = images.map((url, i) => ({
+            src: url,
+            label: labels[i % labels.length],
+          }));
+
+          return {
+            id: property.id,
+            eyebrow: "FEATURED PROJECT",
+            title: property.name,
+            slug: property.slug || `property-${property.id}`,
+            image: images[0] || "",
+            images: gallery.slice(1, 3),
+            fullGallery: gallery,
+          };
+        });
+
         setProjects(transformed);
-        setError(null);
-      } catch (err) {
-        console.error("Error fetching featured properties:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load properties"
-        );
+      } catch {
         setProjects([]);
       } finally {
         setLoading(false);
       }
     }
-
-    // Helper function to transform properties
-    function transformProperties(properties: ApiProperty[]): FeaturedProject[] {
-      return properties.map((property) => {
-        // Get all gallery images from various sources
-        let allImages: string[] = [];
-        
-        // Priority: gallery_urls > images array > featured_image
-        if (property.gallery_urls && property.gallery_urls.length > 0) {
-          allImages = property.gallery_urls;
-        } else if (property.images && property.images.length > 0) {
-          allImages = property.images.map(img => img.url);
-        } else if (property.featured_image) {
-          allImages = [property.featured_image];
-        }
-
-        // If no images at all, use fallback
-        if (allImages.length === 0) {
-          allImages = [FALLBACK_IMG];
-        }
-
-        // Create ProjectImage array
-        const galleryImages: ProjectImage[] = allImages.map((url, index) => ({
-          src: url,
-          label: `${property.name || "Property"} - Image ${index + 1}`,
-        }));
-
-        // First 2 images for thumbnails
-        const thumbnailImages = galleryImages.slice(0, 2);
-
-        // Featured image (use first image if no featured_image)
-        const featuredImage = property.featured_image || allImages[0] || FALLBACK_IMG;
-
-        return {
-          id: property.id,
-          eyebrow: property.listing_type || "FEATURED PROJECT",
-          title: property.name || "Property",
-          slug: property.slug || `property-${property.id}`,
-          image: featuredImage,
-          images: thumbnailImages,
-          fullGallery: galleryImages,
-        };
-      });
-    }
-
-    fetchFeaturedProperties();
+    fetchData();
   }, []);
 
-  // ─── AUTO-SLIDE ──────────────────────────────────────────────────────
-
-  const next = useCallback(() => {
-    if (projects.length === 0) return;
-    setActive((prev) => (prev + 1) % projects.length);
-  }, [projects.length]);
-
-  const prev = useCallback(() => {
-    if (projects.length === 0) return;
-    setActive((prev) => (prev - 1 + projects.length) % projects.length);
-  }, [projects.length]);
+  const next = useCallback(
+    () => setActive((p: number) => (p + 1) % projects.length),
+    [projects.length]
+  );
+  const prev = useCallback(
+    () =>
+      setActive((p: number) => (p - 1 + projects.length) % projects.length),
+    [projects.length]
+  );
 
   useEffect(() => {
-    if (projects.length === 0) return;
-    if (isHovered || galleryOpen) return;
-
-    timerRef.current = setTimeout(() => {
-      next();
-    }, SLIDE_DURATION);
-
+    if (projects.length === 0 || isHovered || galleryOpen) return;
+    timerRef.current = setTimeout(next, SLIDE_DURATION);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [active, isHovered, galleryOpen, next, projects.length]);
 
-  // ─── DEFINE currentProject BEFORE useCallback THAT USE IT ──────────
+  const project = projects[active] || projects[0];
 
-  const currentProject = projects[active] || projects[0] || null;
-
-  // ─── NAVIGATION HANDLERS ────────────────────────────────────────────
-
-  // Navigate to individual property page (slug page)
-  const navigateToProperty = useCallback((slug: string) => {
-    router.push(`/featured-explore-properties/${slug}`);
-  }, [router]);
-
-  // Navigate to featured-explore-properties page
-  const navigateToFeaturedExplore = useCallback(() => {
-    router.push('/featured-explore-properties');
-  }, [router]);
-
-  const handleDiscoverMore = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    if (discoverLoading || !currentProject) return;
-    setDiscoverLoading(true);
-
-    setTimeout(() => {
-      navigateToFeaturedExplore();
-      setDiscoverLoading(false);
-    }, 500);
-  }, [discoverLoading, currentProject, navigateToFeaturedExplore]);
-
-  const handleImageClick = useCallback((slug: string) => {
-    navigateToProperty(slug);
-  }, [navigateToProperty]);
-
-  const handleViewAllPhotos = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>, startIdx: number = 0) => {
-      e.stopPropagation();
-      if (photosLoading || projects.length === 0) return;
-      setPhotosLoading(true);
-
-      setTimeout(() => {
-        setGalleryStartIndex(startIdx);
-        setGalleryOpen(true);
-        setPhotosLoading(false);
-      }, 500);
+  const navigateToProperty = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("button") || target.closest(".interactive")) {
+        return;
+      }
+      if (project) {
+        router.push(`/featured-explore-properties/${project.slug}`);
+      }
     },
-    [photosLoading, projects.length]
+    [project, router]
   );
 
-  // ─── useMemo HOOKS ───────────────────────────────────────────────────
-
-  const thumbnails = useMemo(() => {
-    if (!currentProject) return [];
-    return currentProject.images.slice(0, 2);
-  }, [currentProject]);
-
-  const allGalleryImages = useMemo(() => {
-    if (!currentProject) return [];
-    const combined = [
-      { src: currentProject.image, label: currentProject.title.toUpperCase() },
-      ...currentProject.images,
-      ...currentProject.fullGallery,
-    ];
-
-    const seen = new Set<string>();
-    return combined.filter((img) => {
-      if (seen.has(img.src)) return false;
-      seen.add(img.src);
-      return true;
-    });
-  }, [currentProject]);
-
-  // ─── CONDITIONAL RETURNS ────────────────────────────────────────────
-
-  if (loading) {
-    return <LoadingState />;
-  }
-
-  if (error || projects.length === 0 || !currentProject) {
-    return <ErrorState message={error || "No featured properties available"} />;
-  }
-
-  // ─── RENDER CONTENT ──────────────────────────────────────────────────
-
-  const project = currentProject;
+  if (loading) return <LoadingState />;
+  if (!project || projects.length === 0) return null;
 
   return (
     <>
-      <section className="bg-white py-10 md:py-16">
-        <div className="mx-auto max-w-[1320px] px-4 md:px-6">
-          {/* MAIN BANNER CONTAINER - FULL CLICKABLE */}
+      <section className="bg-[#0F172A] py-0">
+        <div className="mx-auto max-w-[100%] px-0">
           <div
-            className="relative overflow-hidden bg-[#101827] cursor-pointer"
-            style={{
-              minHeight: "420px",
-              height: "min(72vw, 620px)",
-            }}
+            className="relative overflow-hidden bg-[#0A0F1A] cursor-pointer"
+            style={{ minHeight: "380px", height: "min(70vw, 600px)" }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            onClick={() => handleImageClick(project.slug)}
+            onClick={navigateToProperty}
           >
-            {/* Background Image */}
             <ImageWithFallback
-              key={project.id}
               src={project.image}
               alt={project.title}
               className="absolute inset-0 transition-transform duration-700 hover:scale-105"
-              isClickable={false}
             />
 
-            {/* Dark overlays */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-black/20" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
 
-            {/* Top decorative line */}
-            <div className="absolute left-6 right-6 top-10 hidden h-px bg-gradient-to-r from-white/15 via-white/45 to-white/15 md:block" />
-
-            {/* Arrows - with stopPropagation */}
-            <div className="absolute right-6 top-8 z-20 flex items-center">
+            <div className="absolute right-4 top-4 z-20 flex items-center gap-0 md:right-10 md:top-10 interactive">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   prev();
                 }}
-                aria-label="Previous project"
-                className="flex h-10 w-12 items-center justify-center border border-white/35 text-white/80 transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334]"
+                className="flex h-9 w-11 items-center justify-center border border-white/30 bg-transparent text-white transition-all hover:border-white hover:bg-white hover:text-[#0F172A] md:h-11 md:w-14"
               >
-                <FiArrowLeft size={15} />
+                <FiArrowLeft size={14} strokeWidth={1.5} />
               </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   next();
                 }}
-                aria-label="Next project"
-                className="-ml-px flex h-10 w-12 items-center justify-center border border-white/35 text-white/80 transition-all hover:border-[#C8AA78] hover:bg-[#C8AA78] hover:text-[#192334]"
+                className="-ml-px flex h-9 w-11 items-center justify-center border border-white/30 bg-transparent text-white transition-all hover:border-white hover:bg-white hover:text-[#0F172A] md:h-11 md:w-14"
               >
-                <FiArrowRight size={15} />
+                <FiArrowRight size={14} strokeWidth={1.5} />
               </button>
             </div>
 
-            {/* Content - with stopPropagation on buttons */}
-            <div className="absolute bottom-8 left-6 z-20 max-w-[520px] md:bottom-16 md:left-16">
-              <p className="mb-3 text-[9px] font-medium uppercase tracking-[0.24em] text-white/60">
+            <div className="absolute bottom-8 left-4 z-20 max-w-[90%] md:bottom-14 md:left-14 md:max-w-[520px]">
+              <p className="mb-2 text-[8px] font-medium uppercase tracking-[0.28em] text-white/60 md:mb-3 md:text-[10px]">
                 {project.eyebrow}
               </p>
 
               <h2
-                className="text-[28px] leading-tight text-white md:text-[38px] cursor-pointer hover:text-[#C8AA78] transition-colors"
+                className="text-[24px] leading-tight text-white hover:text-white/80 transition-colors md:text-[42px]"
                 style={{
                   fontFamily: "'Playfair Display', Georgia, serif",
-                  textShadow: "0 3px 18px rgba(0,0,0,0.45)",
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleImageClick(project.slug);
+                  fontWeight: 400,
                 }}
               >
                 {project.title}
               </h2>
 
-              <div className="mt-8 flex flex-wrap items-center gap-2">
-                <GoldenProjectButton
-                  loadingText="Loading..."
-                  variant="solid"
-                  onClick={handleDiscoverMore}
-                  isProcessing={discoverLoading}
+              <div className="mt-4 flex flex-wrap items-center gap-2 md:mt-7 md:gap-3 interactive">
+                <FigmaButton
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    router.push(
+                      `/featured-explore-properties/${project.slug}`
+                    );
+                  }}
                 >
                   Discover More
-                </GoldenProjectButton>
+                </FigmaButton>
 
-                <GoldenProjectButton
-                  loadingText="Loading..."
-                  variant="outline"
-                  onClick={(e) => handleViewAllPhotos(e, 0)}
-                  isProcessing={photosLoading}
+                <FigmaButton
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    setGalleryStartIndex(0);
+                    setGalleryOpen(true);
+                  }}
                 >
                   View All Photos
-                </GoldenProjectButton>
+                </FigmaButton>
               </div>
             </div>
 
-            {/* Thumbnails desktop — clickable to open gallery */}
-            <div className="absolute bottom-10 right-10 z-20 hidden bg-white p-2 shadow-2xl md:flex">
-              {thumbnails.map((img, thumbIdx) => (
-                <motion.button
-                  key={img.label}
-                  onClick={(e) => handleViewAllPhotos(e, thumbIdx + 1)}
-                  whileHover={{ y: -3 }}
-                  className="group/thumb block w-[150px] cursor-pointer"
-                >
-                  <div className="relative h-[105px] overflow-hidden bg-gray-100">
-                    <ImageWithFallback
-                      src={img.src}
-                      alt={img.label}
-                      className="transition-transform duration-500 group-hover/thumb:scale-105"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-300 group-hover/thumb:bg-black/40 group-hover/thumb:opacity-100">
-                      <FiImage size={22} className="text-white" />
-                    </div>
-                  </div>
-                  <p className="mt-2 px-1 text-left text-[8px] font-medium uppercase tracking-[0.14em] text-[#192334]">
-                    {img.label}
-                  </p>
-                </motion.button>
-              ))}
-            </div>
+            {project.images.length >= 2 && (
+              <div className="absolute bottom-8 right-4 z-20 hidden md:bottom-10 md:right-10 md:flex interactive">
+                <div className="flex bg-white p-1.5 shadow-2xl">
+                  {project.images.map((img, idx) => (
+                    <motion.button
+                      key={idx}
+                      onClick={(e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        setGalleryStartIndex(idx + 1);
+                        setGalleryOpen(true);
+                      }}
+                      whileHover={{ scale: 1.02 }}
+                      className={`group relative block cursor-pointer overflow-hidden ${
+                        idx > 0 ? "ml-1.5" : ""
+                      }`}
+                      style={{ width: "180px" }}
+                    >
+                      <div className="relative h-[120px] overflow-hidden bg-gray-800">
+                        <ImageWithFallback
+                          src={img.src}
+                          alt={img.label}
+                          className="transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-all duration-300 group-hover:bg-black/40 group-hover:opacity-100">
+                          <FiImage size={22} className="text-white" />
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5">
+                          <p className="text-left text-[8px] font-medium uppercase tracking-[0.2em] text-white">
+                            {img.label}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {/* Dots mobile */}
-            <div className="absolute bottom-4 right-5 z-20 flex items-center gap-2 md:hidden">
+            <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 md:hidden interactive">
               {projects.map((_, idx) => (
                 <button
                   key={idx}
@@ -933,12 +686,11 @@ export default function FeaturedProjectSection() {
                     e.stopPropagation();
                     setActive(idx);
                   }}
-                  aria-label={`Go to project ${idx + 1}`}
-                  className="h-[3px] rounded-full transition-all"
+                  className="h-[2px] rounded-full transition-all"
                   style={{
-                    width: idx === active ? 26 : 7,
+                    width: idx === active ? 22 : 6,
                     background:
-                      idx === active ? "#C8AA78" : "rgba(255,255,255,0.35)",
+                      idx === active ? "#FFFFFF" : "rgba(255,255,255,0.25)",
                   }}
                 />
               ))}
@@ -947,11 +699,10 @@ export default function FeaturedProjectSection() {
         </div>
       </section>
 
-      {/* Photo Gallery Popup */}
       <PhotoGalleryPopup
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
-        images={allGalleryImages}
+        images={project.fullGallery}
         projectTitle={project.title}
         startIndex={galleryStartIndex}
       />

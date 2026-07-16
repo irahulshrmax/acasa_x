@@ -1,3 +1,4 @@
+// app/api/properties/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getProperties,
@@ -179,12 +180,10 @@ async function fetchAllPropertiesDirect(filters: any) {
       'pp.property_id'
     );
 
-  // ✅ Only apply status if provided (no default)
   if (filters.status !== undefined && filters.status !== null) {
     query = query.where('p.status', filters.status);
   }
 
-  // ✅ Apply featured filter if provided
   if (filters.featured) {
     query = query.where(function() {
       this.where('p.featured_property', '1')
@@ -193,7 +192,6 @@ async function fetchAllPropertiesDirect(filters: any) {
     });
   }
 
-  // Other filters
   if (filters.listing_type) {
     query = query.where('p.listing_type', filters.listing_type);
   }
@@ -237,7 +235,6 @@ async function fetchAllPropertiesDirect(filters: any) {
     }
   }
 
-  // Order by
   if (filters.sort_by === 'price_asc') {
     query = query.orderByRaw('COALESCE(NULLIF(pp.sale_price, 0), NULLIF(p.price, 0)) ASC NULLS LAST');
   } else if (filters.sort_by === 'price_desc') {
@@ -307,7 +304,6 @@ async function fetchAllPropertiesDirect(filters: any) {
 
   const properties = await query.select(columns);
 
-  // ✅ FIX: Filter out NaN and invalid IDs
   const allMediaIds: number[] = [];
   for (const p of properties) {
     if (p.gallery_media_ids) {
@@ -320,11 +316,9 @@ async function fetchAllPropertiesDirect(filters: any) {
   }
 
   const uniqueMediaIds = [...new Set(allMediaIds)].filter(id => id > 0);
-  console.log(`✅ Found ${uniqueMediaIds.length} valid media IDs`);
 
   const mediaMap = new Map<number, any>();
   if (uniqueMediaIds.length > 0) {
-    // ✅ Split into chunks to avoid query too large
     const chunkSize = 500;
     for (let i = 0; i < uniqueMediaIds.length; i += chunkSize) {
       const chunk = uniqueMediaIds.slice(i, i + chunkSize);
@@ -339,7 +333,6 @@ async function fetchAllPropertiesDirect(filters: any) {
     }
   }
 
-  // ✅ Transform with images array
   const transformed = properties.map((p: any) => {
     const galleryIds = p.gallery_media_ids ? 
       p.gallery_media_ids.split(',').map((id: string) => parseInt(id.trim(), 10)).filter((id: number) => !isNaN(id) && id > 0) : 
@@ -358,7 +351,6 @@ async function fetchAllPropertiesDirect(filters: any) {
 
     const galleryUrls = galleryImages.map((g: any) => g.url);
     
-    // Featured image
     let featuredImage = null;
     if (p.featured_image) {
       if (p.featured_image.includes('.') || p.featured_image.includes('/')) {
@@ -461,12 +453,16 @@ export async function GET(req: NextRequest) {
     const slug = searchParams.get('slug');
     const showAll = searchParams.get('show_all') === 'true';
     
+    // ✅ GET LIMIT FROM QUERY PARAM (default 25, max 9999)
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limitParam = searchParams.get('limit');
     let limit = DEFAULT_LIMIT;
     
     if (limitParam) {
       limit = parseInt(limitParam, 10);
+      // Allow user to set custom limit (1-9999)
+      if (isNaN(limit) || limit < 1) limit = DEFAULT_LIMIT;
+      if (limit > MAX_LIMIT) limit = MAX_LIMIT;
     }
     
     const effectiveLimit = showAll ? 9999 : Math.min(limit, MAX_LIMIT);
@@ -572,10 +568,15 @@ export async function GET(req: NextRequest) {
     }
 
     if (action === 'featured') {
+      // ✅ Get limit from query (default 10, user can customize)
       const featuredLimit = parseInt(searchParams.get('limit') || '10', 10);
-      const result = await getFeaturedProperties(featuredLimit);
+      const finalLimit = Math.min(Math.max(1, featuredLimit), 100); // Max 100 for featured
+      
+      const result = await getFeaturedProperties(finalLimit);
       const sortedData = sortPropertiesByQuality(result.data);
       const fixedData = fixPropertiesPrices(sortedData);
+      
+      // ✅ Return requested limit info in meta
       const response = {
         success: true,
         data: fixedData,
@@ -583,6 +584,8 @@ export async function GET(req: NextRequest) {
           ...result.meta, 
           sorted_by: 'quality_layer', 
           action: 'featured',
+          requested_limit: finalLimit,
+          returned_count: fixedData.length,
           per_page: DEFAULT_LIMIT,
           timestamp: new Date().toISOString() 
         },
@@ -593,9 +596,12 @@ export async function GET(req: NextRequest) {
 
     if (action === 'recent') {
       const recentLimit = parseInt(searchParams.get('limit') || '10', 10);
-      const result = await getRecentProperties(recentLimit);
+      const finalLimit = Math.min(Math.max(1, recentLimit), 100);
+      
+      const result = await getRecentProperties(finalLimit);
       const sortedData = sortPropertiesByQuality(result.data);
       const fixedData = fixPropertiesPrices(sortedData);
+      
       const response = {
         success: true,
         data: fixedData,
@@ -603,6 +609,8 @@ export async function GET(req: NextRequest) {
           ...result.meta, 
           sorted_by: 'quality_layer', 
           action: 'recent',
+          requested_limit: finalLimit,
+          returned_count: fixedData.length,
           per_page: DEFAULT_LIMIT,
           timestamp: new Date().toISOString() 
         },
@@ -614,12 +622,15 @@ export async function GET(req: NextRequest) {
     if (action === 'related') {
       const propertyId = parseInt(searchParams.get('property_id') || '0', 10);
       const relatedLimit = parseInt(searchParams.get('limit') || '6', 10);
+      const finalLimit = Math.min(Math.max(1, relatedLimit), 50);
+      
       if (!propertyId) {
         return NextResponse.json({ success: false, error: 'property_id is required' }, { status: 400 });
       }
-      const result = await getRelatedProperties(propertyId, relatedLimit);
+      const result = await getRelatedProperties(propertyId, finalLimit);
       const sortedData = sortPropertiesByQuality(result.data);
       const fixedData = fixPropertiesPrices(sortedData);
+      
       const response = {
         success: true,
         data: fixedData,
@@ -628,6 +639,8 @@ export async function GET(req: NextRequest) {
           property_id: propertyId, 
           sorted_by: 'quality_layer', 
           action: 'related',
+          requested_limit: finalLimit,
+          returned_count: fixedData.length,
           per_page: DEFAULT_LIMIT,
           timestamp: new Date().toISOString() 
         },

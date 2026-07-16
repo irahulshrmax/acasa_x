@@ -3,7 +3,7 @@
 
 import { useEffect, useState, lazy, Suspense, memo, useRef } from "react";
 import { motion, type Variants } from "framer-motion";
-import { Eye, EyeOff, Lock, Shield, XCircle } from "lucide-react";
+import { Eye, EyeOff, Lock, Shield, CheckCircle, XCircle } from "lucide-react";
 
 // ─── LAZY IMPORTS ──────────────────────────────────────────────────────
 
@@ -13,6 +13,7 @@ const PropertyShowcase = lazy(() => import("@/components/PropertyShowcase"));
 const FeaturedProperties = lazy(() => import("@/components/FeaturesProperties"));
 const FeaturedProjects = lazy(() => import("@/components/FeaturedProjectSection"));
 const Neighborhoods = lazy(() => import("@/components/Neighborhoods"));
+const Lifestyle = lazy(() => import("@/components/LifestyleSection"));
 const Developers = lazy(() => import("@/components/Developers"));
 const About = lazy(() => import("@/components/About"));
 const Blogs = lazy(() => import("@/components/Blogs"));
@@ -21,6 +22,7 @@ const Footer = lazy(() => import("@/components/Footer"));
 // ─── CONSTANTS ──────────────────────────────────────────────────────────
 
 const PASSWORD = "1234567";
+const PASSWORD_CORRECT = "✅ Password correct!";
 const PASSWORD_INCORRECT = "❌ Incorrect password. Try again.";
 
 const SECTION_BG = {
@@ -160,6 +162,12 @@ const SECTIONS: SectionConfig[] = [
     Skeleton: () => <SectionSkeleton bg="offwhite" height="h-64" cols={3} />,
   },
   {
+    id: "lifestyle",
+    bg: "white",
+    Component: Lifestyle,
+    Skeleton: () => <SectionSkeleton bg="white" height="h-64" cols={2} />,
+  },
+  {
     id: "developers",
     bg: "cream",
     Component: Developers,
@@ -210,6 +218,7 @@ function PasswordLockScreen({ onSuccess }: { onSuccess: () => void }) {
       setPassword("");
       
       if (attempts + 1 >= maxAttempts) {
+        // Block after max attempts
         setTimeout(() => {
           alert(`Too many failed attempts. Please try again after 30 seconds.`);
           setAttempts(0);
@@ -389,6 +398,7 @@ export default function HomePage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    // Check if already authenticated
     const auth = localStorage.getItem("acasa_auth");
     const authTime = localStorage.getItem("acasa_auth_time");
     
@@ -397,6 +407,7 @@ export default function HomePage() {
       const now = Date.now();
       const hour = 60 * 60 * 1000;
       
+      // Auto logout after 1 hour
       if (now - time < hour) {
         setIsAuthenticated(true);
       } else {
