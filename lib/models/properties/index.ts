@@ -1,10 +1,50 @@
-// lib/models/properties/index.ts
 import { db } from '@/lib/database';
 import { cache } from '@/lib/cache';
+import {
+  UPLOAD_BASE_URL,
+  getImageUrl,
+  getImageUrlVariations,
+  getFeaturedImage,
+  getNoImageUrl,
+  getDeveloperImageUrl,
+  getDeveloperImageVariations,
+  getAgentImageUrl,
+  getAgentImageVariations,
+  getCommunityImageUrl,
+  getCommunityImageVariations,
+  getMediaImageUrl,
+  getGalleryImages,
+  isValidImageUrl,
+  validateImagePath,
+  sanitizeImagePath,
+  IMAGE_EXTENSIONS,
+  PROPERTY_IMAGE_DIRS,
+  USER_IMAGE_DIRS,
+  AGENT_IMAGE_DIRS,
+  COMMUNITY_IMAGE_DIRS,
+  BLOG_IMAGE_DIRS,
+  TESTIMONIAL_IMAGE_DIRS,
+  extractImageUrls,
+  processImageBatch,
+  getProjectImageCandidates,
+  getProjectImageUrl,
+  getProjectImageVariations,
+  getProjectGalleryImageUrl,
+  getProjectGalleryImages,
+  getProjectLogoUrl,
+  getProjectFeaturedImage,
+  buildProjectImageSet,
+} from '@/lib/image-resolver';
 
-const UPLOAD_BASE_URL = 'https://acasa.ae/upload';
-const IMAGE_EXTENSIONS = ['.webp', '.jpg', '.jpeg', '.png'];
-const IMAGE_DIRS = ['media', 'media/thumbnail', 'media/medium', 'properties', 'blogs'];
+const CACHE_TTL = {
+  LIST: 120,
+  DETAIL: 600,
+  RELATED: 300,
+  FILTERS: 900,
+  STATS: 3600,
+  MEDIA: 300,
+  PLANS: 600,
+};
 
 const CK = {
   list: (f: any) => `prop:list:${JSON.stringify(f)}`,
@@ -59,8 +99,6 @@ interface PropertyListResult {
   };
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────
-
 function cleanPath(val: string): string {
   return val.replace(/\\/g, '/').trim().replace(/^\/+/, '');
 }
@@ -71,34 +109,6 @@ function isAbsoluteUrl(val: string): boolean {
 
 function stripUploadPrefix(val: string): string {
   return cleanPath(val).replace(/^upload\//i, '').replace(/^\/+/, '');
-}
-
-export function getNoImageUrl(): string {
-  return `${UPLOAD_BASE_URL}/no-image.png`;
-}
-
-export function getImageUrl(rawPath: string | null | undefined): string {
-  if (!rawPath || /no-image/i.test(rawPath)) return getNoImageUrl();
-  if (isAbsoluteUrl(rawPath)) return rawPath;
-  const clean = stripUploadPrefix(rawPath);
-  if (!clean) return getNoImageUrl();
-  if (!clean.includes('/') || clean.split('/')[0] === 'property') {
-    return `${UPLOAD_BASE_URL}/media/${clean}`;
-  }
-  return `${UPLOAD_BASE_URL}/${clean}`;
-}
-
-function getImageVariations(rawPath: string | null | undefined): string[] {
-  if (!rawPath || /no-image/i.test(rawPath)) return [getNoImageUrl()];
-  if (isAbsoluteUrl(rawPath)) return [rawPath];
-  const clean = stripUploadPrefix(rawPath);
-  if (!clean) return [getNoImageUrl()];
-  const urls: string[] = [];
-  for (const dir of IMAGE_DIRS) {
-    urls.push(`${UPLOAD_BASE_URL}/${dir}/${clean}`);
-  }
-  urls.push(`${UPLOAD_BASE_URL}/${clean}`);
-  return [...new Set(urls)];
 }
 
 function toNumber(val: unknown): number | null {
@@ -172,8 +182,6 @@ function parseCommaIds(ids: string | null | undefined): number[] {
     .map(id => parseInt(id.trim(), 10))
     .filter(id => !isNaN(id));
 }
-
-// ─── BUILD QUERY ──────────────────────────────────────────────────────────
 
 function buildPropertyQuery(knex: any, filters: PropertyFilters) {
   const {
@@ -425,6 +433,7 @@ const LIST_COLUMNS = [
   'u.photo as agent_photo',
   'c.name as community_name',
   'c.slug as community_slug',
+  'c.img as community_image',
   'sc.name as sub_community_name',
   'ci.name as city_name',
   'cur.code as currency_code',
@@ -450,7 +459,7 @@ async function batchFetchMedia(knex: any, galleryIds: number[]): Promise<Map<num
   const map = new Map<number, any>();
   for (const r of records) map.set(r.id, r);
   await cache.set(cacheKey, map, {
-    ttl: 300,
+    ttl: CACHE_TTL.MEDIA,
     tags: ['media', 'properties'],
   });
   return map;
@@ -468,7 +477,7 @@ async function batchFetchPaymentPlans(knex: any, planIds: number[]): Promise<Map
   const map = new Map<number, any>();
   for (const p of plans) map.set(p.id, p);
   await cache.set(cacheKey, map, {
-    ttl: 600,
+    ttl: CACHE_TTL.PLANS,
     tags: ['plans', 'properties'],
   });
   return map;
@@ -483,21 +492,48 @@ function transformProperty(
   isDetail = false
 ): any {
   const galleryIds = parseCommaIds(p.gallery_media_ids);
+  
+  // ✅ Build gallery images from mediaMap with proper paths
   const galleryImages = galleryIds
     .map(id => mediaMap.get(id))
     .filter(Boolean)
     .map((m: any) => ({
       id: m.id,
-      url: getImageUrl(m.path),
+      url: getMediaImageUrl(m.path),
       title: m.title || null,
       description: m.description || null,
       featured: m.featured || 0,
     }));
 
+  // ✅ Gallery URLs from media path
   const galleryUrls = galleryImages.map((g: any) => g.url);
-  const featuredImage = p.featured_image
-    ? getImageUrl(p.featured_image)
-    : galleryUrls[0] || getNoImageUrl();
+  
+  // ✅ Featured image - try featured_image first
+  let featuredImage = null;
+  
+  if (p.featured_image) {
+    // If it contains extension or slash, it's a path
+    if (p.featured_image.includes('.') || p.featured_image.includes('/')) {
+      featuredImage = getMediaImageUrl(p.featured_image);
+    } else {
+      // It might be a media ID
+      const mediaId = parseInt(p.featured_image, 10);
+      if (!isNaN(mediaId) && mediaMap.has(mediaId)) {
+        const media = mediaMap.get(mediaId);
+        featuredImage = getMediaImageUrl(media.path);
+      }
+    }
+  }
+  
+  // If no featured image, use first gallery image
+  if (!featuredImage && galleryUrls.length > 0) {
+    featuredImage = galleryUrls[0];
+  }
+  
+  // If still no image, use no-image placeholder
+  if (!featuredImage) {
+    featuredImage = getNoImageUrl();
+  }
 
   const priceAmount = toNumber(p.sale_price) || toNumber(p.price);
   const priceEndAmount = toNumber(p.price_end);
@@ -565,6 +601,7 @@ function transformProperty(
       longitude: p.map_longitude || null,
       community_id: p.community_id || null,
       city_id: p.city_id || null,
+      community_image: p.community_image ? getCommunityImageUrl(p.community_image) : null,
     },
 
     developer: {
@@ -572,18 +609,20 @@ function transformProperty(
       name: devName,
       country: devCountry,
       is_international: isInternational,
-      logo_url: getImageUrl(devLogo),
-      logo_variations: getImageVariations(devLogo),
+      logo_url: getDeveloperImageUrl(devLogo),
+      logo_variations: getDeveloperImageVariations(devLogo),
     },
 
     agent: {
       id: p.agent_id || null,
       name: p.agent_name || null,
       phone: p.agent_phone || null,
-      photo_url: getImageUrl(p.agent_photo),
+      photo_url: getAgentImageUrl(p.agent_photo),
+      photo_variations: getAgentImageVariations(p.agent_photo),
     },
 
     featured_image: featuredImage,
+    featured_image_variations: [featuredImage],
     images: isDetail ? galleryImages : galleryImages.slice(0, 5),
     gallery_urls: isDetail ? galleryUrls : galleryUrls.slice(0, 5),
     gallery_preview: galleryUrls.slice(0, 3),
@@ -612,6 +651,11 @@ function transformProperty(
         keywords: p.keyword || null,
         slug: p.property_slug || '',
       },
+      image_candidates: {
+        featured: [featuredImage],
+        gallery: galleryUrls,
+        community: p.community_image ? getCommunityImageVariations(p.community_image) : [],
+      },
     };
   }
 
@@ -638,7 +682,7 @@ export async function getProperties(filters: PropertyFilters = {}): Promise<Prop
         const [{ total }] = await countQ.count('p.id as total');
         const count = Number(total);
         await cache.set(countKey, count, {
-          ttl: 120,
+          ttl: CACHE_TTL.LIST,
           tags: ['properties', 'list', 'count'],
         });
         return count;
@@ -694,7 +738,7 @@ export async function getProperties(filters: PropertyFilters = {}): Promise<Prop
     if (filters.featured) tags.push('featured');
 
     await cache.set(cacheKey, result, {
-      ttl: 120,
+      ttl: CACHE_TTL.LIST,
       tags,
     });
     return result;
@@ -777,15 +821,18 @@ export async function getPropertyById(id: number): Promise<any | null> {
       knex('property_locations').where('property_id', id).first(),
     ]);
 
+    const transformed = transformProperty(property, mediaMap, plansMap, true);
+
     const result = {
-      ...transformProperty(property, mediaMap, plansMap, true),
+      ...transformed,
       facilities: facilities || null,
       location_data: locationData || null,
       agent: {
         id: property.agent_id || null,
         name: property.agent_name || null,
         phone: property.agent_phone || null,
-        photo_url: getImageUrl(property.agent_photo),
+        photo_url: getAgentImageUrl(property.agent_photo),
+        photo_variations: getAgentImageVariations(property.agent_photo),
         rera_brn: property.agent_rera || null,
         email: property.agent_email || null,
         mobile: property.agent_mobile || null,
@@ -797,13 +844,21 @@ export async function getPropertyById(id: number): Promise<any | null> {
         country: property.intd_country || property.developer_country || null,
         website: property.intd_website || property.developer_website || null,
         informations: property.intd_info || property.developer_info || null,
-        logo_url: getImageUrl(property.intd_logo || property.developer_logo),
+        logo_url: getDeveloperImageUrl(property.intd_logo || property.developer_logo),
+        logo_variations: getDeveloperImageVariations(property.intd_logo || property.developer_logo),
         is_international: !!property.intd_name,
+      },
+      community: {
+        id: property.community_id || null,
+        name: property.community_name || null,
+        slug: property.community_slug || null,
+        image: property.community_image ? getCommunityImageUrl(property.community_image) : null,
+        image_variations: property.community_image ? getCommunityImageVariations(property.community_image) : [],
       },
     };
 
     await cache.set(cacheKey, result, {
-      ttl: 600,
+      ttl: CACHE_TTL.DETAIL,
       tags: ['properties', 'detail', `property:${id}`],
     });
     return result;
@@ -826,7 +881,7 @@ export async function getPropertyBySlug(slug: string): Promise<any | null> {
   const result = await getPropertyById(row.id);
   if (result) {
     await cache.set(cacheKey, result, {
-      ttl: 600,
+      ttl: CACHE_TTL.DETAIL,
       tags: ['properties', 'detail', `slug:${slug}`],
     });
   }
@@ -896,7 +951,7 @@ export async function getRelatedProperties(propertyId: number, limit = 6): Promi
   };
 
   await cache.set(cacheKey, result, {
-    ttl: 300,
+    ttl: CACHE_TTL.RELATED,
     tags: ['properties', 'related', `property:${propertyId}`],
   });
   return result;
@@ -932,8 +987,8 @@ export async function getSearchFilters() {
     cities,
     communities: communities.map((c: any) => ({
       ...c,
-      image_url: getImageUrl(c.img),
-      image_variations: getImageVariations(c.img),
+      image_url: getCommunityImageUrl(c.img),
+      image_variations: getCommunityImageVariations(c.img),
     })),
     sub_communities: subCommunities,
     price_range: {
@@ -948,7 +1003,7 @@ export async function getSearchFilters() {
   };
 
   await cache.set(cacheKey, result, {
-    ttl: 900,
+    ttl: CACHE_TTL.FILTERS,
     tags: ['properties', 'filters'],
   });
   return result;
@@ -1299,7 +1354,7 @@ export async function getOffPlanStatistics() {
   };
 
   await cache.set(cacheKey, result, {
-    ttl: 3600,
+    ttl: CACHE_TTL.STATS,
     tags: ['properties', 'stats', 'offplan'],
   });
   return result;
@@ -1386,7 +1441,7 @@ export async function getBuyPropertiesStatistics() {
   };
 
   await cache.set(cacheKey, result, {
-    ttl: 3600,
+    ttl: CACHE_TTL.STATS,
     tags: ['properties', 'stats', 'buy'],
   });
   return result;
@@ -1498,7 +1553,7 @@ export async function getSellPropertiesStatistics() {
   };
 
   await cache.set(cacheKey, result, {
-    ttl: 3600,
+    ttl: CACHE_TTL.STATS,
     tags: ['properties', 'stats', 'sell'],
   });
   return result;
@@ -1567,7 +1622,7 @@ export async function getArchiveStatistics() {
   };
 
   await cache.set(cacheKey, result, {
-    ttl: 3600,
+    ttl: CACHE_TTL.STATS,
     tags: ['properties', 'stats', 'archive'],
   });
   return result;
@@ -1792,7 +1847,7 @@ export async function getOffPlanPriceRangeStats(): Promise<any> {
     .orderBy('min_price');
 
   await cache.set(cacheKey, result, {
-    ttl: 3600,
+    ttl: CACHE_TTL.STATS,
     tags: ['properties', 'stats', 'offplan'],
   });
 
@@ -1827,7 +1882,7 @@ export async function getOffPlanCompletionStats(): Promise<any> {
     .orderBy('completion_timeline');
 
   await cache.set(cacheKey, result, {
-    ttl: 3600,
+    ttl: CACHE_TTL.STATS,
     tags: ['properties', 'stats', 'offplan'],
   });
 
@@ -1861,7 +1916,7 @@ export async function getOffPlanBedroomStats(): Promise<any> {
     .orderByRaw('CAST(REGEXP_SUBSTR(bedroom_label, \'^[0-9]+\') AS UNSIGNED)');
 
   await cache.set(cacheKey, result, {
-    ttl: 3600,
+    ttl: CACHE_TTL.STATS,
     tags: ['properties', 'stats', 'offplan'],
   });
 
@@ -1937,6 +1992,44 @@ export async function fixCityDataFromLocation(): Promise<any> {
   return { updated, total: properties.length };
 }
 
+// ─── IMAGE UTILITY EXPORTS ──────────────────────────────────────────────
+
+export {
+  UPLOAD_BASE_URL,
+  getImageUrl,
+  getImageUrlVariations,
+  getFeaturedImage,
+  getNoImageUrl,
+  getDeveloperImageUrl,
+  getDeveloperImageVariations,
+  getAgentImageUrl,
+  getAgentImageVariations,
+  getCommunityImageUrl,
+  getCommunityImageVariations,
+  getMediaImageUrl,
+  getGalleryImages,
+  isValidImageUrl,
+  validateImagePath,
+  sanitizeImagePath,
+  IMAGE_EXTENSIONS,
+  PROPERTY_IMAGE_DIRS,
+  USER_IMAGE_DIRS,
+  AGENT_IMAGE_DIRS,
+  COMMUNITY_IMAGE_DIRS,
+  BLOG_IMAGE_DIRS,
+  TESTIMONIAL_IMAGE_DIRS,
+  extractImageUrls,
+  processImageBatch,
+  getProjectImageCandidates,
+  getProjectImageUrl,
+  getProjectImageVariations,
+  getProjectGalleryImageUrl,
+  getProjectGalleryImages,
+  getProjectLogoUrl,
+  getProjectFeaturedImage,
+  buildProjectImageSet,
+};
+
 export default {
   getProperties,
   getPropertyById,
@@ -1988,4 +2081,37 @@ export default {
   fixBedroomData,
   updateLocationFromPropertyLocations,
   fixCityDataFromLocation,
+  UPLOAD_BASE_URL,
+  getImageUrl,
+  getImageUrlVariations,
+  getFeaturedImage,
+  getNoImageUrl,
+  getDeveloperImageUrl,
+  getDeveloperImageVariations,
+  getAgentImageUrl,
+  getAgentImageVariations,
+  getCommunityImageUrl,
+  getCommunityImageVariations,
+  getMediaImageUrl,
+  getGalleryImages,
+  isValidImageUrl,
+  validateImagePath,
+  sanitizeImagePath,
+  IMAGE_EXTENSIONS,
+  PROPERTY_IMAGE_DIRS,
+  USER_IMAGE_DIRS,
+  AGENT_IMAGE_DIRS,
+  COMMUNITY_IMAGE_DIRS,
+  BLOG_IMAGE_DIRS,
+  TESTIMONIAL_IMAGE_DIRS,
+  extractImageUrls,
+  processImageBatch,
+  getProjectImageCandidates,
+  getProjectImageUrl,
+  getProjectImageVariations,
+  getProjectGalleryImageUrl,
+  getProjectGalleryImages,
+  getProjectLogoUrl,
+  getProjectFeaturedImage,
+  buildProjectImageSet,
 };

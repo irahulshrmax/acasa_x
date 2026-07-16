@@ -124,77 +124,61 @@ const SORT_OPTIONS: FilterOption[] = [
   { value: "price_desc", label: "Price: High to Low" },
 ];
 
-// ===================== GET IMAGE FROM API =====================
+// ✅ Listing type options
+const LISTING_TYPE_OPTIONS: FilterOption[] = [
+  { value: "All", label: "All Types" },
+  { value: "Off plan", label: "Off Plan" },
+  { value: "Ready", label: "Ready" },
+  { value: "Resale", label: "Resale" },
+];
+
+// ─── GET IMAGE FROM API ──────────────────────────────────────────────────
+
 function getPropertyImage(property: Property): string | null {
-  // Priority 1: featured_image
   if (property.featured_image) {
     return property.featured_image;
   }
-  
-  // Priority 2: gallery_urls
   if (property.gallery_urls && property.gallery_urls.length > 0) {
     return property.gallery_urls[0];
   }
-  
-  // Priority 3: images array
   if (property.images && property.images.length > 0) {
     return property.images[0].url;
   }
-  
-  // Priority 4: gallery_preview
   if (property.gallery_preview && property.gallery_preview.length > 0) {
     return property.gallery_preview[0];
   }
-  
   return null;
 }
 
-function getAllImages(property: Property): string[] {
-  const imgs: string[] = [];
-  
-  if (property.featured_image) {
-    imgs.push(property.featured_image);
+function getDisplayName(property: Property): string {
+  if (property.name && property.name !== 'Null' && property.name !== 'null') {
+    return property.name;
   }
-  
-  if (property.gallery_urls) {
-    property.gallery_urls.forEach(img => {
-      if (!imgs.includes(img)) imgs.push(img);
-    });
+  if (property.slug) {
+    return property.slug
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (char: string) => char.toUpperCase())
+      .replace(/\bLn\d+\b/g, '')
+      .trim() || `Property ${property.id}`;
   }
-  
-  if (property.images) {
-    property.images.forEach(img => {
-      if (img.url && !imgs.includes(img.url)) imgs.push(img.url);
-    });
-  }
-  
-  if (property.gallery_preview) {
-    property.gallery_preview.forEach(img => {
-      if (!imgs.includes(img)) imgs.push(img);
-    });
-  }
-  
-  return imgs;
+  return `Property ${property.id}`;
 }
 
-// ===================== PROPERTY CARD =====================
+// ─── PROPERTY CARD ───────────────────────────────────────────────────────
+
 function PropertyCard({ property, viewMode = "grid" }: { property: Property; viewMode?: string }) {
   const [isWishlisted, setIsWishlisted] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
 
   const location = property.location?.community || property.location?.city || "Dubai";
   const isPriceOnRequest = property.price?.is_price_on_request || !property.price?.amount;
   const priceDisplay = property.price?.display || "Price on Request";
+  const displayName = getDisplayName(property);
 
-  const allImages = useMemo(() => getAllImages(property), [property]);
-  const hasImages = allImages.length > 0;
-  
-  // Get current image
-  const currentImage = useMemo(() => {
-    if (imageError || !hasImages) return null;
-    return allImages[currentImageIndex % allImages.length];
-  }, [allImages, currentImageIndex, imageError, hasImages]);
+  const imageUrl = useMemo(() => {
+    if (imageError) return null;
+    return getPropertyImage(property);
+  }, [property, imageError]);
 
   const specs = [
     property.bedrooms,
@@ -203,17 +187,8 @@ function PropertyCard({ property, viewMode = "grid" }: { property: Property; vie
   ].filter(Boolean).join("  |  ");
 
   const isListMode = viewMode === "list";
+  const hasImage = !!imageUrl;
 
-  // Auto-rotate images
-  useEffect(() => {
-    if (allImages.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % allImages.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [allImages.length]);
-
-  // Load wishlist status
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("property_wishlist") || "[]");
@@ -249,38 +224,16 @@ function PropertyCard({ property, viewMode = "grid" }: { property: Property; vie
       }`}
       style={{ fontFamily: FONT_BODY }}
     >
-      {/* Image Container */}
       <div className={`relative overflow-hidden bg-gray-100 ${isListMode ? "sm:w-[320px] sm:flex-shrink-0" : "aspect-[4/3]"}`}>
         <Link href={`/apartments-for-sale-in-dubai/${property.slug}`} className="block h-full w-full">
-          {currentImage ? (
-            <>
-              <img
-                src={currentImage}
-                alt={property.name}
-                loading="lazy"
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                onError={() => setImageError(true)}
-              />
-              
-              {/* Image Counter */}
-              {allImages.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                  {allImages.slice(0, 5).map((_, i) => (
-                    <span
-                      key={i}
-                      className={`h-1.5 rounded-full transition-all ${
-                        i === currentImageIndex % allImages.length
-                          ? "w-4 bg-white"
-                          : "w-1.5 bg-white/50"
-                      }`}
-                    />
-                  ))}
-                  {allImages.length > 5 && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-white/50" />
-                  )}
-                </div>
-              )}
-            </>
+          {hasImage ? (
+            <img
+              src={imageUrl}
+              alt={displayName}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+              onError={() => setImageError(true)}
+            />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center">
               <ImageOff className="h-12 w-12 text-gray-300" />
@@ -289,7 +242,6 @@ function PropertyCard({ property, viewMode = "grid" }: { property: Property; vie
           )}
         </Link>
 
-        {/* Badges */}
         {property.featured && (
           <span className="absolute left-3 top-3 rounded-[3px] bg-[#192334] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
             Featured
@@ -309,7 +261,6 @@ function PropertyCard({ property, viewMode = "grid" }: { property: Property; vie
           </div>
         )}
 
-        {/* Wishlist Button */}
         <button
           onClick={toggleWishlist}
           aria-label="Add to wishlist"
@@ -321,17 +272,8 @@ function PropertyCard({ property, viewMode = "grid" }: { property: Property; vie
         >
           <Heart className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
         </button>
-
-        {/* View Photos Button */}
-        {hasImages && allImages.length > 1 && (
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-[9px] text-white backdrop-blur-sm">
-            <Eye className="h-3 w-3" />
-            {allImages.length}
-          </div>
-        )}
       </div>
 
-      {/* Content */}
       <div className={`flex flex-1 flex-col ${isListMode ? "py-2 pr-2" : "pt-4"}`}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -340,7 +282,7 @@ function PropertyCard({ property, viewMode = "grid" }: { property: Property; vie
                 className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-opacity hover:opacity-70"
                 style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
               >
-                {property.name}
+                {displayName}
               </h3>
             </Link>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#8A94A3]">
@@ -378,7 +320,8 @@ function PropertyCard({ property, viewMode = "grid" }: { property: Property; vie
   );
 }
 
-// ===================== SKELETON =====================
+// ─── SKELETON ───────────────────────────────────────────────────────────
+
 function SkeletonCard({ viewMode = "grid" }: { viewMode?: string }) {
   const isListMode = viewMode === "list";
   return (
@@ -400,7 +343,8 @@ function SkeletonCard({ viewMode = "grid" }: { viewMode?: string }) {
   );
 }
 
-// ===================== FILTER DROPDOWN =====================
+// ─── FILTER DROPDOWN ────────────────────────────────────────────────────
+
 function FilterDropdown({
   label,
   value,
@@ -485,7 +429,8 @@ function FilterDropdown({
   );
 }
 
-// ===================== PAGINATION =====================
+// ─── PAGINATION ─────────────────────────────────────────────────────────
+
 function Pagination({
   currentPage,
   totalPages,
@@ -555,7 +500,8 @@ function Pagination({
   );
 }
 
-// ===================== MAIN PAGE =====================
+// ─── MAIN PAGE ──────────────────────────────────────────────────────────
+
 export default function DubaiApartmentsPage() {
   const loaderRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -577,11 +523,12 @@ export default function DubaiApartmentsPage() {
     min_price: "",
     max_price: "",
     sort_by: "newest",
-    listing_type: "Off plan",
+    listing_type: "All", // ✅ Changed from "Off plan" to "All"
+    status: "", // ✅ Changed from "5" to ""
   });
 
   const currentPriceValue = filters.min_price && filters.max_price ? `${filters.min_price}-${filters.max_price}` : "";
-  const hasActiveFilters = filters.bedrooms !== "" || filters.min_price !== "" || filters.max_price !== "";
+  const hasActiveFilters = filters.bedrooms !== "" || filters.min_price !== "" || filters.max_price !== "" || filters.listing_type !== "All" || filters.status !== "";
   const hasMore = pagination ? filters.page < pagination.totalPages : false;
 
   const fetchProperties = useCallback(
@@ -600,21 +547,32 @@ export default function DubaiApartmentsPage() {
         params.append("page", String(page));
         params.append("limit", String(filters.limit));
         params.append("sort_by", filters.sort_by);
-        params.append("listing_type", filters.listing_type);
-        params.append("status", "5");
+        
+        // ✅ Only add listing_type if not "All"
+        if (filters.listing_type && filters.listing_type !== "All") {
+          params.append("listing_type", filters.listing_type);
+        }
+        
+        // ✅ Only add status if provided
+        if (filters.status) {
+          params.append("status", filters.status);
+        }
 
         if (filters.bedrooms) params.append("bedrooms", filters.bedrooms);
         if (filters.min_price) params.append("min_price", filters.min_price);
         if (filters.max_price) params.append("max_price", filters.max_price);
 
+        console.log("📡 Fetching:", `${API_URL}?${params.toString()}`);
+        
         const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
+
+        console.log("📦 Response:", data);
 
         if (!data.success) throw new Error(data.error || "Failed to fetch");
 
         let newProperties: Property[] = data.data || [];
 
-        // Remove duplicates
         const seen = new Set<number>();
         newProperties = newProperties.filter((p) => {
           if (seen.has(p.id)) return false;
@@ -634,6 +592,7 @@ export default function DubaiApartmentsPage() {
 
         setPagination(data.meta || null);
       } catch (err: any) {
+        console.error("❌ Error:", err);
         setError(err.message);
         if (isReset) {
           setProperties([]);
@@ -647,12 +606,10 @@ export default function DubaiApartmentsPage() {
     [filters]
   );
 
-  // Fetch on filter change
   useEffect(() => {
     fetchProperties(filters.page, filters.page === 1);
   }, [fetchProperties, filters.page]);
 
-  // Infinite scroll
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
     const currentLoader = loaderRef.current;
@@ -671,7 +628,6 @@ export default function DubaiApartmentsPage() {
     return () => observerRef.current?.disconnect();
   }, [hasMore, loading, loadingMore, isInitialLoad]);
 
-  // Scroll to top
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
     window.addEventListener("scroll", handleScroll);
@@ -702,7 +658,8 @@ export default function DubaiApartmentsPage() {
       min_price: "",
       max_price: "",
       sort_by: "newest",
-      listing_type: "Off plan",
+      listing_type: "All",
+      status: "",
     });
   }, []);
 
@@ -714,7 +671,6 @@ export default function DubaiApartmentsPage() {
 
   return (
     <section className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
-      {/* Header */}
       <div className="mx-auto max-w-[1200px] px-4 pt-10 md:px-6">
         <div className="mb-6">
           <motion.h1
@@ -734,17 +690,36 @@ export default function DubaiApartmentsPage() {
             {loading
               ? "Loading..."
               : pagination
-              ? `${pagination.total.toLocaleString()} OFF PLAN APARTMENTS AVAILABLE`
+              ? `${pagination.total.toLocaleString()} APARTMENTS AVAILABLE`
               : `${properties.length} listings`}
           </motion.p>
         </div>
       </div>
 
-      {/* Filter Bar */}
       <div className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur-sm" style={{ borderColor: THEME.border }}>
         <div className="mx-auto max-w-[1200px] px-4 md:px-6">
           <div className="flex h-14 items-center gap-2 md:gap-4">
             <div className="hidden flex-1 items-center justify-end gap-1 lg:flex">
+              <FilterDropdown
+                label="Status"
+                value={filters.status}
+                onChange={(v) => updateFilter("status", v)}
+                options={[
+                  { value: "", label: "All Status" },
+                  { value: "1", label: "Ready" },
+                  { value: "5", label: "Off Plan" },
+                ]}
+                icon={Building2}
+              />
+              
+              <FilterDropdown
+                label="Listing Type"
+                value={filters.listing_type}
+                onChange={(v) => updateFilter("listing_type", v)}
+                options={LISTING_TYPE_OPTIONS}
+                icon={Building2}
+              />
+              
               <FilterDropdown
                 label="Price"
                 value={currentPriceValue}
@@ -808,7 +783,6 @@ export default function DubaiApartmentsPage() {
         </div>
       </div>
 
-      {/* Mobile Filters */}
       <AnimatePresence>
         {showMobileFilters && (
           <motion.div
@@ -820,6 +794,26 @@ export default function DubaiApartmentsPage() {
           >
             <div className="p-4">
               <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={filters.status}
+                  onChange={(e) => updateFilter("status", e.target.value)}
+                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+                >
+                  <option value="">All Status</option>
+                  <option value="1">Ready</option>
+                  <option value="5">Off Plan</option>
+                </select>
+                <select
+                  value={filters.listing_type}
+                  onChange={(e) => updateFilter("listing_type", e.target.value)}
+                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+                >
+                  {LISTING_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
                 <select
                   value={currentPriceValue}
                   onChange={(e) => handlePriceChange(e.target.value)}
@@ -867,7 +861,6 @@ export default function DubaiApartmentsPage() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
       <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-6 md:px-6">
         {error && !loading && (
           <div className="mb-6 flex items-center gap-3 border border-red-200 bg-red-50 p-4 text-[13px] text-red-600">
@@ -941,7 +934,6 @@ export default function DubaiApartmentsPage() {
         )}
       </div>
 
-      {/* Scroll to Top */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.button

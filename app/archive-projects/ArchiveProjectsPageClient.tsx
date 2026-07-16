@@ -1,11 +1,12 @@
+// app/archive-projects/page.tsx
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Building2, MapPin, BedDouble, ArrowLeft } from "lucide-react";
+import { Building2, MapPin, BedDouble, ArrowLeft, Home, Calendar, TrendingUp } from "lucide-react";
 
-const API_URL = "/api/archive/projects";
-const IMAGE_BASE_URL = "https://acasa.ae/upload/media";
+const API_URL = "/api/v1/archive-projects";
 
 interface ArchiveProject {
   id: number;
@@ -39,21 +40,13 @@ interface StatsData {
 
 function getUnsplashFallback(title?: string | null): string {
   const query = encodeURIComponent(title || "luxury project dubai");
-  return `https://source.unsplash.com/800x600/?${query},real-estate,property,development`;
+  return `https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&h=600&fit=crop&q=80`;
 }
 
 function ArchiveImage({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
   const [error, setError] = useState(false);
 
-  const imageUrl = src || getUnsplashFallback(alt);
-
-  if (error) {
-    return (
-      <div className={`flex h-full w-full items-center justify-center bg-gray-100 ${className}`}>
-        <Building2 className="h-8 w-8 opacity-30" />
-      </div>
-    );
-  }
+  const imageUrl = error ? getUnsplashFallback(alt) : (src || getUnsplashFallback(alt));
 
   return (
     <img
@@ -67,6 +60,10 @@ function ArchiveImage({ src, alt, className = "" }: { src: string | null; alt: s
 }
 
 function ArchiveCard({ project }: { project: ArchiveProject }) {
+  const bedsList = project.beds && project.beds !== "N/A" 
+    ? project.beds.split(",").slice(0, 2).join(", ") + (project.beds.split(",").length > 2 ? "..." : "")
+    : "N/A";
+
   return (
     <Link
       href={`/archive-projects/${project.slug}`}
@@ -82,6 +79,11 @@ function ArchiveCard({ project }: { project: ArchiveProject }) {
             Featured
           </div>
         )}
+        {project.listingType && (
+          <div className="absolute bottom-3 left-3 rounded bg-black/70 px-3 py-1 text-[10px] uppercase tracking-wider text-white backdrop-blur-sm">
+            {project.listingType}
+          </div>
+        )}
       </div>
 
       <div className="p-4">
@@ -90,22 +92,31 @@ function ArchiveCard({ project }: { project: ArchiveProject }) {
         </h3>
 
         {project.location && (
-          <div className="mt-2 flex items-center gap-1 text-xs text-[#1A2233]/60">
+          <div className="mt-1 flex items-center gap-1 text-xs text-[#1A2233]/60">
             <MapPin className="h-3 w-3" />
             {project.location}
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3 text-xs text-[#1A2233]/60">
-            {project.beds && project.beds !== "N/A" && (
+            {bedsList && bedsList !== "N/A" && (
               <span className="flex items-center gap-1">
                 <BedDouble className="h-3.5 w-3.5" />
-                {project.beds}
+                {bedsList}
               </span>
             )}
             {project.sqft && project.sqft !== "N/A" && (
-              <span>{project.sqft}</span>
+              <span className="flex items-center gap-1">
+                <Home className="h-3.5 w-3.5" />
+                {project.sqft}
+              </span>
+            )}
+            {project.handover && project.handover !== "TBA" && (
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5" />
+                {project.handover}
+              </span>
             )}
           </div>
           <p className="text-sm font-semibold text-[#1A2233]" style={{ fontFamily: "'Playfair Display', serif" }}>
@@ -123,7 +134,7 @@ function SkeletonCard() {
       <div className="aspect-[4/3] bg-gray-200" />
       <div className="p-4">
         <div className="h-5 w-3/4 bg-gray-200 rounded" />
-        <div className="mt-3 h-4 w-1/2 bg-gray-200 rounded" />
+        <div className="mt-2 h-4 w-1/2 bg-gray-200 rounded" />
         <div className="mt-3 flex justify-between">
           <div className="h-4 w-1/3 bg-gray-200 rounded" />
           <div className="h-4 w-1/4 bg-gray-200 rounded" />
@@ -211,9 +222,18 @@ export default function ArchiveProjectsPage() {
             Archived Projects
           </h1>
 
-          <p className="mt-2 text-[#1A2233]/60">
-            {stats?.total || 0} projects no longer active but preserved for reference
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-4 text-[#1A2233]/60">
+            <span>{stats?.total || 0} projects</span>
+            <span className="text-[#1A2233]/20">|</span>
+            <span className="flex items-center gap-1">
+              <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+              {stats?.offPlan || 0} Off Plan
+            </span>
+            <span className="flex items-center gap-1">
+              <Building2 className="h-3.5 w-3.5 text-blue-500" />
+              {stats?.resale || 0} Resale
+            </span>
+          </div>
         </div>
       </div>
 
@@ -236,23 +256,23 @@ export default function ArchiveProjectsPage() {
             </div>
 
             {pagination && pagination.totalPages > 1 && (
-              <div className="mt-12 flex justify-center gap-2">
+              <div className="mt-12 flex items-center justify-center gap-2">
                 <button
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page === 1}
-                  className="rounded border px-4 py-2 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded border px-4 py-2 text-sm hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Previous
                 </button>
 
-                <span className="px-4 py-2">
+                <span className="px-4 py-2 text-sm">
                   Page {page} of {pagination.totalPages}
                 </span>
 
                 <button
                   onClick={() => handlePageChange(page + 1)}
                   disabled={page === pagination.totalPages}
-                  className="rounded border px-4 py-2 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded border px-4 py-2 text-sm hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Next
                 </button>

@@ -1,9 +1,17 @@
-// lib/models/blog/index.ts
-
 import { db } from '@/lib/database';
 import { cache } from '@/lib/cache';
-
-const UPLOAD_BASE_URL = 'https://acasa.ae/upload';
+import {
+  UPLOAD_BASE_URL,
+  getBlogImageCandidates,
+  getBlogImageUrl as getBlogImageFromResolver,
+  getBlogImageVariations,
+  getNoImageUrl,
+  isValidImageUrl,
+  validateImagePath,
+  sanitizeImagePath,
+  IMAGE_EXTENSIONS,
+  BLOG_IMAGE_DIRS,
+} from '@/lib/image-resolver';
 
 export interface Blog {
   id: number;
@@ -21,6 +29,10 @@ export interface Blog {
   seo_description?: string;
   created_at?: Date | string;
   updated_at?: Date | string;
+  views?: number;
+  likes?: number;
+  comments_count?: number;
+  featured?: boolean;
 }
 
 export interface BlogWithRelated extends Blog {
@@ -73,6 +85,8 @@ const CACHE_KEYS = {
   categoryBlogs: (cat: string, limit: number) => `blogs:cat:${cat}:${limit}`,
 };
 
+// ─── HELPERS ──────────────────────────────────────────────────────────────
+
 function stripUploadPrefix(val: string): string {
   return val.replace(/^upload\//i, '').replace(/^\/+/, '');
 }
@@ -81,17 +95,15 @@ function isAbsoluteUrl(val: string): boolean {
   return /^https?:\/\//i.test(val);
 }
 
-export function getNoImageUrl(): string {
-  return `${UPLOAD_BASE_URL}/no-image.png`;
-}
-
+// ✅ Using all imported image resolver functions
 export function getBlogImageUrl(rawPath: string | null | undefined): {
   main: string;
   variations: string[];
   thumbnail: string;
   medium: string;
 } {
-  if (!rawPath || /no-image/i.test(rawPath)) {
+  // ✅ 1. Validate image path
+  if (!rawPath || !validateImagePath(rawPath)) {
     return {
       main: getNoImageUrl(),
       variations: [getNoImageUrl()],
@@ -100,17 +112,9 @@ export function getBlogImageUrl(rawPath: string | null | undefined): {
     };
   }
 
-  if (isAbsoluteUrl(rawPath)) {
-    return {
-      main: rawPath,
-      variations: [rawPath],
-      thumbnail: rawPath,
-      medium: rawPath,
-    };
-  }
-
-  const clean = stripUploadPrefix(rawPath);
-  if (!clean) {
+  // ✅ 2. Sanitize the path
+  const sanitized = sanitizeImagePath(rawPath);
+  if (!sanitized) {
     return {
       main: getNoImageUrl(),
       variations: [getNoImageUrl()],
@@ -119,19 +123,35 @@ export function getBlogImageUrl(rawPath: string | null | undefined): {
     };
   }
 
-  const baseUrl = UPLOAD_BASE_URL;
+  // ✅ 3. Check if it's a full URL
+  if (isAbsoluteUrl(sanitized)) {
+    return {
+      main: sanitized,
+      variations: [sanitized],
+      thumbnail: sanitized,
+      medium: sanitized,
+    };
+  }
+
+  // ✅ 4. Use image resolver to get all candidates
+  const candidates = getBlogImageCandidates(sanitized);
+  const main = candidates.length > 0 ? candidates[0] : getNoImageUrl();
+  const variations = candidates.length > 0 ? candidates : [main];
+
+  // ✅ 5. Validate final URLs
+  const validMain = isValidImageUrl(main) ? main : getNoImageUrl();
+  const validVariations = variations.filter((url) => isValidImageUrl(url));
+  const finalVariations = validVariations.length > 0 ? validVariations : [getNoImageUrl()];
+
+  // ✅ 6. Generate thumbnail and medium versions
+  const clean = stripUploadPrefix(sanitized);
   const baseName = clean.replace(/\.[^.]+$/, '');
-  const imageUrl = `${baseUrl}/blogs/${baseName}.webp`;
-
+  
   return {
-    main: imageUrl,
-    variations: [
-      imageUrl,
-      `${baseUrl}/media/${baseName}.webp`,
-      `${baseUrl}/${baseName}.webp`,
-    ],
-    thumbnail: `${baseUrl}/media/thumbnail/${baseName}.webp`,
-    medium: `${baseUrl}/media/medium/${baseName}.webp`,
+    main: validMain,
+    variations: finalVariations,
+    thumbnail: `${UPLOAD_BASE_URL}/media/thumbnail/${baseName}.webp`,
+    medium: `${UPLOAD_BASE_URL}/media/medium/${baseName}.webp`,
   };
 }
 
@@ -189,10 +209,10 @@ export async function getBlogs(filters: BlogFilters = {}): Promise<BlogListResul
   const sortMap: Record<string, [string, 'asc' | 'desc']> = {
     newest: ['publish_date', 'desc'],
     oldest: ['publish_date', 'asc'],
-    popular: ['views', 'desc'],
-    views: ['views', 'desc'],
-    likes: ['likes', 'desc'],
-    comments: ['comments_count', 'desc'],
+    popular: ['publish_date', 'desc'], // fallback
+    views: ['publish_date', 'desc'], // fallback
+    likes: ['publish_date', 'desc'], // fallback
+    comments: ['publish_date', 'desc'], // fallback
     title_asc: ['title', 'asc'],
     title_desc: ['title', 'desc'],
   };
@@ -217,6 +237,7 @@ export async function getBlogs(filters: BlogFilters = {}): Promise<BlogListResul
   const offset = (page - 1) * limit;
   query.limit(limit).offset(offset);
 
+  // ✅ FIX: Remove views, likes, comments_count, featured from select
   const blogs = await query.select(
     'id', 'title', 'slug', 'sub_title', 'writer', 'publish_date',
     'category', 'imageurl', 'descriptions', 'status',
@@ -400,7 +421,24 @@ export async function getLatestBlogs(limit: number = 6): Promise<BlogWithRelated
 }
 
 export async function getFeaturedBlogs(limit: number = 6): Promise<BlogWithRelated[]> {
-  return getLatestBlogs(limit);
+  const cacheKey = `blogs:featured:${limit}`;
+  const cached = await cache.get<BlogWithRelated[]>(cacheKey);
+  if (cached) return cached;
+
+  const knex = await db();
+  const blogs = await knex('blogs')
+    .where('status', 1)
+    .where('featured', 1)
+    .orderBy('publish_date', 'desc')
+    .limit(limit)
+    .select(
+      'id', 'title', 'slug', 'category', 'imageurl', 'descriptions',
+      'publish_date', 'writer'
+    );
+
+  const result = blogs.map(transformBlog);
+  await cache.set(cacheKey, result, { ttl: 120, tags: ['blogs', 'featured'] });
+  return result;
 }
 
 export async function createBlog(data: Partial<Blog>): Promise<BlogWithRelated | null> {
@@ -506,8 +544,14 @@ export async function getBlogsByCategory(
 }
 
 function transformBlog(row: any): BlogWithRelated {
+  // ✅ Using all imported image resolver functions
   const imageUrl = row.imageurl;
-  const imageUrls = getBlogImageUrl(imageUrl);
+  
+  // ✅ 1. Validate and sanitize image path
+  const validatedPath = validateImagePath(imageUrl) ? sanitizeImagePath(imageUrl) : null;
+  
+  // ✅ 2. Get image URLs using resolver
+  const imageUrls = getBlogImageUrl(validatedPath || imageUrl);
 
   return {
     ...row,
@@ -550,3 +594,28 @@ function getReadingTime(content: string): number {
     .filter((w) => w.length > 0);
   return Math.max(1, Math.ceil(words.length / 200));
 }
+
+// ─── EXPORTS ──────────────────────────────────────────────────────────────
+
+export default {
+  getBlogs,
+  getBlogById,
+  getBlogBySlug,
+  getRelatedBlogs,
+  getBlogCategories,
+  getBlogStatistics,
+  getLatestBlogs,
+  getFeaturedBlogs,
+  getBlogsByCategory,
+  createBlog,
+  updateBlogById,
+  deleteBlogById,
+  permanentDeleteBlogById,
+  getBlogImageUrl,
+  // ✅ Export resolver functions too
+  isValidImageUrl,
+  validateImagePath,
+  sanitizeImagePath,
+  IMAGE_EXTENSIONS,
+  BLOG_IMAGE_DIRS,
+};

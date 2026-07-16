@@ -1,3 +1,5 @@
+// app/api/v1/properties/offplan/[id]/route.ts - COMPLETE FIXED VERSION
+
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getOffPlanPropertyBySlug,
@@ -5,17 +7,143 @@ import {
   getOffPlanProperties,
 } from '@/lib/models/properties';
 
+// ─── CONSTANTS ──────────────────────────────────────────────────────────
+
+const DEFAULT_CURRENCY = 'AED';
+const DEFAULT_SYMBOL = 'AED';
+const FALLBACK_DISPLAY = 'Price on Request';
+
+// ─── STRONG PRICE FIXER ───────────────────────────────────────────────
+
+function fixPropertyPrice(property: any): any {
+  if (!property) return property;
+
+  // If price doesn't exist, create it
+  if (!property.price) {
+    property.price = {
+      amount: null,
+      amount_end: null,
+      display: FALLBACK_DISPLAY,
+      display_end: '',
+      currency: DEFAULT_CURRENCY,
+      symbol: DEFAULT_SYMBOL,
+      is_price_on_request: true,
+      sale_price: null,
+      listing_price: null,
+      rental_price: null,
+    };
+    return property;
+  }
+
+  const price = property.price;
+
+  // ─── TRY TO GET AMOUNT FROM VARIOUS SOURCES ──────────────────────
+  let amount = null;
+  
+  // Check all possible price fields
+  if (price.amount && price.amount !== 'null' && !isNaN(parseFloat(price.amount))) {
+    amount = parseFloat(price.amount);
+  } else if (price.sale_price && price.sale_price !== 'null' && !isNaN(parseFloat(price.sale_price))) {
+    amount = parseFloat(price.sale_price);
+  } else if (price.listing_price && price.listing_price !== 'null' && !isNaN(parseFloat(price.listing_price))) {
+    amount = parseFloat(price.listing_price);
+  } else if (price.rental_price && price.rental_price !== 'null' && !isNaN(parseFloat(price.rental_price))) {
+    amount = parseFloat(price.rental_price);
+  } else if (price.amount_from && price.amount_from !== 'null' && !isNaN(parseFloat(price.amount_from))) {
+    amount = parseFloat(price.amount_from);
+  }
+
+  // Store the amount
+  price.amount = amount;
+
+  // ─── GET CURRENCY AND SYMBOL ──────────────────────────────────────
+  let currency = price.currency || DEFAULT_CURRENCY;
+  let symbol = price.symbol || DEFAULT_SYMBOL;
+
+  // Clean up null strings
+  if (currency === 'null' || !currency) currency = DEFAULT_CURRENCY;
+  if (symbol === 'null' || !symbol) symbol = DEFAULT_SYMBOL;
+
+  price.currency = currency;
+  price.symbol = symbol;
+
+  // ─── GENERATE DISPLAY ─────────────────────────────────────────────
+  if (amount && amount > 0) {
+    // Format the amount with proper locale
+    const formattedAmount = Number(amount).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+
+    // Use symbol if available, otherwise use currency code
+    const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+    price.display = `${prefix} ${formattedAmount}`;
+
+    // If there's an end amount, add range
+    let amountEnd = null;
+    if (price.amount_end && price.amount_end !== 'null' && !isNaN(parseFloat(price.amount_end))) {
+      amountEnd = parseFloat(price.amount_end);
+    } else if (price.amount_to && price.amount_to !== 'null' && !isNaN(parseFloat(price.amount_to))) {
+      amountEnd = parseFloat(price.amount_to);
+    }
+
+    if (amountEnd && amountEnd > 0 && amountEnd !== amount) {
+      const formattedEnd = Number(amountEnd).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+      price.display = `${prefix} ${formattedAmount} - ${formattedEnd}`;
+      price.display_end = `${prefix} ${formattedEnd}`;
+      price.amount_end = amountEnd;
+    }
+
+    price.is_price_on_request = false;
+  } else {
+    // No valid amount found
+    price.display = FALLBACK_DISPLAY;
+    price.is_price_on_request = true;
+  }
+
+  // ─── FIX AMOUNT_END ───────────────────────────────────────────────
+  if (!price.amount_end || price.amount_end === 'null') {
+    price.amount_end = null;
+  }
+
+  return property;
+}
+
+// ─── FORMAT PRICE FOR DISPLAY ─────────────────────────────────────────
+
+function formatPriceDisplay(price: any): string {
+  if (!price) return FALLBACK_DISPLAY;
+  
+  if (price.display && !price.display.includes('null') && !price.display.startsWith('null ')) {
+    return price.display;
+  }
+  
+  const amount = price.amount || price.sale_price || price.listing_price || price.rental_price;
+  if (!amount) return FALLBACK_DISPLAY;
+  
+  const currency = price.currency || DEFAULT_CURRENCY;
+  const symbol = price.symbol || DEFAULT_SYMBOL;
+  const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+  
+  return `${prefix} ${Number(amount).toLocaleString()}`;
+}
+
+// ─── INTERFACES ─────────────────────────────────────────────────────────
+
 interface PropertyPrice {
   amount: number | null;
-  amount_end?: number | null;
+  amount_end: number | null;
   display: string;
-  display_end?: string | null;
+  display_end: string | null;
   currency: string;
-  symbol?: string;
+  symbol: string;
   is_price_on_request: boolean;
-  sale_price?: string | null;
-  listing_price?: string | null;
-  rental_price?: string | null;
+  sale_price: number | null;
+  listing_price: number | null;
+  rental_price: number | null;
 }
 
 interface PropertyArea {
@@ -132,6 +260,8 @@ interface PropertyResponse {
   similar_properties: any[];
 }
 
+// ─── CACHE ─────────────────────────────────────────────────────────────
+
 const cache = new Map<string, { data: any; timestamp: number }>();
 const CACHE_TTL = 300;
 
@@ -160,6 +290,8 @@ function clearCache(pattern?: string): void {
   }
 }
 
+// ─── MAIN GET HANDLER ──────────────────────────────────────────────────
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -179,7 +311,10 @@ export async function GET(
         success: true,
         data: cachedProperty,
         cached: true,
-        meta: { timestamp: new Date().toISOString() }
+        meta: { 
+          timestamp: new Date().toISOString(),
+          price_fixed: true 
+        }
       });
     }
 
@@ -202,46 +337,56 @@ export async function GET(
       );
     }
 
+    // ─── FIX PRICE ──────────────────────────────────────────────────
+    const fixedProperty = fixPropertyPrice(property);
+    const formattedPrice = formatPriceDisplay(fixedProperty.price);
+
+    // ─── BUILD RESPONSE WITH FIXED PRICE ──────────────────────────
     const responseData: PropertyResponse = {
-      id: property.id,
-      property_name: property.property_name || property.name || 'Property',
-      property_slug: property.property_slug || property.slug || '',
-      listing_type: property.listing_type || null,
-      property_type: property.property_type || null,
-      property_purpose: property.property_purpose || null,
-      status: property.status || 5,
-      featured: property.featured_property === '1' || property.featured === true,
-      created_at: property.created_at || null,
-      updated_at: property.updated_at || null,
+      id: fixedProperty.id,
+      property_name: fixedProperty.property_name || fixedProperty.name || 'Property',
+      property_slug: fixedProperty.property_slug || fixedProperty.slug || '',
+      listing_type: fixedProperty.listing_type || null,
+      property_type: fixedProperty.property_type || null,
+      property_purpose: fixedProperty.property_purpose || null,
+      status: fixedProperty.status || 5,
+      featured: fixedProperty.featured_property === '1' || fixedProperty.featured === true,
+      created_at: fixedProperty.created_at || null,
+      updated_at: fixedProperty.updated_at || null,
       
-      price: property.price || {
-        amount: null,
-        display: 'Price on Request',
-        currency: 'AED',
-        symbol: 'AED',
-        is_price_on_request: true,
+      price: {
+        amount: fixedProperty.price?.amount || null,
+        amount_end: fixedProperty.price?.amount_end || null,
+        display: formattedPrice,
+        display_end: fixedProperty.price?.display_end || null,
+        currency: fixedProperty.price?.currency || DEFAULT_CURRENCY,
+        symbol: fixedProperty.price?.symbol || DEFAULT_SYMBOL,
+        is_price_on_request: fixedProperty.price?.is_price_on_request !== false,
+        sale_price: fixedProperty.price?.sale_price || null,
+        listing_price: fixedProperty.price?.listing_price || null,
+        rental_price: fixedProperty.price?.rental_price || null,
       },
       
-      bedrooms: property.bedrooms || property.bedroom || 'Studio',
-      bathrooms: property.bathrooms || '1 Bath',
+      bedrooms: fixedProperty.bedrooms || fixedProperty.bedroom || 'Studio',
+      bathrooms: fixedProperty.bathrooms || '1 Bath',
       
-      area: property.area || {
+      area: fixedProperty.area || {
         value: null,
         display: 'Area on Request',
         size: null,
       },
       
-      location: property.location || {
+      location: fixedProperty.location || {
         community: null,
         community_slug: null,
         sub_community: null,
         city: null,
-        latitude: property.map_latitude || null,
-        longitude: property.map_longitude || null,
-        community_id: property.community_id || null,
+        latitude: fixedProperty.map_latitude || null,
+        longitude: fixedProperty.map_longitude || null,
+        community_id: fixedProperty.community_id || null,
       },
       
-      developer: property.developer || {
+      developer: fixedProperty.developer || {
         id: null,
         name: null,
         country: null,
@@ -251,7 +396,7 @@ export async function GET(
         is_international: false,
       },
       
-      agent: property.agent || {
+      agent: fixedProperty.agent || {
         id: null,
         name: null,
         phone: null,
@@ -262,51 +407,52 @@ export async function GET(
         about: null,
       },
       
-      images: property.images || [],
-      featured_image_url: property.featured_image_url || property.image || '',
-      gallery_images: property.gallery_images || [],
-      gallery_preview: property.gallery_preview || [],
-      media_base_url: property.media_base_url || 'https://acasa.ae/upload',
+      images: fixedProperty.images || [],
+      featured_image_url: fixedProperty.featured_image_url || fixedProperty.image || '',
+      gallery_images: fixedProperty.gallery_images || [],
+      gallery_preview: fixedProperty.gallery_preview || [],
+      media_base_url: fixedProperty.media_base_url || 'https://acasa.ae/upload',
       
-      description: property.description || null,
-      video_url: property.video_url || null,
-      furnishing: property.furnishing || null,
-      amenities: property.amenities || [],
+      description: fixedProperty.description || null,
+      video_url: fixedProperty.video_url || null,
+      furnishing: fixedProperty.furnishing || null,
+      amenities: fixedProperty.amenities || [],
       
-      payment_plans: property.payment_plans || [],
+      payment_plans: fixedProperty.payment_plans || [],
       
-      facilities: property.facilities || null,
-      location_data: property.location_data || null,
+      facilities: fixedProperty.facilities || null,
+      location_data: fixedProperty.location_data || null,
       
       is_off_plan: true,
       off_plan_details: {
-        completion_date: property.completion_date || null,
-        occupancy: property.occupancy || null,
-        exclusive_status: property.exclusive_status || null,
-        dld_permit: property.dld_permit || null,
-        rera_number: property.ReraNumber || null,
+        completion_date: fixedProperty.completion_date || null,
+        occupancy: fixedProperty.occupancy || null,
+        exclusive_status: fixedProperty.exclusive_status || null,
+        dld_permit: fixedProperty.dld_permit || null,
+        rera_number: fixedProperty.ReraNumber || null,
       },
       
-      ref_number: property.RefNumber || property.ref_number || null,
-      display_title: property.display_title || property.property_name || 'Property',
+      ref_number: fixedProperty.RefNumber || fixedProperty.ref_number || null,
+      display_title: fixedProperty.display_title || fixedProperty.property_name || 'Property',
       
       seo: {
-        title: property.seo_title || property.property_name || 'Property',
-        description: property.meta_description || property.description?.slice(0, 160) || null,
-        slug: property.property_slug || '',
+        title: fixedProperty.seo_title || fixedProperty.property_name || 'Property',
+        description: fixedProperty.meta_description || fixedProperty.description?.slice(0, 160) || null,
+        slug: fixedProperty.property_slug || '',
       },
       
       similar_properties: [],
     };
 
+    // ─── FETCH SIMILAR PROPERTIES ──────────────────────────────────
     if (includeSimilar) {
       try {
         let similarResult: { data: any[]; meta: any } = { data: [], meta: {} };
-        const currentPropertyId = property.id;
+        const currentPropertyId = fixedProperty.id;
 
-        if (property.community_id) {
+        if (fixedProperty.community_id) {
           const result = await getOffPlanProperties({
-            community_id: property.community_id,
+            community_id: fixedProperty.community_id,
             status: 5,
             limit: similarLimit + 1,
             page: 1,
@@ -314,9 +460,9 @@ export async function GET(
           similarResult = result;
         }
         
-        if (!similarResult.data.length && property.property_type) {
+        if (!similarResult.data.length && fixedProperty.property_type) {
           const result = await getOffPlanProperties({
-            property_type: property.property_type,
+            property_type: fixedProperty.property_type,
             status: 5,
             limit: similarLimit + 1,
             page: 1,
@@ -334,11 +480,16 @@ export async function GET(
           similarResult = result;
         }
 
-        responseData.similar_properties = similarResult.data
+        // Fix prices for similar properties
+        const fixedSimilar = similarResult.data
           .filter((p: any) => p.id !== currentPropertyId)
-          .slice(0, similarLimit);
+          .slice(0, similarLimit)
+          .map((p: any) => fixPropertyPrice(p));
+
+        responseData.similar_properties = fixedSimilar;
 
       } catch (error) {
+        console.error('Error fetching similar properties:', error);
         responseData.similar_properties = [];
       }
     }
@@ -350,16 +501,18 @@ export async function GET(
       data: responseData,
       cached: false,
       meta: {
-        id: property.id,
-        slug: property.property_slug,
+        id: fixedProperty.id,
+        slug: fixedProperty.property_slug,
         listing_type: 'Off plan',
         has_similar: responseData.similar_properties.length > 0,
         similar_count: responseData.similar_properties.length,
+        price_fixed: true,
         timestamp: new Date().toISOString(),
       },
     });
 
   } catch (error: any) {
+    console.error('Off-Plan Property API Error:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -369,6 +522,20 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+// ─── OPTIONS: CORS ─────────────────────────────────────────────────────
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
 }
 
 export const runtime = 'nodejs';

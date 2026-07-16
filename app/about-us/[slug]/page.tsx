@@ -9,8 +9,6 @@ import {
   HiOutlineCalendar,
   HiOutlineMapPin,
   HiOutlineUserGroup,
-  HiOutlineArrowRight,
-  HiOutlineSparkles,
 } from "react-icons/hi2";
 
 interface AboutData {
@@ -30,38 +28,24 @@ interface AboutData {
   image_variations?: string[];
 }
 
-function getImageUrl(image: string | null | undefined, image_url?: string): string {
-  if (image_url && !image_url.includes('no-image')) {
-    return image_url;
+function getImageUrl(image: string | null | undefined): string {
+  if (!image || image.includes('no-image')) {
+    return "https://images.unsplash.com/photo-1560518883-ce09059eeffc?w=1200&h=800&fit=crop&q=80";
   }
 
-  if (!image) {
-    return "/about/about1.png";
+  if (image.startsWith("http://") || image.startsWith("https://")) {
+    return image;
   }
 
-  const clean = image.trim();
-  if (!clean) {
-    return "/about/about1.png";
+  if (image.startsWith("/")) {
+    return `https://acasa.ae${image}`;
   }
 
-  if (clean.startsWith("http://") || clean.startsWith("https://")) {
-    return clean;
+  if (image.startsWith("upload/")) {
+    return `https://acasa.ae/${image}`;
   }
 
-  if (clean.startsWith("/")) {
-    return `https://acasa.ae${clean}`;
-  }
-
-  if (clean.startsWith("upload/")) {
-    return `https://acasa.ae/${clean}`;
-  }
-
-  if (clean.includes("about/") || !clean.includes("/")) {
-    const filename = clean.replace(/^about\//, "");
-    return `https://acasa.ae/upload/about/${filename}`;
-  }
-
-  return "/about/about1.png";
+  return `https://acasa.ae/upload/about/${image}`;
 }
 
 export default function AboutSlugPage() {
@@ -88,7 +72,6 @@ export default function AboutSlugPage() {
           throw new Error(data?.message || "Page not found");
         }
       } catch (err: any) {
-        console.error("About fetch error:", err);
         setError(err.message || "Failed to load page");
       } finally {
         setLoading(false);
@@ -130,7 +113,7 @@ export default function AboutSlugPage() {
     );
   }
 
-  const heroImage = getImageUrl(about.imageurl, about.image_url);
+  const heroImage = getImageUrl(about.imageurl || about.image_url);
   const stats = [
     { label: "Properties", value: "2,500+", icon: HiOutlineBuildingOffice2 },
     { label: "Clients", value: "3,200+", icon: HiOutlineUserGroup },
@@ -142,7 +125,7 @@ export default function AboutSlugPage() {
     <div className="min-h-screen bg-white pt-24 pb-16">
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <Link
-          href="/about"
+          href="/about-us"
           className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-[#192334] transition mb-6"
         >
           <HiOutlineArrowLeft className="h-4 w-4" />
@@ -160,15 +143,16 @@ export default function AboutSlugPage() {
           <p className="mt-4 max-w-2xl text-gray-600">{about.seo_description}</p>
         )}
 
-        {about.imageurl && (
-          <div className="mt-6 overflow-hidden rounded-2xl">
-            <img
-              src={heroImage}
-              alt={about.title}
-              className="h-[300px] w-full object-cover"
-            />
-          </div>
-        )}
+        <div className="mt-6 overflow-hidden rounded-2xl">
+          <img
+            src={heroImage}
+            alt={about.title}
+            className="h-[300px] w-full object-cover"
+            onError={(e) => {
+              e.currentTarget.src = "https://images.unsplash.com/photo-1560518883-ce09059eeffc?w=1200&h=800&fit=crop&q=80";
+            }}
+          />
+        </div>
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {stats.map((stat, i) => (

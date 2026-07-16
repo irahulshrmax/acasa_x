@@ -1,7 +1,8 @@
 // app/api/v1/neighborhoods/[slug]/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getNeighborhoodBySlug } from '@/lib/models/neighborhood';
+import { getNeighborhoodBySlug, getNeighborhoodById } from '@/lib/models/neighborhood';
+import { db } from '@/lib/database';
 
 export async function GET(
   request: NextRequest,
@@ -17,15 +18,26 @@ export async function GET(
       );
     }
 
-    // Extract numeric ID from slug (e.g., "29-dubai-creek-harbour" -> "29")
-    const numericSlug = slug.split('-')[0];
+    let neighborhood = await getNeighborhoodBySlug(slug);
     
-    // Try to find by numeric slug first
-    let neighborhood = await getNeighborhoodBySlug(numericSlug);
-    
-    // If not found, try with original slug
     if (!neighborhood) {
-      neighborhood = await getNeighborhoodBySlug(slug);
+      const numericId = parseInt(slug, 10);
+      if (!isNaN(numericId)) {
+        neighborhood = await getNeighborhoodById(numericId);
+      }
+    }
+
+    if (!neighborhood) {
+      const searchSlug = slug.replace(/-/g, ' ');
+      const knex = await db();
+      const found = await knex('community')
+        .where('name', 'like', `%${searchSlug}%`)
+        .where('status', 1)
+        .first();
+      
+      if (found) {
+        neighborhood = await getNeighborhoodById(found.id);
+      }
     }
 
     if (!neighborhood) {

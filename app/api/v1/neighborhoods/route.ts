@@ -7,6 +7,7 @@ import {
   getNeighborhoodCities,
   getNeighborhoodBySlug,
   getNeighborhoodById,
+  getNeighborhoodsByCity,
   type NeighborhoodFilters,
 } from '@/lib/models/neighborhood';
 
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT), 10);
     const keyword = searchParams.get('keyword') || undefined;
     const city_id = searchParams.get('city_id') ? parseInt(searchParams.get('city_id')!, 10) : undefined;
+    const city_slug = searchParams.get('city_slug') || undefined;
 
     const validPage = Math.max(1, page);
     const validLimit = Math.min(MAX_LIMIT, Math.max(1, limit));
@@ -86,6 +88,25 @@ export async function GET(request: NextRequest) {
         data: neighborhood,
         meta: {
           id: neighborhoodId,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    if (city_slug) {
+      const result = await getNeighborhoodsByCity(city_slug, {
+        page: validPage,
+        limit: validLimit,
+        status: 1,
+        keyword,
+      });
+      return NextResponse.json({
+        success: true,
+        data: result.data,
+        meta: {
+          ...result.meta,
+          type: 'city',
+          city_slug,
           timestamp: new Date().toISOString()
         }
       });

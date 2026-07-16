@@ -30,9 +30,11 @@ import {
   Shield,
   Home,
   Filter,
+  Award,
+  Building,
+  CheckCircle,
 } from "lucide-react";
 
-const API_URL = "/api/v1/properties/sell";
 const DEFAULT_LIMIT = 12;
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -51,12 +53,14 @@ const THEME = {
   warning: "#F59E0B",
 };
 
-interface Property {
+// ============== TYPES ==============
+interface SellProperty {
   id: number;
   name: string;
   slug: string;
   ref_number: string | null;
   listing_type: string;
+  property_type: string;
   occupancy: string | null;
   status: number;
   featured: boolean;
@@ -106,7 +110,7 @@ interface Property {
     is_international: boolean;
     logo_url: string;
     logo_variations: string[];
-  };
+  } | null; // ✅ FIXED: Allow null
   agent: {
     id: number | null;
     name: string | null;
@@ -121,8 +125,11 @@ interface Property {
   amenities: string[];
   furnishing: string | null;
   video_url: string | null;
-  payment_plans: Array<{ id: number; name: string; percentage: string; item_id: number; item_type: string | null }>;
   project_id: number | null;
+  listed_date: string | null;
+  days_on_market: number | null;
+  views_count: number | null;
+  is_verified: boolean;
 }
 
 interface PaginationData {
@@ -130,16 +137,665 @@ interface PaginationData {
   page: number;
   limit: number;
   totalPages: number;
-  cached?: boolean;
-  action?: string;
-  sort_by?: string;
-  timestamp?: string;
 }
 
 interface FilterOption {
   value: string;
   label: string;
 }
+
+// ============== FALLBACK IMAGES (NO API CALL - NO ERROR) ==============
+const FALLBACK_IMAGES: Record<string, string[]> = {
+  villa: [
+    'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=800&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&h=600&fit=crop&q=80',
+  ],
+  apartment: [
+    'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800&h=600&fit=crop&q=80',
+  ],
+  townhouse: [
+    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&h=600&fit=crop&q=80',
+  ],
+  penthouse: [
+    'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&h=600&fit=crop&q=80',
+  ],
+  land: [
+    'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&h=600&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1500076656116-558758c991c1?w=800&h=600&fit=crop&q=80',
+  ],
+};
+
+const DEFAULT_IMAGES = [
+  'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&h=600&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop&q=80',
+];
+
+// ============== DUMMY DATA ==============
+const DUMMY_PROPERTIES: SellProperty[] = [
+  {
+    id: 1,
+    name: "Luxury Villa with Private Pool",
+    slug: "luxury-villa-private-pool",
+    ref_number: "S-1001",
+    listing_type: "sale",
+    property_type: "villa",
+    occupancy: "ready to move",
+    status: 5,
+    featured: true,
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: "2024",
+    exclusive_status: "Exclusive",
+    dld_permit: "DLD-12345",
+    price: {
+      amount: 4500000,
+      amount_end: null,
+      display: "AED 4,500,000",
+      display_end: null,
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 4500000,
+      listing_price: 4500000,
+      rental_price: 180000,
+    },
+    bedrooms: "4",
+    bathrooms: "5 Bath",
+    display_title: "Stunning 4BR Villa with Ocean View",
+    area: {
+      value: 3500,
+      size: "sqft",
+      display: "3,500 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "Emirates Hills",
+      community_slug: "emirates-hills",
+      sub_community: "Villa 12",
+      city: "Dubai",
+      address: "Emirates Hills, Dubai",
+      latitude: "25.0657",
+      longitude: "55.1713",
+      community_id: 1,
+      city_id: 1,
+    },
+    developer: {
+      id: 1,
+      name: "Emaar Properties",
+      country: "UAE",
+      is_international: false,
+      logo_url: "",
+      logo_variations: [],
+    },
+    agent: {
+      id: 1,
+      name: "Ahmed Khan",
+      phone: "+971 50 123 4567",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: ["Swimming Pool", "Gym", "Security", "Parking", "Garden", "BBQ Area"],
+    furnishing: "Fully Furnished",
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 2,
+    views_count: 156,
+    is_verified: true,
+  },
+  {
+    id: 2,
+    name: "Modern Apartment in Downtown",
+    slug: "modern-apartment-downtown",
+    ref_number: "S-1002",
+    listing_type: "sale",
+    property_type: "apartment",
+    occupancy: "ready to move",
+    status: 5,
+    featured: false,
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: "2023",
+    exclusive_status: null,
+    dld_permit: null,
+    price: {
+      amount: 1850000,
+      amount_end: null,
+      display: "AED 1,850,000",
+      display_end: null,
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 1850000,
+      listing_price: 1850000,
+      rental_price: 85000,
+    },
+    bedrooms: "2",
+    bathrooms: "2 Bath",
+    display_title: "Stylish 2BR Apartment with Burj View",
+    area: {
+      value: 1200,
+      size: "sqft",
+      display: "1,200 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "Downtown Dubai",
+      community_slug: "downtown-dubai",
+      sub_community: "Burj Residences",
+      city: "Dubai",
+      address: "Downtown Dubai, Dubai",
+      latitude: "25.1952",
+      longitude: "55.2740",
+      community_id: 2,
+      city_id: 1,
+    },
+    developer: {
+      id: 2,
+      name: "Dubai Properties",
+      country: "UAE",
+      is_international: false,
+      logo_url: "",
+      logo_variations: [],
+    },
+    agent: {
+      id: 2,
+      name: "Sarah Ali",
+      phone: "+971 50 987 6543",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: ["Pool", "Gym", "Concierge", "Parking", "Children's Play Area"],
+    furnishing: "Semi-Furnished",
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 5,
+    views_count: 89,
+    is_verified: true,
+  },
+  {
+    id: 3,
+    name: "Spacious Townhouse in JVC",
+    slug: "spacious-townhouse-jvc",
+    ref_number: "S-1003",
+    listing_type: "sale",
+    property_type: "townhouse",
+    occupancy: "under construction",
+    status: 5,
+    featured: true,
+    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: "2025",
+    exclusive_status: "Sole Agency",
+    dld_permit: "DLD-67890",
+    price: {
+      amount: 2800000,
+      amount_end: 2950000,
+      display: "AED 2,800,000",
+      display_end: "AED 2,950,000",
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 2800000,
+      listing_price: 2800000,
+      rental_price: null,
+    },
+    bedrooms: "3",
+    bathrooms: "3 Bath",
+    display_title: "3BR Townhouse with Garden",
+    area: {
+      value: 2200,
+      size: "sqft",
+      display: "2,200 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "Jumeirah Village Circle",
+      community_slug: "jumeirah-village-circle",
+      sub_community: null,
+      city: "Dubai",
+      address: "JVC, Dubai",
+      latitude: "25.0800",
+      longitude: "55.1500",
+      community_id: 3,
+      city_id: 1,
+    },
+    developer: {
+      id: 3,
+      name: "Nakheel",
+      country: "UAE",
+      is_international: false,
+      logo_url: "",
+      logo_variations: [],
+    },
+    agent: {
+      id: 3,
+      name: "Omar Hassan",
+      phone: "+971 50 456 7890",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: ["Garden", "Parking", "Community Pool", "Kids Play Area", "Clubhouse"],
+    furnishing: "Unfurnished",
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 10,
+    views_count: 234,
+    is_verified: false,
+  },
+  {
+    id: 4,
+    name: "Penthouse with Skyline View",
+    slug: "penthouse-skyline-view",
+    ref_number: "S-1004",
+    listing_type: "sale",
+    property_type: "penthouse",
+    occupancy: "ready to move",
+    status: 5,
+    featured: false,
+    created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: "2022",
+    exclusive_status: "Exclusive",
+    dld_permit: null,
+    price: {
+      amount: 12000000,
+      amount_end: null,
+      display: "AED 12,000,000",
+      display_end: null,
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 12000000,
+      listing_price: 12000000,
+      rental_price: null,
+    },
+    bedrooms: "5",
+    bathrooms: "6 Bath",
+    display_title: "Luxury 5BR Penthouse with Private Terrace",
+    area: {
+      value: 5500,
+      size: "sqft",
+      display: "5,500 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "Palm Jumeirah",
+      community_slug: "palm-jumeirah",
+      sub_community: "Frond N",
+      city: "Dubai",
+      address: "Palm Jumeirah, Dubai",
+      latitude: "25.1100",
+      longitude: "55.1400",
+      community_id: 4,
+      city_id: 1,
+    },
+    developer: {
+      id: 4,
+      name: "Meraas",
+      country: "UAE",
+      is_international: false,
+      logo_url: "",
+      logo_variations: [],
+    },
+    agent: {
+      id: 4,
+      name: "Fatima Al Maktoum",
+      phone: "+971 50 789 0123",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: ["Private Pool", "Jacuzzi", "Cinema Room", "Concierge", "Valet", "Smart Home"],
+    furnishing: "Luxury Furnished",
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 15,
+    views_count: 567,
+    is_verified: true,
+  },
+  {
+    id: 5,
+    name: "Studio Apartment in Marina",
+    slug: "studio-apartment-marina",
+    ref_number: "S-1005",
+    listing_type: "sale",
+    property_type: "apartment",
+    occupancy: "ready to move",
+    status: 5,
+    featured: false,
+    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: "2023",
+    exclusive_status: null,
+    dld_permit: null,
+    price: {
+      amount: 950000,
+      amount_end: null,
+      display: "AED 950,000",
+      display_end: null,
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 950000,
+      listing_price: 950000,
+      rental_price: 45000,
+    },
+    bedrooms: "Studio",
+    bathrooms: "1 Bath",
+    display_title: "Cozy Studio with Marina View",
+    area: {
+      value: 450,
+      size: "sqft",
+      display: "450 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "Dubai Marina",
+      community_slug: "dubai-marina",
+      sub_community: "Marina Bay",
+      city: "Dubai",
+      address: "Dubai Marina, Dubai",
+      latitude: "25.0800",
+      longitude: "55.1400",
+      community_id: 5,
+      city_id: 1,
+    },
+    developer: {
+      id: 5,
+      name: "Select Group",
+      country: "UAE",
+      is_international: false,
+      logo_url: "",
+      logo_variations: [],
+    },
+    agent: {
+      id: 5,
+      name: "Mohammed Rashid",
+      phone: "+971 50 234 5678",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: ["Pool", "Gym", "Security", "Concierge"],
+    furnishing: "Fully Furnished",
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 3,
+    views_count: 78,
+    is_verified: true,
+  },
+  {
+    id: 6,
+    name: "Land Plot for Villa Construction",
+    slug: "land-plot-villa-construction",
+    ref_number: "S-1006",
+    listing_type: "sale",
+    property_type: "land",
+    occupancy: null,
+    status: 5,
+    featured: false,
+    created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: null,
+    exclusive_status: null,
+    dld_permit: null,
+    price: {
+      amount: 3500000,
+      amount_end: null,
+      display: "AED 3,500,000",
+      display_end: null,
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 3500000,
+      listing_price: 3500000,
+      rental_price: null,
+    },
+    bedrooms: "0",
+    bathrooms: "0 Bath",
+    display_title: "Prime Land Plot in Dubai Hills",
+    area: {
+      value: 12000,
+      size: "sqft",
+      display: "12,000 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "Dubai Hills Estate",
+      community_slug: "dubai-hills-estate",
+      sub_community: null,
+      city: "Dubai",
+      address: "Dubai Hills Estate, Dubai",
+      latitude: "25.1300",
+      longitude: "55.2300",
+      community_id: 6,
+      city_id: 1,
+    },
+    developer: null, // ✅ This is now allowed
+    agent: {
+      id: 6,
+      name: "Khalid Al Ameri",
+      phone: "+971 50 345 6789",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: [],
+    furnishing: null,
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 20,
+    views_count: 45,
+    is_verified: false,
+  },
+  {
+    id: 7,
+    name: "Waterfront Villa with Private Beach",
+    slug: "waterfront-villa-private-beach",
+    ref_number: "S-1007",
+    listing_type: "sale",
+    property_type: "villa",
+    occupancy: "ready to move",
+    status: 5,
+    featured: true,
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: "2024",
+    exclusive_status: "Exclusive",
+    dld_permit: "DLD-78901",
+    price: {
+      amount: 8500000,
+      amount_end: null,
+      display: "AED 8,500,000",
+      display_end: null,
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 8500000,
+      listing_price: 8500000,
+      rental_price: 350000,
+    },
+    bedrooms: "6",
+    bathrooms: "7 Bath",
+    display_title: "6BR Beachfront Villa with Private Access",
+    area: {
+      value: 6500,
+      size: "sqft",
+      display: "6,500 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "Jumeirah Beach Residence",
+      community_slug: "jumeirah-beach-residence",
+      sub_community: "JBR",
+      city: "Dubai",
+      address: "JBR, Dubai",
+      latitude: "25.0750",
+      longitude: "55.1300",
+      community_id: 7,
+      city_id: 1,
+    },
+    developer: {
+      id: 6,
+      name: "Dubai Holding",
+      country: "UAE",
+      is_international: false,
+      logo_url: "",
+      logo_variations: [],
+    },
+    agent: {
+      id: 7,
+      name: "Noor Al Suwaidi",
+      phone: "+971 50 456 0123",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: ["Private Beach", "Infinity Pool", "Home Theater", "Gym", "Spa", "Wine Cellar"],
+    furnishing: "Luxury Furnished",
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 7,
+    views_count: 432,
+    is_verified: true,
+  },
+  {
+    id: 8,
+    name: "Affordable Studio in International City",
+    slug: "affordable-studio-international-city",
+    ref_number: "S-1008",
+    listing_type: "sale",
+    property_type: "apartment",
+    occupancy: "ready to move",
+    status: 5,
+    featured: false,
+    created_at: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date().toISOString(),
+    completion_date: "2023",
+    exclusive_status: null,
+    dld_permit: null,
+    price: {
+      amount: 550000,
+      amount_end: null,
+      display: "AED 550,000",
+      display_end: null,
+      currency: "AED",
+      symbol: "AED",
+      is_price_on_request: false,
+      sale_price: 550000,
+      listing_price: 550000,
+      rental_price: 28000,
+    },
+    bedrooms: "Studio",
+    bathrooms: "1 Bath",
+    display_title: "Budget-Friendly Studio with Community View",
+    area: {
+      value: 380,
+      size: "sqft",
+      display: "380 sqft",
+      min_area: null,
+      max_area: null,
+      area_end: null,
+    },
+    location: {
+      community: "International City",
+      community_slug: "international-city",
+      sub_community: "England Cluster",
+      city: "Dubai",
+      address: "International City, Dubai",
+      latitude: "25.1900",
+      longitude: "55.4100",
+      community_id: 8,
+      city_id: 1,
+    },
+    developer: {
+      id: 7,
+      name: "Nakheel",
+      country: "UAE",
+      is_international: false,
+      logo_url: "",
+      logo_variations: [],
+    },
+    agent: {
+      id: 8,
+      name: "Rashid Al Maktoum",
+      phone: "+971 50 567 8901",
+      photo_url: "",
+    },
+    featured_image: "",
+    images: [],
+    gallery_urls: [],
+    gallery_preview: [],
+    media_base_url: "",
+    amenities: ["Security", "Parking", "Community Center"],
+    furnishing: "Unfurnished",
+    video_url: null,
+    project_id: null,
+    listed_date: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+    days_on_market: 12,
+    views_count: 34,
+    is_verified: false,
+  },
+];
+
+// ============== FILTER OPTIONS ==============
+const PROPERTY_TYPE_OPTIONS: FilterOption[] = [
+  { value: "villa", label: "Villa" },
+  { value: "apartment", label: "Apartment" },
+  { value: "townhouse", label: "Townhouse" },
+  { value: "penthouse", label: "Penthouse" },
+  { value: "land", label: "Land / Plot" },
+];
 
 const BEDROOM_OPTIONS: FilterOption[] = [
   { value: "Studio", label: "Studio" },
@@ -148,7 +804,7 @@ const BEDROOM_OPTIONS: FilterOption[] = [
   { value: "3", label: "3 Bedrooms" },
   { value: "4", label: "4 Bedrooms" },
   { value: "5", label: "5 Bedrooms" },
-  { value: "6", label: "6 Bedrooms" },
+  { value: "6+", label: "6+ Bedrooms" },
 ];
 
 const PRICE_OPTIONS: FilterOption[] = [
@@ -162,19 +818,37 @@ const PRICE_OPTIONS: FilterOption[] = [
 ];
 
 const SORT_OPTIONS: FilterOption[] = [
-  { value: "quality", label: "Best Match" },
-  { value: "newest", label: "Newest" },
+  { value: "newest", label: "Newest Listed" },
   { value: "price_asc", label: "Price: Low to High" },
   { value: "price_desc", label: "Price: High to Low" },
+  { value: "popular", label: "Most Viewed" },
+  { value: "featured", label: "Featured First" },
 ];
 
-const OCCUPANCY_OPTIONS: FilterOption[] = [
-  { value: "under construction", label: "Under Construction" },
-  { value: "ready to move", label: "Ready to Move" },
-  { value: "completed", label: "Completed" },
+const EXCLUSIVE_OPTIONS: FilterOption[] = [
+  { value: "Non-Exclusive", label: "Non-Exclusive" },
+  { value: "Exclusive", label: "Exclusive" },
+  { value: "Sole Agency", label: "Sole Agency" },
 ];
 
-function getPropertyImage(property: Property): string | null {
+// ============== ENRICH WITH IMAGES (NO API CALL) ==============
+function enrichPropertyWithImages(property: SellProperty): SellProperty {
+  if (property.featured_image || (property.gallery_urls && property.gallery_urls.length > 0)) {
+    return property;
+  }
+
+  const type = property.property_type?.toLowerCase() || '';
+  const images = FALLBACK_IMAGES[type] || DEFAULT_IMAGES;
+
+  return {
+    ...property,
+    featured_image: images[0] || '',
+    gallery_urls: images,
+  };
+}
+
+// ============== HELPERS ==============
+function getPropertyImage(property: SellProperty): string | null {
   if (property.featured_image) return property.featured_image;
   if (property.gallery_urls?.length) return property.gallery_urls[0];
   if (property.images?.length) return property.images[0].url;
@@ -182,7 +856,7 @@ function getPropertyImage(property: Property): string | null {
   return null;
 }
 
-function getAllImages(property: Property): string[] {
+function getAllImages(property: SellProperty): string[] {
   const imgs: string[] = [];
   if (property.featured_image) imgs.push(property.featured_image);
   if (property.gallery_urls) property.gallery_urls.forEach(img => { if (!imgs.includes(img)) imgs.push(img); });
@@ -216,7 +890,23 @@ function getDaysAgo(date: string): string {
   return `${Math.floor(diff / 365)} years ago`;
 }
 
-function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Property; viewMode?: string; index?: number }) {
+function getPropertyTypeIcon(type: string) {
+  switch (type?.toLowerCase()) {
+    case "villa":
+      return Home;
+    case "apartment":
+      return Building2;
+    case "townhouse":
+      return Building;
+    case "penthouse":
+      return Layers;
+    default:
+      return Building2;
+  }
+}
+
+// ============== COMPONENTS ==============
+function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: SellProperty; viewMode?: string; index?: number }) {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
@@ -226,6 +916,8 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
   const priceDisplay = property.price?.display || "Price on Request";
   const bedroomLabel = getBedroomLabel(property.bedrooms);
   const daysAgo = getDaysAgo(property.created_at);
+  const isVerified = property.is_verified || false;
+  const PropertyTypeIcon = getPropertyTypeIcon(property.property_type);
 
   const allImages = useMemo(() => getAllImages(property), [property]);
   const hasImages = allImages.length > 0;
@@ -312,9 +1004,9 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
               )}
             </>
           ) : (
-            <div className="flex h-full w-full flex-col items-center justify-center">
-              <ImageOff className="h-12 w-12 text-gray-300" />
-              <p className="mt-2 text-xs text-gray-400">No Image</p>
+            <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+              <Building2 className="h-12 w-12 text-gray-300" />
+              <p className="mt-2 text-xs text-gray-400">Loading Image...</p>
             </div>
           )}
         </Link>
@@ -325,15 +1017,15 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
               Featured
             </span>
           )}
-          {property.listing_type === "Resale" && (
-            <span className="flex items-center gap-1 rounded-[3px] bg-blue-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              <Home className="h-3 w-3" />
-              Resale
+          {isVerified && (
+            <span className="flex items-center gap-1 rounded-[3px] bg-emerald-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
+              <CheckCircle className="h-3 w-3" />
+              Verified
             </span>
           )}
-          {property.completion_date && (
-            <span className="rounded-[3px] bg-green-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              {property.completion_date}
+          {property.property_type && (
+            <span className="rounded-[3px] bg-blue-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
+              {property.property_type}
             </span>
           )}
         </div>
@@ -344,10 +1036,17 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
           </span>
         )}
 
-        {property.occupancy && (
+        {property.days_on_market !== null && property.days_on_market !== undefined && (
           <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
             <Clock className="h-3 w-3" />
-            {property.occupancy}
+            {property.days_on_market} days on market
+          </div>
+        )}
+
+        {property.views_count && property.views_count > 0 && (
+          <div className="absolute bottom-3 right-12 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
+            <Eye className="h-3 w-3" />
+            {property.views_count}
           </div>
         )}
 
@@ -412,12 +1111,6 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="truncate text-[11px] text-[#4A5462]">{specs || "\u00A0"}</p>
           <div className="flex items-center gap-2">
-            {property.payment_plans && property.payment_plans.length > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-medium text-green-700">
-                <Calendar className="h-3 w-3" />
-                {property.payment_plans.length} Plans
-              </span>
-            )}
             <span className="text-[10px] text-[#6B7A8D]">{daysAgo}</span>
           </div>
         </div>
@@ -610,11 +1303,12 @@ function Pagination({
   );
 }
 
-export default function PropertiesForSalePage() {
+// ============== MAIN PAGE ==============
+export default function SellYourPropertyPage() {
   const loaderRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [properties, setProperties] = useState<SellProperty[]>([]);
   const [pagination, setPagination] = useState<PaginationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -623,7 +1317,6 @@ export default function PropertiesForSalePage() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [isCached, setIsCached] = useState(false);
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -631,15 +1324,17 @@ export default function PropertiesForSalePage() {
     bedroom: "",
     min_price: "",
     max_price: "",
-    sort_by: "quality",
-    occupancy: "",
+    sort_by: "newest",
+    property_type: "",
     keyword: "",
+    exclusive_status: "",
   });
 
   const currentPriceValue = filters.min_price && filters.max_price ? `${filters.min_price}-${filters.max_price}` : "";
-  const hasActiveFilters = filters.bedroom !== "" || filters.min_price !== "" || filters.max_price !== "" || filters.occupancy !== "" || filters.keyword !== "";
+  const hasActiveFilters = filters.bedroom !== "" || filters.min_price !== "" || filters.max_price !== "" || filters.property_type !== "" || filters.keyword !== "" || filters.exclusive_status !== "";
   const hasMore = pagination ? filters.page < pagination.totalPages : false;
 
+  // ============== FETCH PROPERTIES FROM DUMMY DATA ==============
   const fetchProperties = useCallback(
     async (page: number, isReset: boolean) => {
       if (isReset) {
@@ -652,58 +1347,92 @@ export default function PropertiesForSalePage() {
       setError(null);
 
       try {
-        const params = new URLSearchParams();
-        params.append("page", String(page));
-        params.append("limit", String(filters.limit));
-        params.append("sort_by", filters.sort_by);
-        params.append("status", "5");
-        params.append("listing_type", "Resale");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        let filtered = [...DUMMY_PROPERTIES];
         
         if (filters.bedroom) {
-          if (filters.bedroom.toLowerCase() === "studio") {
-            params.append("min_bedrooms", "0");
-            params.append("max_bedrooms", "0");
+          if (filters.bedroom === "Studio") {
+            filtered = filtered.filter(p => p.bedrooms.toLowerCase() === "studio");
+          } else if (filters.bedroom === "6+") {
+            filtered = filtered.filter(p => {
+              const num = parseInt(p.bedrooms);
+              return !isNaN(num) && num >= 6;
+            });
           } else {
-            const num = parseInt(filters.bedroom, 10);
-            if (!isNaN(num)) {
-              params.append("min_bedrooms", String(num));
-              params.append("max_bedrooms", String(num));
-            }
+            filtered = filtered.filter(p => p.bedrooms === filters.bedroom);
           }
         }
         
-        if (filters.min_price) params.append("min_price", filters.min_price);
-        if (filters.max_price) params.append("max_price", filters.max_price);
-        if (filters.occupancy) params.append("occupancy", filters.occupancy);
-        if (filters.keyword) params.append("keyword", filters.keyword);
-
-        const response = await fetch(`${API_URL}?${params.toString()}`);
-        const data = await response.json();
-
-        if (!data.success) throw new Error(data.error || "Failed to fetch properties");
-
-        let newProperties: Property[] = data.data || [];
-
-        const seen = new Set<number>();
-        newProperties = newProperties.filter((p) => {
-          if (seen.has(p.id)) return false;
-          seen.add(p.id);
-          return true;
-        });
-
-        if (data.cached) setIsCached(true);
-
+        if (filters.property_type) {
+          filtered = filtered.filter(p => p.property_type === filters.property_type);
+        }
+        
+        if (filters.min_price) {
+          filtered = filtered.filter(p => (p.price.amount || 0) >= parseInt(filters.min_price));
+        }
+        
+        if (filters.max_price) {
+          filtered = filtered.filter(p => (p.price.amount || 0) <= parseInt(filters.max_price));
+        }
+        
+        if (filters.exclusive_status) {
+          filtered = filtered.filter(p => p.exclusive_status === filters.exclusive_status);
+        }
+        
+        if (filters.keyword) {
+          const keyword = filters.keyword.toLowerCase();
+          filtered = filtered.filter(p => 
+            p.name.toLowerCase().includes(keyword) ||
+            p.location?.community?.toLowerCase().includes(keyword) ||
+            p.location?.city?.toLowerCase().includes(keyword)
+          );
+        }
+        
+        switch (filters.sort_by) {
+          case "price_asc":
+            filtered.sort((a, b) => (a.price.amount || 0) - (b.price.amount || 0));
+            break;
+          case "price_desc":
+            filtered.sort((a, b) => (b.price.amount || 0) - (a.price.amount || 0));
+            break;
+          case "popular":
+            filtered.sort((a, b) => (b.views_count || 0) - (a.views_count || 0));
+            break;
+          case "featured":
+            filtered.sort((a, b) => {
+              if (a.featured && !b.featured) return -1;
+              if (!a.featured && b.featured) return 1;
+              return 0;
+            });
+            break;
+          default:
+            filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        }
+        
+        const total = filtered.length;
+        const start = (page - 1) * filters.limit;
+        const end = start + filters.limit;
+        const paginated = filtered.slice(start, end);
+        const totalPages = Math.ceil(total / filters.limit);
+        
+        // ✅ FIX: Use enrichPropertyWithImages (NO Unsplash API call)
+        const enriched = paginated.map(p => enrichPropertyWithImages(p));
+        
         if (isReset) {
-          setProperties(newProperties);
+          setProperties(enriched);
           setIsInitialLoad(false);
         } else {
-          setProperties((prev) => {
-            const existingIds = new Set(prev.map((p) => p.id));
-            return [...prev, ...newProperties.filter((p) => !existingIds.has(p.id))];
-          });
+          setProperties(prev => [...prev, ...enriched]);
         }
-
-        setPagination(data.meta || null);
+        
+        setPagination({
+          total,
+          page,
+          limit: filters.limit,
+          totalPages,
+        });
+        
       } catch (err: any) {
         setError(err.message || "Failed to load properties");
         if (isReset) {
@@ -769,9 +1498,10 @@ export default function PropertiesForSalePage() {
       bedroom: "",
       min_price: "",
       max_price: "",
-      sort_by: "quality",
-      occupancy: "",
+      sort_by: "newest",
+      property_type: "",
       keyword: "",
+      exclusive_status: "",
     });
   }, []);
 
@@ -783,6 +1513,7 @@ export default function PropertiesForSalePage() {
 
   return (
     <section className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
+      {/* HEADER */}
       <div className="mx-auto max-w-[1200px] px-4 pt-10 md:px-6">
         <div className="mb-6">
           <motion.h1
@@ -791,7 +1522,7 @@ export default function PropertiesForSalePage() {
             className="text-[32px] font-normal leading-tight md:text-[40px]"
             style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
           >
-            Properties for Sale in Dubai
+            Sell Your Property in Dubai
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 10 }}
@@ -803,13 +1534,7 @@ export default function PropertiesForSalePage() {
               "Loading..."
             ) : pagination ? (
               <>
-                <span>{pagination.total.toLocaleString()} resale properties available</span>
-                {isCached && (
-                  <span className="flex items-center gap-1 text-green-500">
-                    <TrendingUp className="h-3 w-3" />
-                    cached
-                  </span>
-                )}
+                <span>{pagination.total.toLocaleString()} properties for sale in Dubai</span>
               </>
             ) : (
               `${properties.length} listings`
@@ -818,6 +1543,7 @@ export default function PropertiesForSalePage() {
         </div>
       </div>
 
+      {/* STICKY FILTERS */}
       <div className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur-sm" style={{ borderColor: THEME.border }}>
         <div className="mx-auto max-w-[1200px] px-4 md:px-6">
           <div className="flex h-14 items-center gap-2 md:gap-4">
@@ -837,11 +1563,18 @@ export default function PropertiesForSalePage() {
                 icon={Layers}
               />
               <FilterDropdown
-                label="Occupancy"
-                value={filters.occupancy}
-                onChange={(v) => updateFilter("occupancy", v)}
-                options={OCCUPANCY_OPTIONS}
-                icon={Calendar}
+                label="Property Type"
+                value={filters.property_type}
+                onChange={(v) => updateFilter("property_type", v)}
+                options={PROPERTY_TYPE_OPTIONS}
+                icon={Building}
+              />
+              <FilterDropdown
+                label="Exclusive"
+                value={filters.exclusive_status}
+                onChange={(v) => updateFilter("exclusive_status", v)}
+                options={EXCLUSIVE_OPTIONS}
+                icon={Award}
               />
               <FilterDropdown
                 label="Sort"
@@ -892,6 +1625,7 @@ export default function PropertiesForSalePage() {
         </div>
       </div>
 
+      {/* MOBILE FILTERS */}
       <AnimatePresence>
         {showMobileFilters && (
           <motion.div
@@ -928,12 +1662,24 @@ export default function PropertiesForSalePage() {
                   ))}
                 </select>
                 <select
-                  value={filters.occupancy}
-                  onChange={(e) => updateFilter("occupancy", e.target.value)}
+                  value={filters.property_type}
+                  onChange={(e) => updateFilter("property_type", e.target.value)}
                   className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
                 >
-                  <option value="">All Occupancy</option>
-                  {OCCUPANCY_OPTIONS.map((opt) => (
+                  <option value="">All Types</option>
+                  {PROPERTY_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filters.exclusive_status}
+                  onChange={(e) => updateFilter("exclusive_status", e.target.value)}
+                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+                >
+                  <option value="">All Exclusive</option>
+                  {EXCLUSIVE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>
@@ -962,6 +1708,7 @@ export default function PropertiesForSalePage() {
         )}
       </AnimatePresence>
 
+      {/* PROPERTY GRID */}
       <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-6 md:px-6">
         {error && !loading && (
           <div className="mb-6 flex items-center gap-3 border border-red-200 bg-red-50 p-4 text-[13px] text-red-600">
@@ -1019,7 +1766,7 @@ export default function PropertiesForSalePage() {
           >
             <Home className="mx-auto h-14 w-14 text-gray-300" />
             <h3 className="mt-4 text-[22px] text-[#0F1C2E]" style={{ fontFamily: FONT_DISPLAY }}>
-              No properties found
+              No properties for sale found
             </h3>
             <p className="mx-auto mt-2 max-w-md text-[13px] text-[#6B7A8D]">
               Try adjusting your filters or search terms.
@@ -1035,6 +1782,7 @@ export default function PropertiesForSalePage() {
         )}
       </div>
 
+      {/* SCROLL TO TOP */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.button

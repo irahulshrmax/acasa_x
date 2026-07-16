@@ -1,6 +1,8 @@
+// app/careers/page.tsx
+
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -11,32 +13,15 @@ import {
   MapPin,
   ArrowRight,
   X,
-  DollarSign,
-  Layers,
-  Sparkles,
-  Grid3x3,
-  List,
-  Calendar,
+  Briefcase,
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
   AlertCircle,
-  Heart,
-  Eye,
-  ImageOff,
-  TrendingUp,
   Clock,
   Shield,
-  Home,
-  Filter,
-  Award,
-  Globe,
-  Briefcase,
-  Users,
-  Mail,
-  Phone,
-  MapPin as MapPinIcon,
+  TrendingUp,
 } from "lucide-react";
 
 const API_URL = "/api/v1/jobs";
@@ -136,6 +121,8 @@ function JobCard({ job, index = 0 }: { job: Job; index?: number }) {
   const daysAgo = getDaysAgo(job.created_at);
   const typeColor = getJobTypeColor(job.type || "");
 
+  const jobSlug = job.link || job.slug || `job-${job.id}`;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -144,7 +131,7 @@ function JobCard({ job, index = 0 }: { job: Job; index?: number }) {
       className="group bg-white border transition-all duration-300 hover:shadow-xl"
       style={{ borderColor: THEME.border }}
     >
-      <Link href={`/careers/${job.link || job.id}`} className="block">
+      <Link href={`/careers/${jobSlug}`} className="block">
         <div className="p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
@@ -164,7 +151,7 @@ function JobCard({ job, index = 0 }: { job: Job; index?: number }) {
 
           {job.city_name && (
             <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#6B7A8D]">
-              <MapPinIcon className="h-3 w-3" />
+              <MapPin className="h-3 w-3" />
               <span>{job.city_name}</span>
             </div>
           )}

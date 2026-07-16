@@ -1,6 +1,7 @@
-//app/api/v1/blogs/search/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getBlogs } from '@/lib/models/blog';
+
+const CACHE_TTL = 60; // Short cache for search
 
 export async function GET(request: NextRequest) {
     try {
@@ -8,9 +9,13 @@ export async function GET(request: NextRequest) {
 
         const keyword = searchParams.get('q') || searchParams.get('keyword') || '';
         const category = searchParams.get('category') || undefined;
-        const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 10;
-        const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1;
+        const limit = Math.min(
+            parseInt(searchParams.get('limit') || '10'),
+            50
+        );
+        const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
 
+        // ─── VALIDATION ──────────────────────────────────────────────────
         if (!keyword || keyword.length < 2) {
             return NextResponse.json({
                 success: true,
@@ -20,11 +25,13 @@ export async function GET(request: NextRequest) {
                     page,
                     limit,
                     totalPages: 0,
+                    keyword: keyword || '',
+                    message: 'Please provide at least 2 characters for search',
                 },
-                cached: false,
             });
         }
 
+        // ─── SEARCH ──────────────────────────────────────────────────────
         const result = await getBlogs({
             keyword,
             category,
@@ -37,13 +44,22 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             success: true,
             data: result.data,
-            meta: result.meta,
-            cached: false,
+            meta: {
+                ...result.meta,
+                keyword,
+                category: category || null,
+                timestamp: new Date().toISOString(),
+            },
         });
+
     } catch (error: any) {
-        console.error('Error searching blogs:', error);
+        console.error('❌ Error searching blogs:', error);
         return NextResponse.json(
-            { success: false, message: 'Failed to search blogs', error: error.message },
+            {
+                success: false,
+                message: 'Failed to search blogs',
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+            },
             { status: 500 }
         );
     }

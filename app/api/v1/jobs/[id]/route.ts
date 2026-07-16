@@ -18,7 +18,6 @@ export async function GET(
 
     let job;
 
-    // Check if ID is numeric
     if (!isNaN(parseInt(id))) {
       job = await getJobById(parseInt(id));
     } else {

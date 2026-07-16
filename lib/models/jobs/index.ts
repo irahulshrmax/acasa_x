@@ -1,4 +1,4 @@
-// models/jobs.ts
+// lib/models/jobs/index.ts
 
 import { db } from '@/lib/database';
 import {
@@ -11,16 +11,12 @@ import {
   JobStatistics,
 } from '@/types/jobs';
 
-// ==================== CONSTANTS ====================
-
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
 const JOB_STATUS_ACTIVE = 1;
 const JOB_STATUS_INACTIVE = 0;
 const APPLICATION_STATUS_ACTIVE = 1;
 const APPLICATION_STATUS_INACTIVE = 0;
-
-// ==================== HELPER FUNCTIONS ====================
 
 function generateSlug(title: string): string {
   return title
@@ -33,11 +29,6 @@ function getCurrentTimestamp(): string {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
-// ==================== JOB FUNCTIONS ====================
-
-/**
- * Get all jobs with filters
- */
 export async function getJobs(filters: JobFilters = {}) {
   const knex = await db();
   const {
@@ -52,7 +43,6 @@ export async function getJobs(filters: JobFilters = {}) {
 
   const query = knex('jobs');
 
-  // Apply filters
   if (type) {
     query.where('type', 'like', `%${type}%`);
   }
@@ -75,7 +65,6 @@ export async function getJobs(filters: JobFilters = {}) {
     });
   }
 
-  // Apply sorting
   switch (sort_by) {
     case 'created_at_asc':
       query.orderBy('created_at', 'asc');
@@ -86,16 +75,20 @@ export async function getJobs(filters: JobFilters = {}) {
     case 'updated_at_asc':
       query.orderBy('updated_at', 'asc');
       break;
+    case 'title_asc':
+      query.orderBy('title', 'asc');
+      break;
+    case 'title_desc':
+      query.orderBy('title', 'desc');
+      break;
     case 'created_at_desc':
     default:
       query.orderBy('created_at', 'desc');
   }
 
-  // Get total count
   const countQuery = query.clone();
   const [{ total }] = await countQuery.count('* as total');
 
-  // Apply pagination
   const offset = (page - 1) * limit;
   const data = await query.limit(limit).offset(offset);
 
@@ -110,9 +103,6 @@ export async function getJobs(filters: JobFilters = {}) {
   };
 }
 
-/**
- * Get job by ID
- */
 export async function getJobById(id: number): Promise<Job | null> {
   const knex = await db();
   const job = await knex('jobs')
@@ -122,9 +112,6 @@ export async function getJobById(id: number): Promise<Job | null> {
   return job || null;
 }
 
-/**
- * Get job by slug
- */
 export async function getJobBySlug(slug: string): Promise<Job | null> {
   const knex = await db();
   const job = await knex('jobs')
@@ -135,23 +122,37 @@ export async function getJobBySlug(slug: string): Promise<Job | null> {
   return job || null;
 }
 
-/**
- * Create a new job
- */
+export async function getJobByTitle(title: string): Promise<Job | null> {
+  const knex = await db();
+  const job = await knex('jobs')
+    .where('title', 'like', `%${title}%`)
+    .where('status', JOB_STATUS_ACTIVE)
+    .first();
+
+  return job || null;
+}
+
 export async function createJob(data: CreateJob): Promise<Job> {
   const knex = await db();
 
-  // Generate slug if not provided
-  if (!data.slug && data.title) {
-    data.slug = generateSlug(data.title);
+  if (data.title) {
+    const baseSlug = generateSlug(data.title);
+    let slug = baseSlug;
+    let counter = 1;
+    
+    let existing = await knex('jobs').where('slug', slug).first();
+    while (existing) {
+      slug = `${baseSlug}-${counter}`;
+      existing = await knex('jobs').where('slug', slug).first();
+      counter++;
+    }
+    data.slug = slug;
   }
 
-  // Set timestamps
   const now = getCurrentTimestamp();
   data.created_at = now;
   data.updated_at = now;
 
-  // Set default status
   if (data.status === undefined) {
     data.status = JOB_STATUS_ACTIVE;
   }
@@ -165,18 +166,23 @@ export async function createJob(data: CreateJob): Promise<Job> {
   return job;
 }
 
-/**
- * Update a job
- */
 export async function updateJob(id: number, data: Partial<CreateJob>): Promise<Job | null> {
   const knex = await db();
 
-  // Update timestamp
   data.updated_at = getCurrentTimestamp();
 
-  // Generate slug if title changed and slug not provided
   if (data.title && !data.slug) {
-    data.slug = generateSlug(data.title);
+    const baseSlug = generateSlug(data.title);
+    let slug = baseSlug;
+    let counter = 1;
+    
+    let existing = await knex('jobs').where('slug', slug).whereNot('id', id).first();
+    while (existing) {
+      slug = `${baseSlug}-${counter}`;
+      existing = await knex('jobs').where('slug', slug).whereNot('id', id).first();
+      counter++;
+    }
+    data.slug = slug;
   }
 
   await knex('jobs')
@@ -186,9 +192,6 @@ export async function updateJob(id: number, data: Partial<CreateJob>): Promise<J
   return getJobById(id);
 }
 
-/**
- * Delete a job (soft delete by setting status to 0)
- */
 export async function deleteJob(id: number): Promise<{ id: number; deleted: boolean }> {
   const knex = await db();
   await knex('jobs')
@@ -201,18 +204,13 @@ export async function deleteJob(id: number): Promise<{ id: number; deleted: bool
   return { id, deleted: true };
 }
 
-/**
- * Permanently delete a job
- */
 export async function permanentDeleteJob(id: number): Promise<{ id: number; deleted: boolean }> {
   const knex = await db();
   
-  // First delete all applications for this job
   await knex('applyed_jobs')
     .where('job_id', id)
     .delete();
   
-  // Then delete the job
   await knex('jobs')
     .where('id', id)
     .delete();
@@ -220,9 +218,6 @@ export async function permanentDeleteJob(id: number): Promise<{ id: number; dele
   return { id, deleted: true };
 }
 
-/**
- * Get featured jobs
- */
 export async function getFeaturedJobs(limit: number = 6): Promise<Job[]> {
   const knex = await db();
   const jobs = await knex('jobs')
@@ -233,11 +228,6 @@ export async function getFeaturedJobs(limit: number = 6): Promise<Job[]> {
   return jobs || [];
 }
 
-// ==================== JOB APPLICATION FUNCTIONS ====================
-
-/**
- * Get job applications with filters
- */
 export async function getJobApplications(filters: JobApplicationFilters = {}) {
   const knex = await db();
   const {
@@ -251,11 +241,8 @@ export async function getJobApplications(filters: JobApplicationFilters = {}) {
     sort_by = 'apply_date_desc',
   } = filters;
 
-  const query = knex('applyed_jobs as a')
-    .leftJoin('jobs as j', 'a.job_id', 'j.id')
-    .select('a.*', 'j.title as job_title', 'j.job_title as job_role');
+  const query = knex('applyed_jobs as a');
 
-  // Apply filters
   if (job_id) {
     query.where('a.job_id', job_id);
   }
@@ -278,11 +265,10 @@ export async function getJobApplications(filters: JobApplicationFilters = {}) {
         .orWhere('a.last_name', 'like', `%${keyword}%`)
         .orWhere('a.email', 'like', `%${keyword}%`)
         .orWhere('a.current_last_employer', 'like', `%${keyword}%`)
-        .orWhere('j.title', 'like', `%${keyword}%`);
+        .orWhere('a.current_job_title', 'like', `%${keyword}%`);
     });
   }
 
-  // Apply sorting
   switch (sort_by) {
     case 'apply_date_asc':
       query.orderBy('a.apply_date', 'asc');
@@ -295,11 +281,9 @@ export async function getJobApplications(filters: JobApplicationFilters = {}) {
       query.orderBy('a.apply_date', 'desc');
   }
 
-  // Get total count
   const countQuery = query.clone();
   const [{ total }] = await countQuery.count('* as total');
 
-  // Apply pagination
   const offset = (page - 1) * limit;
   const data = await query.limit(limit).offset(offset);
 
@@ -314,9 +298,6 @@ export async function getJobApplications(filters: JobApplicationFilters = {}) {
   };
 }
 
-/**
- * Get job application by ID
- */
 export async function getJobApplicationById(id: number): Promise<JobApplication | null> {
   const knex = await db();
   const application = await knex('applyed_jobs')
@@ -326,13 +307,9 @@ export async function getJobApplicationById(id: number): Promise<JobApplication 
   return application || null;
 }
 
-/**
- * Create a new job application
- */
 export async function createJobApplication(data: CreateJobApplication): Promise<JobApplication> {
   const knex = await db();
 
-  // Verify job exists and is active
   const job = await getJobById(data.job_id);
   if (!job) {
     throw new Error('Job not found');
@@ -341,13 +318,23 @@ export async function createJobApplication(data: CreateJobApplication): Promise<
     throw new Error('Job is no longer active');
   }
 
-  // Set default status
   if (data.status === undefined) {
     data.status = APPLICATION_STATUS_ACTIVE;
   }
 
   const [id] = await knex('applyed_jobs').insert({
-    ...data,
+    first_name: data.first_name,
+    last_name: data.last_name || null,
+    email: data.email,
+    phone: data.phone,
+    message: data.message || data.cover_letter || null,
+    resume: data.resume || data.resume_url || null,
+    current_last_employer: data.current_last_employer || null,
+    current_job_title: data.current_job_title || null,
+    employment_status: data.employment_status || null,
+    term: data.term || null,
+    status: data.status,
+    job_id: data.job_id,
     apply_date: new Date(),
     update_date: new Date(),
   });
@@ -359,9 +346,6 @@ export async function createJobApplication(data: CreateJobApplication): Promise<
   return application;
 }
 
-/**
- * Update job application status
- */
 export async function updateJobApplicationStatus(
   id: number,
   status: number
@@ -377,9 +361,6 @@ export async function updateJobApplicationStatus(
   return getJobApplicationById(id);
 }
 
-/**
- * Delete job application
- */
 export async function deleteJobApplication(id: number): Promise<{ id: number; deleted: boolean }> {
   const knex = await db();
   await knex('applyed_jobs')
@@ -389,9 +370,6 @@ export async function deleteJobApplication(id: number): Promise<{ id: number; de
   return { id, deleted: true };
 }
 
-/**
- * Get applications by job ID
- */
 export async function getApplicationsByJob(jobId: number, filters: JobApplicationFilters = {}) {
   return getJobApplications({
     ...filters,
@@ -399,9 +377,6 @@ export async function getApplicationsByJob(jobId: number, filters: JobApplicatio
   });
 }
 
-/**
- * Get applications by email
- */
 export async function getApplicationsByEmail(email: string): Promise<JobApplication[]> {
   const knex = await db();
   const applications = await knex('applyed_jobs')
@@ -411,47 +386,36 @@ export async function getApplicationsByEmail(email: string): Promise<JobApplicat
   return applications || [];
 }
 
-// ==================== STATISTICS ====================
-
-/**
- * Get job statistics
- */
 export async function getJobStatistics(): Promise<JobStatistics> {
   const knex = await db();
 
-  // Total jobs
   const [totalJobs] = await knex('jobs').count('* as total');
   const [activeJobs] = await knex('jobs')
     .where('status', JOB_STATUS_ACTIVE)
     .count('* as total');
   const [totalApplications] = await knex('applyed_jobs').count('* as total');
 
-  // Jobs by type
   const jobsByType = await knex('jobs')
     .select('type')
     .count('* as count')
     .whereNotNull('type')
     .groupBy('type');
 
-  // Jobs by city
   const jobsByCity = await knex('jobs')
     .select('city_name')
     .count('* as count')
     .whereNotNull('city_name')
     .groupBy('city_name');
 
-  // Applications by status
   const applicationsByStatus = await knex('applyed_jobs')
     .select('status')
     .count('* as count')
     .groupBy('status');
 
-  // Recent applications (last 10)
   const recentApplications = await knex('applyed_jobs')
     .orderBy('apply_date', 'desc')
     .limit(10);
 
-  // Recent jobs (last 10)
   const recentJobs = await knex('jobs')
     .where('status', JOB_STATUS_ACTIVE)
     .orderBy('created_at', 'desc')

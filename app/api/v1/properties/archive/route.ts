@@ -1,4 +1,4 @@
-// app/api/v1/properties/archive/route.ts - FIXED VERSION
+// app/api/v1/properties/archive/route.ts - COMPLETE FIXED VERSION
 
 import { NextRequest, NextResponse } from 'next/server';
 import { 
@@ -8,12 +8,16 @@ import {
   getPropertyById,
   permanentDeleteProperty 
 } from '@/lib/models/properties';
+import { fixPropertiesPrices, fixPropertyPrice, formatPriceDisplay } from '@/lib/utils/formatPrice';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const CACHE_TTL = 60;
+const DEFAULT_CURRENCY = 'AED';
+const DEFAULT_SYMBOL = 'AED';
+const FALLBACK_DISPLAY = 'Price on Request';
 
 // ─── STATUS LABELS ──────────────────────────────────────────────────────
 
@@ -49,38 +53,110 @@ function getStatusColor(status: number): string {
   return STATUS_COLORS[status] || 'gray';
 }
 
-// ─── CACHE ─────────────────────────────────────────────────────────────
+// ─── STRONG PRICE FIXER FOR ARCHIVE ──────────────────────────────────
 
-const cache = new Map<string, { data: any; timestamp: number }>();
+function fixArchivePropertyPrice(property: any): any {
+  if (!property) return property;
 
-function getCached(key: string): any | null {
-  const cached = cache.get(key);
-  if (!cached) return null;
-  if (Date.now() - cached.timestamp > CACHE_TTL * 1000) {
-    cache.delete(key);
-    return null;
+  // If price doesn't exist, create it
+  if (!property.price) {
+    property.price = {
+      amount: null,
+      amount_end: null,
+      display: FALLBACK_DISPLAY,
+      display_end: '',
+      currency: DEFAULT_CURRENCY,
+      symbol: DEFAULT_SYMBOL,
+      is_price_on_request: true,
+      sale_price: null,
+      listing_price: null,
+      rental_price: null,
+    };
+    return property;
   }
-  return cached.data;
-}
 
-function setCached(key: string, data: any): void {
-  cache.set(key, { data, timestamp: Date.now() });
-}
+  const price = property.price;
 
-function clearCache(pattern?: string): void {
-  if (pattern) {
-    const keys = Array.from(cache.keys());
-    for (const key of keys) {
-      if (key.includes(pattern)) cache.delete(key);
+  // ─── TRY TO GET AMOUNT FROM VARIOUS SOURCES ──────────────────────
+  let amount = null;
+  
+  // Check all possible price fields
+  if (price.amount && price.amount !== 'null' && !isNaN(parseFloat(price.amount))) {
+    amount = parseFloat(price.amount);
+  } else if (price.sale_price && price.sale_price !== 'null' && !isNaN(parseFloat(price.sale_price))) {
+    amount = parseFloat(price.sale_price);
+  } else if (price.listing_price && price.listing_price !== 'null' && !isNaN(parseFloat(price.listing_price))) {
+    amount = parseFloat(price.listing_price);
+  } else if (price.rental_price && price.rental_price !== 'null' && !isNaN(parseFloat(price.rental_price))) {
+    amount = parseFloat(price.rental_price);
+  } else if (price.amount_from && price.amount_from !== 'null' && !isNaN(parseFloat(price.amount_from))) {
+    amount = parseFloat(price.amount_from);
+  }
+
+  // Store the amount
+  price.amount = amount;
+
+  // ─── GET CURRENCY AND SYMBOL ──────────────────────────────────────
+  let currency = price.currency || DEFAULT_CURRENCY;
+  let symbol = price.symbol || DEFAULT_SYMBOL;
+
+  // Clean up null strings
+  if (currency === 'null' || !currency) currency = DEFAULT_CURRENCY;
+  if (symbol === 'null' || !symbol) symbol = DEFAULT_SYMBOL;
+
+  price.currency = currency;
+  price.symbol = symbol;
+
+  // ─── GENERATE DISPLAY ─────────────────────────────────────────────
+  if (amount && amount > 0) {
+    // Format the amount with proper locale
+    const formattedAmount = Number(amount).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+
+    // Use symbol if available, otherwise use currency code
+    const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+    price.display = `${prefix} ${formattedAmount}`;
+
+    // If there's an end amount, add range
+    let amountEnd = null;
+    if (price.amount_end && price.amount_end !== 'null' && !isNaN(parseFloat(price.amount_end))) {
+      amountEnd = parseFloat(price.amount_end);
+    } else if (price.amount_to && price.amount_to !== 'null' && !isNaN(parseFloat(price.amount_to))) {
+      amountEnd = parseFloat(price.amount_to);
     }
+
+    if (amountEnd && amountEnd > 0 && amountEnd !== amount) {
+      const formattedEnd = Number(amountEnd).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+      price.display = `${prefix} ${formattedAmount} - ${formattedEnd}`;
+      price.display_end = `${prefix} ${formattedEnd}`;
+      price.amount_end = amountEnd;
+    }
+
+    price.is_price_on_request = false;
   } else {
-    cache.clear();
+    // No valid amount found
+    price.display = FALLBACK_DISPLAY;
+    price.is_price_on_request = true;
   }
+
+  // ─── FIX AMOUNT_END ───────────────────────────────────────────────
+  if (!price.amount_end || price.amount_end === 'null') {
+    price.amount_end = null;
+  }
+
+  return property;
 }
 
-function getCacheKey(req: NextRequest): string {
-  const url = new URL(req.url);
-  return url.pathname + url.search;
+// ─── FIX ARCHIVE PROPERTIES BATCH ─────────────────────────────────────
+
+function fixArchivePropertiesPrices(properties: any[]): any[] {
+  if (!properties || !Array.isArray(properties)) return [];
+  return properties.map(property => fixArchivePropertyPrice(property));
 }
 
 // ─── QUALITY SORTING FOR ARCHIVE ──────────────────────────────────────
@@ -136,6 +212,40 @@ function sortArchiveByQuality(properties: any[]): any[] {
 
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
+}
+
+// ─── CACHE ─────────────────────────────────────────────────────────────
+
+const cache = new Map<string, { data: any; timestamp: number }>();
+
+function getCached(key: string): any | null {
+  const cached = cache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > CACHE_TTL * 1000) {
+    cache.delete(key);
+    return null;
+  }
+  return cached.data;
+}
+
+function setCached(key: string, data: any): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+function clearCache(pattern?: string): void {
+  if (pattern) {
+    const keys = Array.from(cache.keys());
+    for (const key of keys) {
+      if (key.includes(pattern)) cache.delete(key);
+    }
+  } else {
+    cache.clear();
+  }
+}
+
+function getCacheKey(req: NextRequest): string {
+  const url = new URL(req.url);
+  return url.pathname + url.search;
 }
 
 // ─── MAIN GET HANDLER ──────────────────────────────────────────────────
@@ -196,10 +306,13 @@ export async function GET(request: NextRequest) {
     // ─── Fetch Properties ─────────────────────────────────────────────
     const result = await getArchiveProperties(filters);
 
+    // ─── FIX PRICES ──────────────────────────────────────────────────
+    let fixedData = fixArchivePropertiesPrices(result.data);
+
     // ─── Sort by Quality if requested ────────────────────────────────
-    let sortedData = result.data;
+    let sortedData = fixedData;
     if (sortByQuality) {
-      sortedData = sortArchiveByQuality(result.data);
+      sortedData = sortArchiveByQuality(fixedData);
     }
 
     // ─── Status Breakdown ─────────────────────────────────────────────
@@ -231,6 +344,7 @@ export async function GET(request: NextRequest) {
           max_price: maxPrice || null,
         },
         quality_sort: sortByQuality,
+        price_fixed: true,
         timestamp: new Date().toISOString(),
       },
       cached: false,
@@ -288,6 +402,11 @@ export async function POST(request: NextRequest) {
 
     // Move to archive: Set status to 0
     const updated = await updateProperty(parseInt(id), { status });
+
+    // Fix price after update
+    if (updated && updated.price) {
+      fixArchivePropertyPrice(updated);
+    }
 
     // Clear cache
     clearCache('archive');
@@ -363,7 +482,11 @@ export async function PUT(request: NextRequest) {
             });
             continue;
           }
-          await updateProperty(parseInt(id), { status });
+          const updated = await updateProperty(parseInt(id), { status });
+          // Fix price
+          if (updated && updated.price) {
+            fixArchivePropertyPrice(updated);
+          }
           results.push({ 
             id, 
             action: 'archived', 
@@ -380,7 +503,11 @@ export async function PUT(request: NextRequest) {
             });
             continue;
           }
-          await updateProperty(parseInt(id), { status: 5 });
+          const updated = await updateProperty(parseInt(id), { status: 5 });
+          // Fix price
+          if (updated && updated.price) {
+            fixArchivePropertyPrice(updated);
+          }
           results.push({ 
             id, 
             action: 'restored', 
@@ -414,6 +541,7 @@ export async function PUT(request: NextRequest) {
         skipped: skipped.length,
         failed: errors.length,
         action: action,
+        price_fixed: true,
         timestamp: new Date().toISOString(),
       },
     });
@@ -474,21 +602,23 @@ export async function DELETE(request: NextRequest) {
 
     // Dry run - just return what would be deleted
     if (dryRun) {
+      const fixedProperties = fixArchivePropertiesPrices(properties);
       return NextResponse.json({
         success: true,
         message: `Dry run: ${ids.length} properties would be permanently deleted`,
         data: {
           would_delete: ids.length,
-          properties: properties.map((p: any) => ({
+          properties: fixedProperties.map((p: any) => ({
             id: p.id,
             name: p.property_name,
-            price: p.price?.amount || null,
+            price: p.price?.display || p.price?.amount || null,
             created_at: p.created_at,
           })),
         },
         meta: {
           dry_run: true,
           statuses: statuses,
+          price_fixed: true,
           timestamp: new Date().toISOString(),
         },
       });

@@ -2,7 +2,7 @@
 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
+import PopularLinksSection from "@/components/PopularLinksSection";
 export default function GlobalPropertiesLayout({
   children,
 }: {
@@ -12,6 +12,7 @@ export default function GlobalPropertiesLayout({
     <>
       <Navbar />
       {children}
+      <PopularLinksSection />
       <Footer />
     </>
   );

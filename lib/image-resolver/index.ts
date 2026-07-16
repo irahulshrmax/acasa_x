@@ -1,11 +1,13 @@
+// ============================================================
+// COMPLETE IMAGE RESOLVER - FIXED VERSION
+// ============================================================
+
 export const UPLOAD_BASE_URL = 'https://acasa.ae/upload';
 
-const IMAGE_EXTENSIONS = ['.webp', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.avif'];
+export const IMAGE_EXTENSIONS = ['.webp', '.jpg', '.jpeg', '.png', '.gif', '.svg', '.avif'];
 
-const PROPERTY_IMAGE_DIRS = [
+export const PROPERTY_IMAGE_DIRS = [
     'media',
-    'media/thumbnail',
-    'media/medium',
     'properties',
     'property',
     'thumbnail',
@@ -15,24 +17,20 @@ const PROPERTY_IMAGE_DIRS = [
     'uploads/property',
 ];
 
-const PROJECT_IMAGE_DIRS = [
+export const PROJECT_IMAGE_DIRS = [
     'media',
-    'media/thumbnail',
-    'media/medium',
     'projects',
     'project',
     'project_gallery',
     'project-gallery',
     'gallery',
-    'project_media',
-    'project-media',
     'upload/projects',
     'upload/project',
     'uploads/projects',
     'uploads/project',
 ];
 
-const PROJECT_GALLERY_DIRS = [
+export const PROJECT_GALLERY_DIRS = [
     'project_gallery',
     'project-gallery',
     'gallery',
@@ -44,7 +42,7 @@ const PROJECT_GALLERY_DIRS = [
     'uploads/project/gallery',
 ];
 
-const PROJECT_LOGO_DIRS = [
+export const PROJECT_LOGO_DIRS = [
     'projects',
     'project',
     'developers',
@@ -56,7 +54,7 @@ const PROJECT_LOGO_DIRS = [
     'uploads/developers',
 ];
 
-const DEVELOPER_IMAGE_DIRS = [
+export const DEVELOPER_IMAGE_DIRS = [
     'developers',
     'developer',
     'media',
@@ -65,7 +63,7 @@ const DEVELOPER_IMAGE_DIRS = [
     'uploads/developer',
 ];
 
-const USER_IMAGE_DIRS = [
+export const USER_IMAGE_DIRS = [
     'members',
     'member',
     'users',
@@ -76,7 +74,7 @@ const USER_IMAGE_DIRS = [
     'media/users',
 ];
 
-const COMMUNITY_IMAGE_DIRS = [
+export const COMMUNITY_IMAGE_DIRS = [
     'locations',
     'locations/medium',
     'locations/menu',
@@ -91,7 +89,7 @@ const COMMUNITY_IMAGE_DIRS = [
     'media/thumbnail',
 ];
 
-const AGENT_IMAGE_DIRS = [
+export const AGENT_IMAGE_DIRS = [
     'agents',
     'agent',
     'users',
@@ -105,7 +103,7 @@ const AGENT_IMAGE_DIRS = [
     'media/users',
 ];
 
-const BLOG_IMAGE_DIRS = [
+export const BLOG_IMAGE_DIRS = [
     'blogs',
     'blog',
     'posts',
@@ -121,13 +119,15 @@ const BLOG_IMAGE_DIRS = [
     'upload/blog',
 ];
 
-const TESTIMONIAL_IMAGE_DIRS = [
+export const TESTIMONIAL_IMAGE_DIRS = [
     'testimonials',
     'testimonial',
     'media',
     'uploads/testimonials',
     'media/testimonials',
 ];
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────
 
 function cleanFilename(filename: string): string {
     return filename.replace(/\\/g, '/').trim().replace(/^\/+/, '');
@@ -196,6 +196,31 @@ function buildCandidates(rawPath: string | null, dirs: string[]): string[] {
     return uniqueStrings(candidates);
 }
 
+// ─── PROPERTY IMAGES ─────────────────────────────────────────────────────
+
+export function getPropertyImageCandidates(rawPath: string | null): string[] {
+    return buildCandidates(rawPath, PROPERTY_IMAGE_DIRS);
+}
+
+export function getImageUrl(filename: string | null): string {
+    const urls = getPropertyImageCandidates(filename);
+    return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
+}
+
+export function getImageUrlVariations(filename: string | null): string[] {
+    const urls = getPropertyImageCandidates(filename);
+    return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
+}
+
+export function getFeaturedImage(featuredImage: string | null, galleryPaths: string[] = []): string {
+    const featuredCandidates = getPropertyImageCandidates(featuredImage);
+    if (featuredCandidates.length > 0) return featuredCandidates[0];
+    if (galleryPaths.length > 0) return galleryPaths[0];
+    return `${UPLOAD_BASE_URL}/no-image.png`;
+}
+
+// ─── DEVELOPER IMAGES ────────────────────────────────────────────────────
+
 export function getDeveloperImageCandidates(rawPath: string | null): string[] {
     return buildCandidates(rawPath, DEVELOPER_IMAGE_DIRS);
 }
@@ -215,26 +240,7 @@ export function getDeveloperLogoUrl(image: string | null, developerId?: number):
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
-export function getPropertyImageCandidates(rawPath: string | null): string[] {
-    return buildCandidates(rawPath, PROPERTY_IMAGE_DIRS);
-}
-
-export function getImageUrlVariations(filename: string | null): string[] {
-    const urls = getPropertyImageCandidates(filename);
-    return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
-}
-
-export function getImageUrl(filename: string | null): string {
-    const urls = getPropertyImageCandidates(filename);
-    return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
-}
-
-export function getFeaturedImage(featuredImage: string | null, galleryPaths: string[] = []): string {
-    const featuredCandidates = getPropertyImageCandidates(featuredImage);
-    if (featuredCandidates.length > 0) return featuredCandidates[0];
-    if (galleryPaths.length > 0) return galleryPaths[0];
-    return `${UPLOAD_BASE_URL}/no-image.png`;
-}
+// ─── PROJECT IMAGES ──────────────────────────────────────────────────────
 
 export function getProjectImageCandidates(rawPath: string | null): string[] {
     return buildCandidates(rawPath, PROJECT_IMAGE_DIRS);
@@ -343,21 +349,7 @@ export function buildProjectImageSet(params: {
     };
 }
 
-export function getProjectMediaImageUrl(path: string | null): string {
-    const urls = getProjectImageCandidates(path);
-    return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
-}
-
-export function resolveProjectImages(imagePaths: (string | null)[]): { urls: string[]; valid: string[]; invalid: number } {
-    const urls = imagePaths.map((path) => getProjectImageUrl(path));
-    const valid = urls.filter((url) => !url.includes('no-image'));
-    const invalid = urls.length - valid.length;
-    return { urls, valid, invalid };
-}
-
-export function isProjectImageValid(imageUrl: string): boolean {
-    return !imageUrl.includes('no-image');
-}
+// ─── USER / AGENT IMAGES ────────────────────────────────────────────────
 
 export function getUserPhotoUrl(photo: string | null, userId?: number): string[] {
     const urls = buildCandidates(photo, USER_IMAGE_DIRS);
@@ -372,6 +364,22 @@ export function getUserImageUrl(filename: string | null): string {
     const urls = getUserImageCandidates(filename);
     return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
 }
+
+export function getAgentImageCandidates(rawPath: string | null): string[] {
+    return buildCandidates(rawPath, AGENT_IMAGE_DIRS);
+}
+
+export function getAgentImageUrl(filename: string | null): string {
+    const urls = getAgentImageCandidates(filename);
+    return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
+}
+
+export function getAgentImageVariations(filename: string | null): string[] {
+    const urls = getAgentImageCandidates(filename);
+    return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
+}
+
+// ─── COMMUNITY IMAGES ────────────────────────────────────────────────────
 
 export function getCommunityImageUrl(image: string | null, communityId?: number): string[] {
     if (image) {
@@ -417,19 +425,7 @@ export function getCommunityImageVariations(filename: string | null): string[] {
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
-export function getAgentImageCandidates(rawPath: string | null): string[] {
-    return buildCandidates(rawPath, AGENT_IMAGE_DIRS);
-}
-
-export function getAgentImageUrl(filename: string | null): string {
-    const urls = getAgentImageCandidates(filename);
-    return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
-}
-
-export function getAgentImageVariations(filename: string | null): string[] {
-    const urls = getAgentImageCandidates(filename);
-    return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
-}
+// ─── BLOG IMAGES ─────────────────────────────────────────────────────────
 
 export function getBlogImageCandidates(rawPath: string | null): string[] {
     return buildCandidates(rawPath, BLOG_IMAGE_DIRS);
@@ -445,18 +441,31 @@ export function getBlogImageVariations(filename: string | null): string[] {
     return urls.length ? urls : [`${UPLOAD_BASE_URL}/no-image.png`];
 }
 
+// ─── MEDIA / GALLERY ────────────────────────────────────────────────────
+
 export function getMediaImageUrl(path: string | null): string {
     if (!path) return `${UPLOAD_BASE_URL}/no-image.png`;
 
+    // Remove any upload/ prefix
     const cleanPath = path
         .replace(/^upload\//i, '')
-        .replace(/^\/+/, '');
+        .replace(/^\/+/, '')
+        .trim();
 
+    if (!cleanPath) return `${UPLOAD_BASE_URL}/no-image.png`;
+
+    // If path already has directory structure
     if (cleanPath.includes('/')) {
         return `${UPLOAD_BASE_URL}/${cleanPath}`;
     }
 
-    return `${UPLOAD_BASE_URL}/media/${cleanPath}`;
+    // If path has extension, return as is
+    if (/\.(webp|jpg|jpeg|png|gif|svg|avif)$/i.test(cleanPath)) {
+        return `${UPLOAD_BASE_URL}/media/${cleanPath}`;
+    }
+
+    // If no extension, add .webp
+    return `${UPLOAD_BASE_URL}/media/${cleanPath}.webp`;
 }
 
 export function getMediaImageUrls(paths: (string | null)[]): string[] {
@@ -475,6 +484,8 @@ export function getGalleryImages(mediaRecords: { path: string | null }[]): strin
     );
 }
 
+// ─── TESTIMONIAL IMAGES ────────────────────────────────────────────────
+
 export function getTestimonialImageCandidates(rawPath: string | null): string[] {
     return buildCandidates(rawPath, TESTIMONIAL_IMAGE_DIRS);
 }
@@ -483,6 +494,8 @@ export function getTestimonialImageUrl(filename: string | null): string {
     const urls = getTestimonialImageCandidates(filename);
     return urls[0] || `${UPLOAD_BASE_URL}/no-image.png`;
 }
+
+// ─── UTILITY FUNCTIONS ──────────────────────────────────────────────────
 
 export function getNoImageUrl(): string {
     return `${UPLOAD_BASE_URL}/no-image.png`;
@@ -580,24 +593,40 @@ export function sanitizeImagePath(path: string): string {
         .trim();
 }
 
-// Legacy aliases
+// ─── LEGACY ALIASES ─────────────────────────────────────────────────────
+
 export const getProjectGalleryImage = getProjectGalleryImageUrl;
 export const getProjectLogo = getProjectLogoUrl;
 export const getDeveloperImage = getDeveloperImageUrl;
 export const getCommunityImage = getCommunityImageUrl;
 export const getAgentImage = getAgentImageUrl;
 
+// ─── DEFAULT EXPORT ─────────────────────────────────────────────────────
+
 export default {
     UPLOAD_BASE_URL,
     IMAGE_EXTENSIONS,
+    PROPERTY_IMAGE_DIRS,
+    PROJECT_IMAGE_DIRS,
+    PROJECT_GALLERY_DIRS,
+    PROJECT_LOGO_DIRS,
+    DEVELOPER_IMAGE_DIRS,
+    USER_IMAGE_DIRS,
+    COMMUNITY_IMAGE_DIRS,
+    AGENT_IMAGE_DIRS,
+    BLOG_IMAGE_DIRS,
+    TESTIMONIAL_IMAGE_DIRS,
+
+    getPropertyImageCandidates,
+    getImageUrl,
+    getImageUrlVariations,
+    getFeaturedImage,
+
     getDeveloperImageCandidates,
     getDeveloperImageUrl,
     getDeveloperImageVariations,
     getDeveloperLogoUrl,
-    getPropertyImageCandidates,
-    getImageUrlVariations,
-    getImageUrl,
-    getFeaturedImage,
+
     getProjectImageCandidates,
     getProjectImageUrl,
     getProjectImageVariations,
@@ -609,26 +638,29 @@ export default {
     getProjectLogoUrl,
     getProjectFeaturedImage,
     buildProjectImageSet,
-    getProjectMediaImageUrl,
-    resolveProjectImages,
-    isProjectImageValid,
+
     getUserPhotoUrl,
     getUserImageCandidates,
     getUserImageUrl,
-    getCommunityImageUrl,
-    getCommunityImageCandidates,
-    getCommunityImageVariations,
     getAgentImageCandidates,
     getAgentImageUrl,
     getAgentImageVariations,
+
+    getCommunityImageUrl,
+    getCommunityImageCandidates,
+    getCommunityImageVariations,
+
     getBlogImageCandidates,
     getBlogImageUrl,
     getBlogImageVariations,
+
     getMediaImageUrl,
     getMediaImageUrls,
     getGalleryImages,
+
     getTestimonialImageCandidates,
     getTestimonialImageUrl,
+
     getNoImageUrl,
     isValidImageUrl,
     getImageExtension,
@@ -640,4 +672,10 @@ export default {
     extractImageUrls,
     validateImagePath,
     sanitizeImagePath,
+
+    getProjectGalleryImage,
+    getProjectLogo,
+    getDeveloperImage,
+    getCommunityImage,
+    getAgentImage,
 };

@@ -18,20 +18,21 @@ import {
   BookOpen,
   Heart,
   MessageCircle,
+  ArrowRight,
 } from "lucide-react";
 
 const API_URL = "/api/v1/blogs";
 const DEFAULT_LIMIT = 9;
 
-const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
+const FONT_DISPLAY = "'Display Pro', 'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
 
 const THEME = {
-  primary: "#0F1C2E",
-  secondary: "#1A2F4A",
-  accent: "#C9A96E",
-  muted: "#6B7A8D",
-  border: "#E2E8F0",
+  primary: "#192334",
+  muted: "#8A94A3",
+  border: "#E8E6E1",
+  accent: "#C8AA78",
+  gold: "#C9A96E",
 };
 
 interface Blog {
@@ -78,17 +79,8 @@ const SORT_OPTIONS = [
 function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
   const [imageError, setImageError] = useState(false);
 
-  console.log("Blog Card Render:", {
-    id: blog.id,
-    title: blog.title,
-    imageurl: blog.imageurl,
-    image_urls: blog.image_urls,
-    main_image: blog.image_urls?.main,
-  });
-
   const defaultImage = "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&h=400&fit=crop";
   
-  // Try to get image from multiple sources
   const imageSrc = (() => {
     if (imageError) return defaultImage;
     if (blog.image_urls?.main && blog.image_urls.main !== "https://acasa.ae/upload/no-image.png") {
@@ -100,14 +92,12 @@ function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
     return defaultImage;
   })();
 
-  console.log("Image Source:", imageSrc);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
-      className="group bg-white border transition-all duration-300 hover:shadow-xl"
+      className="group bg-white border transition-all duration-300 hover:shadow-lg"
       style={{ borderColor: THEME.border }}
     >
       <Link href={`/blog/${blog.slug}`} className="block">
@@ -117,12 +107,9 @@ function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
             alt={blog.title}
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-            onError={() => {
-              console.log("Image load error for:", blog.id, blog.imageurl);
-              setImageError(true);
-            }}
+            onError={() => setImageError(true)}
           />
-          <span className="absolute right-3 top-3 rounded-[3px] bg-black/60 px-2.5 py-1 text-[9px] text-white backdrop-blur-sm">
+          <span className="absolute right-3 top-3 rounded-[3px] bg-[#192334]/80 px-2.5 py-1 text-[9px] text-white backdrop-blur-sm">
             {blog.category}
           </span>
           <div className="absolute bottom-3 left-3 flex items-center gap-3 text-[9px] text-white/80">
@@ -141,7 +128,7 @@ function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
             {blog.title}
           </h3>
 
-          <div className="mt-2 flex items-center gap-3 text-[11px] text-[#6B7A8D]">
+          <div className="mt-2 flex items-center gap-3 text-[11px]" style={{ color: THEME.muted }}>
             <span className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               {blog.formatted_date || "Recent"}
@@ -159,7 +146,7 @@ function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
           </p>
 
           <div className="mt-4 flex items-center justify-between border-t pt-4" style={{ borderColor: THEME.border }}>
-            <span className="text-[9px] font-medium uppercase tracking-[0.12em] transition-colors group-hover:text-[#C9A96E]" style={{ color: THEME.primary }}>
+            <span className="text-[9px] font-medium uppercase tracking-[0.12em] transition-colors group-hover:text-[#C8AA78]" style={{ color: THEME.primary }}>
               Read More →
             </span>
           </div>
@@ -223,7 +210,7 @@ function FilterDropdown({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[11px] font-medium transition-all duration-200 ${
-          hasValue ? "bg-[#0F1C2E] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+          hasValue ? "bg-[#192334] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
         }`}
       >
         <span>{hasValue ? selectedLabel : label}</span>
@@ -257,7 +244,7 @@ function FilterDropdown({
                 }}
                 className={`block w-full px-4 py-2.5 text-left text-[11px] transition-colors ${
                   value === opt.value
-                    ? "bg-[#0F1C2E]/5 font-medium text-[#0F1C2E]"
+                    ? "bg-[#192334]/5 font-medium text-[#192334]"
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -299,7 +286,7 @@ function Pagination({
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#0F1C2E] disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#192334] disabled:cursor-not-allowed disabled:opacity-30"
       >
         Previous
       </button>
@@ -319,7 +306,7 @@ function Pagination({
             key={pageNum}
             onClick={() => onPageChange(pageNum)}
             className={`flex h-9 w-9 items-center justify-center rounded-[4px] text-[12px] font-medium transition-all ${
-              isActive ? "bg-[#0F1C2E] text-white shadow-md" : "text-gray-700 hover:bg-gray-100"
+              isActive ? "bg-[#192334] text-white shadow-md" : "text-gray-700 hover:bg-gray-100"
             }`}
           >
             {pageNum}
@@ -330,7 +317,7 @@ function Pagination({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#0F1C2E] disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#192334] disabled:cursor-not-allowed disabled:opacity-30"
       >
         Next
       </button>
@@ -367,8 +354,6 @@ export default function BlogPage() {
 
   const fetchBlogs = useCallback(
     async (page: number, isReset: boolean) => {
-      console.log("Fetching blogs:", { page, isReset, filters, searchTerm });
-
       if (isReset) {
         setLoading(true);
         setBlogs([]);
@@ -389,19 +374,12 @@ export default function BlogPage() {
         if (keyword) params.append("keyword", keyword);
         if (filters.category) params.append("category", filters.category);
 
-        const url = `${API_URL}?${params.toString()}`;
-        console.log("API URL:", url);
-
-        const response = await fetch(url);
+        const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
-
-        console.log("API Response:", data);
 
         if (!data.success) throw new Error(data.error || "Failed to fetch blogs");
 
         let newBlogs: Blog[] = data.data || [];
-        console.log("Raw blogs from API:", newBlogs);
-        console.log("First blog image data:", newBlogs[0]?.imageurl, newBlogs[0]?.image_urls);
 
         const seen = new Set<number>();
         newBlogs = newBlogs.filter((b) => {
@@ -439,11 +417,9 @@ export default function BlogPage() {
   );
 
   const fetchCategories = useCallback(async () => {
-    console.log("Fetching categories...");
     try {
       const res = await fetch(`${API_URL}?categories=true`);
       const data = await res.json();
-      console.log("Categories response:", data);
       if (data.success) setCategories(data.data || []);
     } catch (err) {
       console.error("Error fetching categories:", err);
@@ -483,20 +459,17 @@ export default function BlogPage() {
   }, []);
 
   const updateFilter = useCallback((key: string, value: string) => {
-    console.log("Updating filter:", key, value);
     setBlogs([]);
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
   }, []);
 
   const handleSearch = useCallback((value: string) => {
-    console.log("Search:", value);
     setSearchTerm(value);
     setBlogs([]);
     setFilters((prev) => ({ ...prev, page: 1 }));
   }, []);
 
   const handleClearFilters = useCallback(() => {
-    console.log("Clearing filters");
     setBlogs([]);
     setFilters({
       page: 1,
@@ -509,7 +482,6 @@ export default function BlogPage() {
   }, []);
 
   const handlePageChange = useCallback((page: number) => {
-    console.log("Page change:", page);
     setBlogs([]);
     setFilters((prev) => ({ ...prev, page }));
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -531,7 +503,7 @@ export default function BlogPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#6B7A8D]"
+            className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#8A94A3]"
           >
             {loading ? (
               "Loading..."
@@ -539,7 +511,7 @@ export default function BlogPage() {
               <>
                 <span>{pagination.total.toLocaleString()} articles</span>
                 {isCached && (
-                  <span className="flex items-center gap-1 text-green-500">
+                  <span className="flex items-center gap-1 text-[#C8AA78]">
                     <TrendingUp className="h-3 w-3" />
                     cached
                   </span>
@@ -557,20 +529,20 @@ export default function BlogPage() {
           <div className="flex h-14 items-center gap-2 md:gap-4">
             <div className="hidden flex-1 items-center gap-2 lg:flex">
               <div className="relative flex-1 max-w-[300px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A94A3]" />
                 <input
                   type="text"
                   placeholder="Search articles..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="w-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-[11px] focus:border-gray-400 focus:outline-none"
+                  className="w-full border border-[#E8E6E1] bg-gray-50 py-2 pl-9 pr-3 text-[11px] focus:border-[#192334] focus:outline-none"
                 />
               </div>
 
               <select
                 value={filters.category}
                 onChange={(e) => updateFilter("category", e.target.value)}
-                className="h-9 border border-gray-200 bg-white px-3 text-[11px] focus:outline-none"
+                className="h-9 border border-[#E8E6E1] bg-white px-3 text-[11px] focus:outline-none"
               >
                 <option value="">All Categories</option>
                 {categories.map((cat) => (
@@ -590,7 +562,7 @@ export default function BlogPage() {
               {hasActiveFilters && (
                 <button
                   onClick={handleClearFilters}
-                  className="ml-2 flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-600 transition-colors hover:bg-gray-100 hover:text-[#0F1C2E]"
+                  className="ml-2 flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-600 transition-colors hover:bg-gray-100 hover:text-[#192334]"
                 >
                   <X className="h-3.5 w-3.5" />
                   Clear
@@ -600,7 +572,7 @@ export default function BlogPage() {
 
             <button
               onClick={() => setShowMobileFilters(!showMobileFilters)}
-              className="ml-auto flex items-center gap-1.5 rounded-[3px] border border-gray-200 px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-gray-700 lg:hidden"
+              className="ml-auto flex items-center gap-1.5 rounded-[3px] border border-[#E8E6E1] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-gray-700 lg:hidden"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Filter
@@ -621,13 +593,13 @@ export default function BlogPage() {
             <div className="p-4">
               <div className="mb-2">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A94A3]" />
                   <input
                     type="text"
                     placeholder="Search..."
                     value={searchTerm}
                     onChange={(e) => handleSearch(e.target.value)}
-                    className="w-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-[11px] focus:border-gray-400 focus:outline-none"
+                    className="w-full border border-[#E8E6E1] bg-gray-50 py-2 pl-9 pr-3 text-[11px] focus:border-[#192334] focus:outline-none"
                   />
                 </div>
               </div>
@@ -635,7 +607,7 @@ export default function BlogPage() {
                 <select
                   value={filters.category}
                   onChange={(e) => updateFilter("category", e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+                  className="h-9 border border-[#E8E6E1] bg-white px-3 text-[11px]"
                 >
                   <option value="">All Categories</option>
                   {categories.map((cat) => (
@@ -647,7 +619,7 @@ export default function BlogPage() {
                 <select
                   value={filters.sort_by}
                   onChange={(e) => updateFilter("sort_by", e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+                  className="h-9 border border-[#E8E6E1] bg-white px-3 text-[11px]"
                 >
                   {SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -657,7 +629,7 @@ export default function BlogPage() {
                 </select>
                 <button
                   onClick={handleClearFilters}
-                  className="col-span-2 h-9 border border-gray-300 text-[10px] uppercase tracking-[0.12em] text-gray-700"
+                  className="col-span-2 h-9 border border-[#E8E6E1] text-[10px] uppercase tracking-[0.12em] text-gray-700"
                 >
                   Clear All
                 </button>
@@ -692,8 +664,8 @@ export default function BlogPage() {
         <div ref={loaderRef} className="py-4">
           {loadingMore && (
             <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-[#0F1C2E]" />
-              <p className="ml-3 text-[10px] uppercase tracking-widest text-[#6B7A8D]">Loading more...</p>
+              <Loader2 className="h-5 w-5 animate-spin text-[#192334]" />
+              <p className="ml-3 text-[10px] uppercase tracking-widest text-[#8A94A3]">Loading more...</p>
             </div>
           )}
         </div>
@@ -707,7 +679,7 @@ export default function BlogPage() {
         )}
 
         {!loading && !hasMore && blogs.length > 0 && (
-          <p className="py-4 text-center text-[10px] uppercase tracking-[0.15em] text-[#6B7A8D]">
+          <p className="py-4 text-center text-[10px] uppercase tracking-[0.15em] text-[#8A94A3]">
             You've reached the end
           </p>
         )}
@@ -719,10 +691,10 @@ export default function BlogPage() {
             className="py-20 text-center"
           >
             <BookOpen className="mx-auto h-14 w-14 text-gray-300" />
-            <h3 className="mt-4 text-[22px] text-[#0F1C2E]" style={{ fontFamily: FONT_DISPLAY }}>
+            <h3 className="mt-4 text-[22px] text-[#192334]" style={{ fontFamily: FONT_DISPLAY }}>
               No articles found
             </h3>
-            <p className="mx-auto mt-2 max-w-md text-[13px] text-[#6B7A8D]">
+            <p className="mx-auto mt-2 max-w-md text-[13px] text-[#8A94A3]">
               Try adjusting your search or filters.
             </p>
             <button
@@ -746,7 +718,7 @@ export default function BlogPage() {
             className="fixed bottom-6 right-6 z-50 flex h-11 w-11 items-center justify-center text-white shadow-lg transition-transform hover:scale-105"
             style={{ backgroundColor: THEME.primary }}
           >
-            ↑
+            <ArrowRight className="h-4 w-4 -rotate-90" />
           </motion.button>
         )}
       </AnimatePresence>

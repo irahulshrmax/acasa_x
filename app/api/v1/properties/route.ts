@@ -31,9 +31,11 @@ import {
   restoreArchiveProperty,
   type PropertyFilters,
 } from '@/lib/models/properties';
+import { db } from '@/lib/database';
+import { fixPropertiesPrices, fixPropertyPrice } from '@/lib/utils/formatPrice';
 
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 100;
+const DEFAULT_LIMIT = 25;
+const MAX_LIMIT = 9999;
 const CACHE_TTL = 300;
 
 type PropertyQuality = {
@@ -62,7 +64,6 @@ function getPropertyQuality(property: any): PropertyQuality {
   else if (hasPrice && hasArea && hasImages) layer = 4;
   else if (hasPrice && hasArea) layer = 5;
   else if (hasPrice) layer = 6;
-  else layer = 7;
 
   let score = 0;
   if (hasPrice) score += 10000;
@@ -99,25 +100,25 @@ function sortPropertiesByQuality(properties: any[]): any[] {
 }
 
 function validatePagination(page: number, limit: number) {
-  const validPage = Math.max(1, page);
-  const validLimit = Math.min(MAX_LIMIT, Math.max(1, limit));
+  const validPage = Math.max(1, page || 1);
+  const validLimit = Math.min(MAX_LIMIT, Math.max(1, limit || DEFAULT_LIMIT));
   return { page: validPage, limit: validLimit };
 }
 
 function validatePriceRange(minPrice: number, maxPrice: number) {
-  const validMin = Math.max(0, minPrice);
-  const validMax = Math.max(validMin, maxPrice);
+  const validMin = Math.max(0, minPrice || 0);
+  const validMax = Math.max(validMin, maxPrice || 0);
   return { minPrice: validMin, maxPrice: validMax };
 }
 
 function validateBedroom(bedroom: string): string {
-  const valid = bedroom.trim();
+  const valid = bedroom?.trim() || '';
   if (/^[0-9]+$/.test(valid)) {
     const num = parseInt(valid, 10);
     if (num === 0) return 'Studio';
     return `${num} Bedroom${num > 1 ? 's' : ''}`;
   }
-  return valid;
+  return valid || 'Studio';
 }
 
 const cache = new Map<string, { data: any; timestamp: number }>();
@@ -152,6 +153,306 @@ function getCacheKey(req: NextRequest): string {
   return url.pathname + url.search;
 }
 
+// ─── FETCH ALL PROPERTIES DIRECT ──────────────────────────────────────
+
+async function fetchAllPropertiesDirect(filters: any) {
+  const knex = await db();
+  
+  let query = knex('properties as p')
+    .leftJoin('developers as d', 'p.developer_id', 'd.id')
+    .leftJoin('users as u', 'p.agent_id', 'u.id')
+    .leftJoin('community as c', 'p.community_id', 'c.id')
+    .leftJoin('cities as ci', 'p.city_id', 'ci.id')
+    .leftJoin('currency as cur', 'p.currency_id', 'cur.id')
+    .leftJoin(
+      knex('properties_prices')
+        .select(
+          'property_id',
+          knex.raw('MIN(NULLIF(sale_price, 0)) as sale_price'),
+          knex.raw('MIN(NULLIF(listing_price, 0)) as listing_price'),
+          knex.raw('MIN(NULLIF(rental_price, 0)) as rental_price'),
+          knex.raw('GROUP_CONCAT(DISTINCT payment_plan_ids SEPARATOR ",") as payment_plan_ids')
+        )
+        .groupBy('property_id')
+        .as('pp'),
+      'p.id',
+      'pp.property_id'
+    );
+
+  // ✅ Only apply status if provided (no default)
+  if (filters.status !== undefined && filters.status !== null) {
+    query = query.where('p.status', filters.status);
+  }
+
+  // ✅ Apply featured filter if provided
+  if (filters.featured) {
+    query = query.where(function() {
+      this.where('p.featured_property', '1')
+        .orWhere('p.featured_property', 'yes')
+        .orWhere('p.featured_property', 'true');
+    });
+  }
+
+  // Other filters
+  if (filters.listing_type) {
+    query = query.where('p.listing_type', filters.listing_type);
+  }
+  if (filters.property_type) {
+    query = query.where('p.property_type', filters.property_type);
+  }
+  if (filters.city_id) {
+    query = query.where('p.city_id', filters.city_id);
+  }
+  if (filters.community_id) {
+    query = query.where('p.community_id', filters.community_id);
+  }
+  if (filters.min_price) {
+    query = query.where(function() {
+      this.where('pp.sale_price', '>=', filters.min_price)
+          .orWhere('p.price', '>=', filters.min_price);
+    });
+  }
+  if (filters.max_price) {
+    query = query.where(function() {
+      this.where('pp.sale_price', '<=', filters.max_price)
+          .orWhere('p.price', '<=', filters.max_price);
+    });
+  }
+  if (filters.bedrooms) {
+    const bedroom = filters.bedrooms;
+    if (bedroom.toLowerCase() === 'studio') {
+      query = query.where(function() {
+        this.where('p.bedroom', 'like', '%Studio%')
+            .orWhere('p.bedroom', '=', '0')
+            .orWhere('p.bedroom', '=', '');
+      });
+    } else {
+      const num = parseInt(bedroom, 10);
+      if (!isNaN(num)) {
+        query = query.whereRaw(
+          'CAST(REGEXP_SUBSTR(p.bedroom, \'^[0-9]+\') AS UNSIGNED) = ?',
+          [num]
+        );
+      }
+    }
+  }
+
+  // Order by
+  if (filters.sort_by === 'price_asc') {
+    query = query.orderByRaw('COALESCE(NULLIF(pp.sale_price, 0), NULLIF(p.price, 0)) ASC NULLS LAST');
+  } else if (filters.sort_by === 'price_desc') {
+    query = query.orderByRaw('COALESCE(NULLIF(pp.sale_price, 0), NULLIF(p.price, 0)) DESC NULLS LAST');
+  } else if (filters.sort_by === 'oldest') {
+    query = query.orderBy('p.created_at', 'asc');
+  } else {
+    query = query.orderBy('p.created_at', 'desc');
+  }
+
+  const columns = [
+    'p.id',
+    'p.p_id',
+    'p.project_id',
+    'p.property_name as name',
+    'p.property_slug as slug',
+    'p.property_type',
+    'p.property_purpose',
+    'p.listing_type',
+    'p.occupancy',
+    'p.price',
+    'p.price_end',
+    'p.bedroom as bedrooms',
+    'p.bathrooms',
+    'p.area',
+    'p.area_size',
+    'p.min_area',
+    'p.max_area',
+    'p.area_end',
+    'p.featured_property as featured',
+    'p.status',
+    'p.featured_image',
+    'p.gallery_media_ids',
+    'p.map_latitude',
+    'p.map_longitude',
+    'p.developer_id',
+    'p.agent_id',
+    'p.community_id',
+    'p.dld_permit',
+    'p.RefNumber as ref_number',
+    'p.completion_date',
+    'p.exclusive_status',
+    'p.furnishing',
+    'p.amenities',
+    'p.description',
+    'p.video_url',
+    'p.created_at',
+    'p.updated_at',
+    'd.name as developer_name',
+    'd.image as developer_logo',
+    'd.country as developer_country',
+    'u.full_name as agent_name',
+    'u.phone as agent_phone',
+    'u.photo as agent_photo',
+    'c.name as community_name',
+    'c.slug as community_slug',
+    'c.img as community_image',
+    'ci.name as city_name',
+    'ci.id as city_id',
+    'cur.code as currency_code',
+    'cur.simbol as currency_symbol',
+    'pp.sale_price',
+    'pp.listing_price',
+    'pp.rental_price',
+    'pp.payment_plan_ids',
+  ];
+
+  const properties = await query.select(columns);
+
+  // ✅ FIX: Filter out NaN and invalid IDs
+  const allMediaIds: number[] = [];
+  for (const p of properties) {
+    if (p.gallery_media_ids) {
+      const ids = p.gallery_media_ids
+        .split(',')
+        .map((id: string) => parseInt(id.trim(), 10))
+        .filter((id: number) => !isNaN(id) && id > 0);
+      allMediaIds.push(...ids);
+    }
+  }
+
+  const uniqueMediaIds = [...new Set(allMediaIds)].filter(id => id > 0);
+  console.log(`✅ Found ${uniqueMediaIds.length} valid media IDs`);
+
+  const mediaMap = new Map<number, any>();
+  if (uniqueMediaIds.length > 0) {
+    // ✅ Split into chunks to avoid query too large
+    const chunkSize = 500;
+    for (let i = 0; i < uniqueMediaIds.length; i += chunkSize) {
+      const chunk = uniqueMediaIds.slice(i, i + chunkSize);
+      const mediaRecords = await knex('media')
+        .whereIn('id', chunk)
+        .where('status', 1)
+        .select('id', 'path', 'title', 'description', 'featured', 'media_order');
+      
+      for (const m of mediaRecords) {
+        mediaMap.set(m.id, m);
+      }
+    }
+  }
+
+  // ✅ Transform with images array
+  const transformed = properties.map((p: any) => {
+    const galleryIds = p.gallery_media_ids ? 
+      p.gallery_media_ids.split(',').map((id: string) => parseInt(id.trim(), 10)).filter((id: number) => !isNaN(id) && id > 0) : 
+      [];
+    
+    const galleryImages = galleryIds
+      .map((id: number) => mediaMap.get(id))
+      .filter(Boolean)
+      .map((m: any) => ({
+        id: m.id,
+        url: `https://acasa.ae/upload/media/${m.path}`,
+        title: m.title || null,
+        description: m.description || null,
+        featured: m.featured || 0,
+      }));
+
+    const galleryUrls = galleryImages.map((g: any) => g.url);
+    
+    // Featured image
+    let featuredImage = null;
+    if (p.featured_image) {
+      if (p.featured_image.includes('.') || p.featured_image.includes('/')) {
+        featuredImage = `https://acasa.ae/upload/media/${p.featured_image}`;
+      } else {
+        const mediaId = parseInt(p.featured_image, 10);
+        if (!isNaN(mediaId) && mediaMap.has(mediaId)) {
+          const media = mediaMap.get(mediaId);
+          featuredImage = `https://acasa.ae/upload/media/${media.path}`;
+        }
+      }
+    }
+    if (!featuredImage && galleryUrls.length > 0) {
+      featuredImage = galleryUrls[0];
+    }
+
+    const priceAmount = p.sale_price || p.price;
+    const isPriceOnRequest = !priceAmount || priceAmount === 0;
+    
+    return {
+      id: p.id,
+      name: p.name || 'Property',
+      slug: p.slug || '',
+      listing_type: p.listing_type || null,
+      occupancy: p.occupancy || null,
+      status: p.status,
+      featured: Boolean(p.featured),
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      completion_date: p.completion_date || null,
+      exclusive_status: p.exclusive_status || null,
+      dld_permit: p.dld_permit || null,
+      ref_number: p.ref_number || null,
+      price: {
+        amount: priceAmount ? Number(priceAmount) : null,
+        display: isPriceOnRequest ? 'Price on Request' : `AED ${Number(priceAmount).toLocaleString()}`,
+        currency: p.currency_code || 'AED',
+        symbol: p.currency_symbol || 'AED',
+        is_price_on_request: isPriceOnRequest,
+        sale_price: p.sale_price ? Number(p.sale_price) : null,
+        listing_price: p.listing_price ? Number(p.listing_price) : null,
+        rental_price: p.rental_price ? Number(p.rental_price) : null,
+      },
+      bedrooms: p.bedrooms || 'Studio',
+      bathrooms: p.bathrooms || '1 Bath',
+      area: {
+        value: p.area ? Number(p.area) : null,
+        display: p.area ? `${Number(p.area).toLocaleString()} sq. ft.` : 'Area on Request',
+        size: p.area_size || null,
+        min_area: p.min_area ? Number(p.min_area) : null,
+        max_area: p.max_area ? Number(p.max_area) : null,
+        area_end: p.area_end || null,
+      },
+      location: {
+        community: p.community_name || null,
+        community_slug: p.community_slug || null,
+        city: p.city_name || 'Dubai',
+        community_id: p.community_id || null,
+        city_id: p.city_id || null,
+      },
+      developer: {
+        id: p.developer_id || null,
+        name: p.developer_name || null,
+        logo_url: p.developer_logo || null,
+      },
+      agent: {
+        id: p.agent_id || null,
+        name: p.agent_name || null,
+        phone: p.agent_phone || null,
+        photo_url: p.agent_photo || null,
+      },
+      featured_image: featuredImage,
+      images: galleryImages,
+      gallery_urls: galleryUrls,
+      gallery_preview: galleryUrls.slice(0, 3),
+      description: p.description || null,
+      amenities: p.amenities ? p.amenities.split(',').map((a: string) => a.trim()).filter(Boolean) : [],
+      video_url: p.video_url || null,
+      payment_plans: [],
+    };
+  });
+
+  return {
+    data: transformed,
+    meta: {
+      total: transformed.length,
+      page: 1,
+      limit: transformed.length,
+      totalPages: 1,
+      show_all: true,
+    },
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -159,21 +460,68 @@ export async function GET(req: NextRequest) {
     const id = searchParams.get('id');
     const slug = searchParams.get('slug');
     const showAll = searchParams.get('show_all') === 'true';
+    
     const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT), 10);
+    const limitParam = searchParams.get('limit');
+    let limit = DEFAULT_LIMIT;
+    
+    if (limitParam) {
+      limit = parseInt(limitParam, 10);
+    }
     
     const effectiveLimit = showAll ? 9999 : Math.min(limit, MAX_LIMIT);
     const { page: validPage, limit: validLimit } = validatePagination(page, effectiveLimit);
 
     const cacheKey = getCacheKey(req);
-    const cachedData = getCached(cacheKey);
-    if (cachedData) {
-      return NextResponse.json({
+    if (!showAll) {
+      const cachedData = getCached(cacheKey);
+      if (cachedData) {
+        if (cachedData.data && Array.isArray(cachedData.data)) {
+          cachedData.data = fixPropertiesPrices(cachedData.data);
+        }
+        if (cachedData.data && !Array.isArray(cachedData.data)) {
+          cachedData.data = fixPropertyPrice(cachedData.data);
+        }
+        return NextResponse.json({
+          success: true,
+          data: cachedData.data,
+          meta: cachedData.meta,
+          cached: true,
+        });
+      }
+    }
+
+    if (showAll) {
+      const filters: any = {};
+      
+      if (searchParams.get('status') !== null) {
+        filters.status = parseInt(searchParams.get('status')!, 10);
+      }
+      if (searchParams.get('listing_type')) filters.listing_type = searchParams.get('listing_type');
+      if (searchParams.get('property_type')) filters.property_type = searchParams.get('property_type');
+      if (searchParams.get('city_id')) filters.city_id = parseInt(searchParams.get('city_id')!, 10);
+      if (searchParams.get('community_id')) filters.community_id = parseInt(searchParams.get('community_id')!, 10);
+      if (searchParams.get('min_price')) filters.min_price = parseFloat(searchParams.get('min_price')!);
+      if (searchParams.get('max_price')) filters.max_price = parseFloat(searchParams.get('max_price')!);
+      if (searchParams.get('bedrooms')) filters.bedrooms = searchParams.get('bedrooms');
+      if (searchParams.get('featured') === 'true') filters.featured = true;
+      if (searchParams.get('sort_by')) filters.sort_by = searchParams.get('sort_by');
+
+      const result = await fetchAllPropertiesDirect(filters);
+      const fixedData = fixPropertiesPrices(result.data);
+      
+      const response = {
         success: true,
-        data: cachedData.data,
-        meta: cachedData.meta,
-        cached: true,
-      });
+        data: fixedData,
+        meta: {
+          ...result.meta,
+          action: 'search',
+          show_all: true,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      return NextResponse.json(response);
     }
 
     if (action === 'filters') {
@@ -227,13 +575,15 @@ export async function GET(req: NextRequest) {
       const featuredLimit = parseInt(searchParams.get('limit') || '10', 10);
       const result = await getFeaturedProperties(featuredLimit);
       const sortedData = sortPropertiesByQuality(result.data);
+      const fixedData = fixPropertiesPrices(sortedData);
       const response = {
         success: true,
-        data: sortedData,
+        data: fixedData,
         meta: { 
           ...result.meta, 
           sorted_by: 'quality_layer', 
           action: 'featured',
+          per_page: DEFAULT_LIMIT,
           timestamp: new Date().toISOString() 
         },
       };
@@ -245,13 +595,15 @@ export async function GET(req: NextRequest) {
       const recentLimit = parseInt(searchParams.get('limit') || '10', 10);
       const result = await getRecentProperties(recentLimit);
       const sortedData = sortPropertiesByQuality(result.data);
+      const fixedData = fixPropertiesPrices(sortedData);
       const response = {
         success: true,
-        data: sortedData,
+        data: fixedData,
         meta: { 
           ...result.meta, 
           sorted_by: 'quality_layer', 
           action: 'recent',
+          per_page: DEFAULT_LIMIT,
           timestamp: new Date().toISOString() 
         },
       };
@@ -267,14 +619,16 @@ export async function GET(req: NextRequest) {
       }
       const result = await getRelatedProperties(propertyId, relatedLimit);
       const sortedData = sortPropertiesByQuality(result.data);
+      const fixedData = fixPropertiesPrices(sortedData);
       const response = {
         success: true,
-        data: sortedData,
+        data: fixedData,
         meta: { 
           ...result.meta, 
           property_id: propertyId, 
           sorted_by: 'quality_layer', 
           action: 'related',
+          per_page: DEFAULT_LIMIT,
           timestamp: new Date().toISOString() 
         },
       };
@@ -304,13 +658,23 @@ export async function GET(req: NextRequest) {
       }
 
       const sortedData = sort === 'quality' ? sortPropertiesByQuality(result.data) : result.data;
+      const fixedData = fixPropertiesPrices(sortedData);
+      const totalPages = Math.ceil((result.meta?.total || 0) / validLimit);
+      
       const response = {
         success: true,
-        data: sortedData,
+        data: fixedData,
         meta: {
           ...result.meta,
           action: 'offplan',
           sort_by: sort === 'quality' ? 'quality_layer' : sort,
+          per_page: validLimit,
+          current_page: validPage,
+          total_pages: totalPages,
+          has_next_page: validPage < totalPages,
+          has_prev_page: validPage > 1,
+          next_page: validPage < totalPages ? validPage + 1 : null,
+          prev_page: validPage > 1 ? validPage - 1 : null,
           filters: { bedroom: bedroom || null, min_price: validMin || null, max_price: validMax || null },
           timestamp: new Date().toISOString(),
         },
@@ -339,13 +703,23 @@ export async function GET(req: NextRequest) {
       }
 
       const sortedData = sort === 'quality' ? sortPropertiesByQuality(result.data) : result.data;
+      const fixedData = fixPropertiesPrices(sortedData);
+      const totalPages = Math.ceil((result.meta?.total || 0) / validLimit);
+      
       const response = {
         success: true,
-        data: sortedData,
+        data: fixedData,
         meta: {
           ...result.meta,
           action: 'buy',
           sort_by: sort === 'quality' ? 'quality_layer' : sort,
+          per_page: validLimit,
+          current_page: validPage,
+          total_pages: totalPages,
+          has_next_page: validPage < totalPages,
+          has_prev_page: validPage > 1,
+          next_page: validPage < totalPages ? validPage + 1 : null,
+          prev_page: validPage > 1 ? validPage - 1 : null,
           filters: { bedroom: bedroom || null, min_price: validMin || null, max_price: validMax || null },
           timestamp: new Date().toISOString(),
         },
@@ -374,13 +748,23 @@ export async function GET(req: NextRequest) {
       }
 
       const sortedData = sort === 'quality' ? sortPropertiesByQuality(result.data) : result.data;
+      const fixedData = fixPropertiesPrices(sortedData);
+      const totalPages = Math.ceil((result.meta?.total || 0) / validLimit);
+      
       const response = {
         success: true,
-        data: sortedData,
+        data: fixedData,
         meta: {
           ...result.meta,
           action: 'sell',
           sort_by: sort === 'quality' ? 'quality_layer' : sort,
+          per_page: validLimit,
+          current_page: validPage,
+          total_pages: totalPages,
+          has_next_page: validPage < totalPages,
+          has_prev_page: validPage > 1,
+          next_page: validPage < totalPages ? validPage + 1 : null,
+          prev_page: validPage > 1 ? validPage - 1 : null,
           filters: { bedroom: bedroom || null, min_price: validMin || null, max_price: validMax || null },
           timestamp: new Date().toISOString(),
         },
@@ -427,13 +811,23 @@ export async function GET(req: NextRequest) {
       }
 
       const sortedData = sort === 'quality' ? sortPropertiesByQuality(result.data) : result.data;
+      const fixedData = fixPropertiesPrices(sortedData);
+      const totalPages = Math.ceil((result.meta?.total || 0) / validLimit);
+      
       const response = {
         success: true,
-        data: sortedData,
+        data: fixedData,
         meta: {
           ...result.meta,
           action: 'archive',
           sort_by: sort === 'quality' ? 'quality_layer' : sort,
+          per_page: validLimit,
+          current_page: validPage,
+          total_pages: totalPages,
+          has_next_page: validPage < totalPages,
+          has_prev_page: validPage > 1,
+          next_page: validPage < totalPages ? validPage + 1 : null,
+          prev_page: validPage > 1 ? validPage - 1 : null,
           filters: { bedroom: bedroom || null, min_price: validMin || null, max_price: validMax || null },
           timestamp: new Date().toISOString(),
         },
@@ -447,7 +841,8 @@ export async function GET(req: NextRequest) {
       if (!property) {
         return NextResponse.json({ success: false, error: 'Property not found' }, { status: 404 });
       }
-      const response = { success: true, data: property, meta: { slug, timestamp: new Date().toISOString() } };
+      const fixedProperty = fixPropertyPrice(property);
+      const response = { success: true, data: fixedProperty, meta: { slug, timestamp: new Date().toISOString() } };
       setCached(cacheKey, response);
       return NextResponse.json(response);
     }
@@ -458,7 +853,8 @@ export async function GET(req: NextRequest) {
       if (!property) {
         return NextResponse.json({ success: false, error: 'Property not found' }, { status: 404 });
       }
-      const response = { success: true, data: property, meta: { id: propertyId, timestamp: new Date().toISOString() } };
+      const fixedProperty = fixPropertyPrice(property);
+      const response = { success: true, data: fixedProperty, meta: { id: propertyId, timestamp: new Date().toISOString() } };
       setCached(cacheKey, response);
       return NextResponse.json(response);
     }
@@ -475,13 +871,18 @@ export async function GET(req: NextRequest) {
     const minArea = parseInt(searchParams.get('min_area') || '0', 10) || undefined;
     const maxArea = parseInt(searchParams.get('max_area') || '0', 10) || undefined;
     const listingType = searchParams.get('listing_type') || undefined;
-    const status = searchParams.get('status') ? parseInt(searchParams.get('status')!, 10) : 5;
+    const status = searchParams.get('status') ? parseInt(searchParams.get('status')!, 10) : undefined;
     const featured = searchParams.get('featured') === 'true';
     const keyword = searchParams.get('keyword') || undefined;
     const sortBy = searchParams.get('sort_by') || 'quality';
     const sort = searchParams.get('sort') || 'quality';
 
-    const filters: PropertyFilters = { page: validPage, limit: validLimit, status };
+    const filters: PropertyFilters = { 
+      page: validPage, 
+      limit: validLimit,
+    };
+    
+    if (status !== undefined) filters.status = status;
     if (propertyType) filters.property_type = propertyType;
     if (propertyPurpose) filters.property_purpose = propertyPurpose;
     if (cityId) filters.city_id = cityId;
@@ -500,13 +901,25 @@ export async function GET(req: NextRequest) {
 
     const result = await getProperties(filters);
     const sortedData = sort === 'quality' ? sortPropertiesByQuality(result.data) : result.data;
+    const fixedData = fixPropertiesPrices(sortedData);
+
+    const totalPages = Math.ceil((result.meta?.total || 0) / validLimit);
+    const hasNextPage = validPage < totalPages;
+    const hasPrevPage = validPage > 1;
 
     const response = {
       success: true,
-      data: sortedData,
+      data: fixedData,
       meta: {
         ...result.meta,
         action: 'search',
+        per_page: validLimit,
+        current_page: validPage,
+        total_pages: totalPages,
+        has_next_page: hasNextPage,
+        has_prev_page: hasPrevPage,
+        next_page: hasNextPage ? validPage + 1 : null,
+        prev_page: hasPrevPage ? validPage - 1 : null,
         filters: {
           property_type: propertyType || null,
           property_purpose: propertyPurpose || null,
@@ -520,7 +933,7 @@ export async function GET(req: NextRequest) {
           min_area: minArea || null,
           max_area: maxArea || null,
           listing_type: listingType || null,
-          status,
+          status: status || null,
           featured: featured || false,
           keyword: keyword || null,
         },
@@ -530,10 +943,14 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    setCached(cacheKey, response);
+    if (!showAll) {
+      setCached(cacheKey, response);
+    }
+    
     return NextResponse.json(response);
 
   } catch (error) {
+    console.error('API Error:', error);
     return NextResponse.json({
       success: false,
       error: 'Internal server error',
@@ -576,6 +993,7 @@ export async function POST(req: NextRequest) {
     }, { status: 201 });
     
   } catch (error) {
+    console.error('POST Error:', error);
     return NextResponse.json({ 
       success: false, 
       error: 'Failed to create property', 
@@ -619,6 +1037,7 @@ export async function PUT(req: NextRequest) {
     });
     
   } catch (error) {
+    console.error('PUT Error:', error);
     return NextResponse.json({ 
       success: false, 
       error: 'Failed to update property', 
@@ -660,6 +1079,7 @@ export async function DELETE(req: NextRequest) {
     });
     
   } catch (error) {
+    console.error('DELETE Error:', error);
     return NextResponse.json({ 
       success: false, 
       error: 'Failed to delete property', 
@@ -704,6 +1124,7 @@ export async function PATCH(req: NextRequest) {
     });
     
   } catch (error) {
+    console.error('PATCH Error:', error);
     return NextResponse.json({ 
       success: false, 
       error: 'Failed to restore property', 

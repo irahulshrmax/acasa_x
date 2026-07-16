@@ -25,18 +25,11 @@ import {
   Heart,
   Eye,
   ImageOff,
-  TrendingUp,
-  Clock,
   Shield,
 } from "lucide-react";
 
-// ─── CONSTANTS ──────────────────────────────────────────────────────────
-
 const API_URL = "/api/v1/properties";
-const DEFAULT_LIMIT = 12;
-const CACHE_TTL = 300; // 5 minutes
-
-const FONT_DISPLAY = "'Display Pro', 'Playfair Display', Georgia, serif";
+const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
 
 const THEME = {
@@ -48,8 +41,6 @@ const THEME = {
   error: "#EF4444",
   warning: "#F59E0B",
 };
-
-// ─── TYPES ──────────────────────────────────────────────────────────────
 
 interface Property {
   id: number;
@@ -67,31 +58,21 @@ interface Property {
   dld_permit: string | null;
   price: {
     amount: number | null;
-    amount_end: number | null;
     display: string | null;
-    display_end: string | null;
     currency: string;
     symbol: string;
     is_price_on_request: boolean;
-    sale_price: number | null;
-    listing_price: number | null;
-    rental_price: number | null;
   };
   bedrooms: string;
   bathrooms: string;
   display_title: string;
   area: {
     value: number | null;
-    size: string | null;
     display: string;
-    min_area: string | null;
-    max_area: string | null;
-    area_end: string | null;
+    size: string | null;
   };
   location: {
     community: string | null;
-    community_slug: string | null;
-    sub_community: string | null;
     city: string | null;
     address: string | null;
     latitude: string | null;
@@ -102,10 +83,7 @@ interface Property {
   developer: {
     id: number | null;
     name: string | null;
-    country: string | null;
-    is_international: boolean;
     logo_url: string;
-    logo_variations: string[];
   };
   agent: {
     id: number | null;
@@ -117,11 +95,8 @@ interface Property {
   images: Array<{ id: number; url: string; title: string; featured: number }>;
   gallery_urls: string[];
   gallery_preview: string[];
-  media_base_url: string;
   amenities: string[];
-  furnishing: string | null;
-  video_url: string | null;
-  payment_plans: Array<{ id: number; name: string; percentage: string; item_id: number; item_type: string | null }>;
+  payment_plans: Array<{ id: number; name: string; percentage: string }>;
   project_id: number | null;
 }
 
@@ -131,17 +106,12 @@ interface PaginationData {
   limit: number;
   totalPages: number;
   cached?: boolean;
-  action?: string;
-  sort_by?: string;
-  timestamp?: string;
 }
 
 interface FilterOption {
   value: string;
   label: string;
 }
-
-// ─── FILTER OPTIONS ────────────────────────────────────────────────────
 
 const BEDROOM_OPTIONS: FilterOption[] = [
   { value: "Studio", label: "Studio" },
@@ -176,33 +146,8 @@ const LISTING_TYPE_OPTIONS: FilterOption[] = [
   { value: "Rental", label: "Rental" },
 ];
 
-const OCCUPANCY_OPTIONS: FilterOption[] = [
-  { value: "under construction", label: "Under Construction" },
-  { value: "ready to move", label: "Ready to Move" },
-  { value: "completed", label: "Completed" },
-];
-
-// ─── UTILITY FUNCTIONS ─────────────────────────────────────────────────
-
-function getPropertyImage(property: Property): string | null {
-  if (property.featured_image) return property.featured_image;
-  if (property.gallery_urls?.length) return property.gallery_urls[0];
-  if (property.images?.length) return property.images[0].url;
-  if (property.gallery_preview?.length) return property.gallery_preview[0];
-  return null;
-}
-
-function getAllImages(property: Property): string[] {
-  const imgs: string[] = [];
-  if (property.featured_image) imgs.push(property.featured_image);
-  if (property.gallery_urls) property.gallery_urls.forEach(img => { if (!imgs.includes(img)) imgs.push(img); });
-  if (property.images) property.images.forEach(img => { if (img.url && !imgs.includes(img.url)) imgs.push(img.url); });
-  if (property.gallery_preview) property.gallery_preview.forEach(img => { if (!imgs.includes(img)) imgs.push(img); });
-  return imgs;
-}
-
 function formatPrice(amount: number | null, currency = "AED"): string {
-  if (!amount) return "Price on Request";
+  if (!amount) return "AED On Request";
   return `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
@@ -216,37 +161,28 @@ function getBedroomLabel(bedroom: string): string {
   return bedroom;
 }
 
-function getDaysAgo(date: string): string {
-  const diff = Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Yesterday";
-  if (diff < 7) return `${diff} days ago`;
-  if (diff < 30) return `${Math.floor(diff / 7)} weeks ago`;
-  if (diff < 365) return `${Math.floor(diff / 30)} months ago`;
-  return `${Math.floor(diff / 365)} years ago`;
+function getImageUrl(property: Property): string | null {
+  if (property.featured_image) return property.featured_image;
+  if (property.gallery_urls?.length) return property.gallery_urls[0];
+  if (property.images?.length) return property.images[0].url;
+  if (property.gallery_preview?.length) return property.gallery_preview[0];
+  return null;
 }
 
-// ─── PROPERTY CARD ─────────────────────────────────────────────────────
-
-function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Property; viewMode?: string; index?: number }) {
+function PropertyCard({ property, index = 0 }: { property: Property; index?: number }) {
   const [isWishlisted, setIsWishlisted] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
 
   const location = property.location?.community || property.location?.city || "Dubai";
   const isPriceOnRequest = property.price?.is_price_on_request || !property.price?.amount;
-  const priceDisplay = property.price?.display || "Price on Request";
+  const priceDisplay = property.price?.display || formatPrice(property.price?.amount);
   const bedroomLabel = getBedroomLabel(property.bedrooms);
   const isOffPlan = property.listing_type === "Off plan";
-  const daysAgo = getDaysAgo(property.created_at);
 
-  const allImages = useMemo(() => getAllImages(property), [property]);
-  const hasImages = allImages.length > 0;
-  
-  const currentImage = useMemo(() => {
-    if (imageError || !hasImages) return null;
-    return allImages[currentImageIndex % allImages.length];
-  }, [allImages, currentImageIndex, imageError, hasImages]);
+  const imageUrl = useMemo(() => {
+    if (imageError) return null;
+    return getImageUrl(property);
+  }, [property, imageError]);
 
   const specs = [
     bedroomLabel,
@@ -254,25 +190,13 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
     property.area?.display && property.area.display !== "Area on Request" ? property.area.display : null,
   ].filter(Boolean).join("  |  ");
 
-  const isListMode = viewMode === "list";
+  const hasImage = !!imageUrl;
 
-  // Auto-rotate images
-  useEffect(() => {
-    if (allImages.length <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % allImages.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [allImages.length]);
-
-  // Load wishlist status
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("property_wishlist") || "[]");
       setIsWishlisted(saved.includes(property.id));
-    } catch {
-      // silent
-    }
+    } catch {}
   }, [property.id]);
 
   const toggleWishlist = (e: React.MouseEvent) => {
@@ -285,9 +209,7 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
         ? saved.filter((id: number) => id !== property.id)
         : [...saved, property.id];
       localStorage.setItem("property_wishlist", JSON.stringify(updated));
-    } catch {
-      // silent
-    }
+    } catch {}
   };
 
   return (
@@ -295,43 +217,18 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
-      className={`group bg-white transition-all duration-300 hover:shadow-xl ${
-        isListMode ? "flex flex-col sm:flex-row gap-4" : ""
-      }`}
-      style={{ fontFamily: FONT_BODY }}
+      className="group bg-white transition-all duration-300 hover:shadow-xl"
     >
-      {/* Image Container */}
-      <div className={`relative overflow-hidden bg-gray-100 ${isListMode ? "sm:w-[320px] sm:flex-shrink-0" : "aspect-[4/3]"}`}>
-        <Link href={`/properties/${property.slug}`} className="block h-full w-full">
-          {currentImage ? (
-            <>
-              <img
-                src={currentImage}
-                alt={property.name}
-                loading="lazy"
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-                onError={() => setImageError(true)}
-              />
-              
-              {/* Image Counter */}
-              {allImages.length > 1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                  {allImages.slice(0, 5).map((_, i) => (
-                    <span
-                      key={i}
-                      className={`h-1.5 rounded-full transition-all ${
-                        i === currentImageIndex % allImages.length
-                          ? "w-4 bg-white"
-                          : "w-1.5 bg-white/50"
-                      }`}
-                    />
-                  ))}
-                  {allImages.length > 5 && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-white/50" />
-                  )}
-                </div>
-              )}
-            </>
+      <div className="relative overflow-hidden bg-gray-100 aspect-[4/3]">
+        <Link href={`/properties-for-sale-dubai/${property.slug}`} className="block h-full w-full">
+          {hasImage ? (
+            <img
+              src={imageUrl}
+              alt={property.name}
+              loading="lazy"
+              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+              onError={() => setImageError(true)}
+            />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center">
               <ImageOff className="h-12 w-12 text-gray-300" />
@@ -340,7 +237,6 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
           )}
         </Link>
 
-        {/* Badges */}
         <div className="absolute left-3 top-3 flex flex-col gap-1.5">
           {property.featured && (
             <span className="rounded-[3px] bg-[#192334] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
@@ -353,11 +249,6 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
               Off Plan
             </span>
           )}
-          {property.completion_date && isOffPlan && (
-            <span className="rounded-[3px] bg-blue-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              {property.completion_date}
-            </span>
-          )}
         </div>
 
         {property.listing_type && !isOffPlan && (
@@ -366,15 +257,6 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
           </span>
         )}
 
-        {/* Status Badge */}
-        {property.occupancy && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
-            <Clock className="h-3 w-3" />
-            {property.occupancy}
-          </div>
-        )}
-
-        {/* Wishlist Button */}
         <button
           onClick={toggleWishlist}
           aria-label="Add to wishlist"
@@ -386,21 +268,12 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
         >
           <Heart className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
         </button>
-
-        {/* View Photos Button */}
-        {hasImages && allImages.length > 1 && (
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-[9px] text-white backdrop-blur-sm">
-            <Eye className="h-3 w-3" />
-            {allImages.length}
-          </div>
-        )}
       </div>
 
-      {/* Content */}
-      <div className={`flex flex-1 flex-col ${isListMode ? "py-2 pr-2" : "pt-4"}`}>
+      <div className="pt-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <Link href={`/properties/${property.slug}`}>
+            <Link href={`/properties-for-sale-dubai/${property.slug}`}>
               <h3
                 className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-opacity hover:opacity-70"
                 style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
@@ -423,13 +296,8 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
           <div className="shrink-0 text-right">
             <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#8A94A3]">Price</p>
             <p className="text-[14px] font-bold leading-tight text-[#192334]">
-              {isPriceOnRequest ? "On Request" : priceDisplay}
+              {isPriceOnRequest ? "AED On Request" : priceDisplay}
             </p>
-            {property.price?.rental_price && property.listing_type !== "Off plan" && (
-              <p className="text-[10px] text-[#8A94A3]">
-                Rental: {formatPrice(property.price.rental_price)}
-              </p>
-            )}
           </div>
         </div>
 
@@ -450,33 +318,18 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
                 {property.exclusive_status}
               </span>
             )}
-            <span className="text-[10px] text-[#8A94A3]">{daysAgo}</span>
           </div>
         </div>
-
-        {/* Developer Logo (List View) */}
-        {isListMode && property.developer?.logo_url && (
-          <div className="mt-2 flex items-center gap-2">
-            <img
-              src={property.developer.logo_url}
-              alt={property.developer.name || "Developer"}
-              className="h-6 w-auto max-w-[80px] object-contain opacity-60 grayscale transition-opacity group-hover:opacity-100"
-            />
-          </div>
-        )}
       </div>
     </motion.div>
   );
 }
 
-// ─── SKELETON ──────────────────────────────────────────────────────────
-
-function SkeletonCard({ viewMode = "grid" }: { viewMode?: string }) {
-  const isListMode = viewMode === "list";
+function SkeletonCard() {
   return (
-    <div className={`bg-white ${isListMode ? "flex flex-col sm:flex-row gap-4" : ""}`}>
-      <div className={`animate-pulse bg-gray-200 ${isListMode ? "sm:w-[320px] sm:aspect-[4/3]" : "aspect-[4/3]"}`} />
-      <div className={`flex-1 space-y-3 ${isListMode ? "py-2" : "py-4"}`}>
+    <div className="bg-white">
+      <div className="animate-pulse bg-gray-200 aspect-[4/3]" />
+      <div className="pt-4 space-y-3">
         <div className="flex justify-between">
           <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
           <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
@@ -491,8 +344,6 @@ function SkeletonCard({ viewMode = "grid" }: { viewMode?: string }) {
     </div>
   );
 }
-
-// ─── FILTER DROPDOWN ──────────────────────────────────────────────────
 
 function FilterDropdown({
   label,
@@ -578,8 +429,6 @@ function FilterDropdown({
   );
 }
 
-// ─── PAGINATION ────────────────────────────────────────────────────────
-
 function Pagination({
   currentPage,
   totalPages,
@@ -649,9 +498,7 @@ function Pagination({
   );
 }
 
-// ─── MAIN PAGE ─────────────────────────────────────────────────────────
-
-export default function PropertiesPage() {
+export default function PropertiesForSaleDubaiPage() {
   const loaderRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -663,26 +510,21 @@ export default function PropertiesPage() {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [isCached, setIsCached] = useState(false);
 
   const [filters, setFilters] = useState({
     page: 1,
-    limit: DEFAULT_LIMIT,
+    limit: 12,
     bedrooms: "",
     min_price: "",
     max_price: "",
     sort_by: "quality",
     listing_type: "Off plan",
-    property_type: "",
-    occupancy: "",
   });
 
   const currentPriceValue = filters.min_price && filters.max_price ? `${filters.min_price}-${filters.max_price}` : "";
-  const hasActiveFilters = filters.bedrooms !== "" || filters.min_price !== "" || filters.max_price !== "" || filters.property_type !== "" || filters.occupancy !== "";
+  const hasActiveFilters = filters.bedrooms !== "" || filters.min_price !== "" || filters.max_price !== "";
   const hasMore = pagination ? filters.page < pagination.totalPages : false;
-
-  // ─── API CALL ──────────────────────────────────────────────────────
 
   const fetchProperties = useCallback(
     async (page: number, isReset: boolean) => {
@@ -702,13 +544,11 @@ export default function PropertiesPage() {
         params.append("sort_by", filters.sort_by);
         params.append("status", "5");
         
-        // Only add if listing_type is selected
         if (filters.listing_type) {
           params.append("listing_type", filters.listing_type);
         }
         
         if (filters.bedrooms) {
-          // Handle Studio and numeric values
           if (filters.bedrooms.toLowerCase() === "studio") {
             params.append("min_bedrooms", "0");
             params.append("max_bedrooms", "0");
@@ -723,8 +563,6 @@ export default function PropertiesPage() {
         
         if (filters.min_price) params.append("min_price", filters.min_price);
         if (filters.max_price) params.append("max_price", filters.max_price);
-        if (filters.property_type) params.append("property_type", filters.property_type);
-        if (filters.occupancy) params.append("occupancy", filters.occupancy);
 
         const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
@@ -733,7 +571,6 @@ export default function PropertiesPage() {
 
         let newProperties: Property[] = data.data || [];
 
-        // Remove duplicates
         const seen = new Set<number>();
         newProperties = newProperties.filter((p) => {
           if (seen.has(p.id)) return false;
@@ -741,7 +578,6 @@ export default function PropertiesPage() {
           return true;
         });
 
-        // Check if response is cached
         if (data.cached) setIsCached(true);
 
         if (isReset) {
@@ -769,14 +605,10 @@ export default function PropertiesPage() {
     [filters]
   );
 
-  // ─── EFFECTS ────────────────────────────────────────────────────────
-
-  // Fetch on filter change
   useEffect(() => {
     fetchProperties(filters.page, filters.page === 1);
   }, [fetchProperties, filters.page]);
 
-  // Infinite scroll
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
     const currentLoader = loaderRef.current;
@@ -795,14 +627,11 @@ export default function PropertiesPage() {
     return () => observerRef.current?.disconnect();
   }, [hasMore, loading, loadingMore, isInitialLoad]);
 
-  // Scroll to top
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  // ─── HANDLERS ───────────────────────────────────────────────────────
 
   const updateFilter = useCallback((key: string, value: string) => {
     setProperties([]);
@@ -823,14 +652,12 @@ export default function PropertiesPage() {
     setProperties([]);
     setFilters({
       page: 1,
-      limit: DEFAULT_LIMIT,
+      limit: 12,
       bedrooms: "",
       min_price: "",
       max_price: "",
       sort_by: "quality",
       listing_type: "Off plan",
-      property_type: "",
-      occupancy: "",
     });
   }, []);
 
@@ -840,11 +667,8 @@ export default function PropertiesPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  // ─── RENDER ─────────────────────────────────────────────────────────
-
   return (
     <section className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
-      {/* Header */}
       <div className="mx-auto max-w-[1200px] px-4 pt-10 md:px-6">
         <div className="mb-6">
           <motion.h1
@@ -859,28 +683,13 @@ export default function PropertiesPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#8A94A3]"
+            className="mt-1.5 text-[10px] uppercase tracking-[0.16em] text-[#8A94A3]"
           >
-            {loading ? (
-              "Loading..."
-            ) : pagination ? (
-              <>
-                <span>{pagination.total.toLocaleString()} properties available</span>
-                {isCached && (
-                  <span className="flex items-center gap-1 text-green-500">
-                    <TrendingUp className="h-3 w-3" />
-                    cached
-                  </span>
-                )}
-              </>
-            ) : (
-              `${properties.length} listings`
-            )}
+            {loading ? "Loading..." : pagination ? `${pagination.total.toLocaleString()} properties available` : `${properties.length} listings`}
           </motion.p>
         </div>
       </div>
 
-      {/* Filter Bar */}
       <div className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur-sm" style={{ borderColor: THEME.border }}>
         <div className="mx-auto max-w-[1200px] px-4 md:px-6">
           <div className="flex h-14 items-center gap-2 md:gap-4">
@@ -907,38 +716,12 @@ export default function PropertiesPage() {
                 icon={Layers}
               />
               <FilterDropdown
-                label="Occupancy"
-                value={filters.occupancy}
-                onChange={(v) => updateFilter("occupancy", v)}
-                options={OCCUPANCY_OPTIONS}
-                icon={Calendar}
-              />
-              <FilterDropdown
                 label="Sort"
                 value={filters.sort_by}
                 onChange={(v) => updateFilter("sort_by", v)}
                 options={SORT_OPTIONS}
                 icon={ArrowUpDown}
               />
-
-              <div className="ml-2 flex rounded-[4px] border border-gray-200 overflow-hidden">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "grid" ? "bg-[#192334] text-white" : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  <Grid3x3 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "list" ? "bg-[#192334] text-white" : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
 
               {hasActiveFilters && (
                 <button
@@ -962,7 +745,6 @@ export default function PropertiesPage() {
         </div>
       </div>
 
-      {/* Mobile Filters */}
       <AnimatePresence>
         {showMobileFilters && (
           <motion.div
@@ -1010,18 +792,6 @@ export default function PropertiesPage() {
                   ))}
                 </select>
                 <select
-                  value={filters.occupancy}
-                  onChange={(e) => updateFilter("occupancy", e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
-                >
-                  <option value="">All Occupancy</option>
-                  {OCCUPANCY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <select
                   value={filters.sort_by}
                   onChange={(e) => updateFilter("sort_by", e.target.value)}
                   className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
@@ -1044,7 +814,6 @@ export default function PropertiesPage() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
       <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-6 md:px-6">
         {error && !loading && (
           <div className="mb-6 flex items-center gap-3 border border-red-200 bg-red-50 p-4 text-[13px] text-red-600">
@@ -1059,15 +828,11 @@ export default function PropertiesPage() {
           </div>
         )}
 
-        <div
-          className={`grid gap-x-6 gap-y-10 ${
-            viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
-          }`}
-        >
+        <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {loading && properties.length === 0
-            ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`skeleton-${i}`} viewMode={viewMode} />)
+            ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`skeleton-${i}`} />)
             : properties.map((property, index) => (
-                <PropertyCard key={`${property.id}-${property.slug}`} property={property} viewMode={viewMode} index={index} />
+                <PropertyCard key={`${property.id}-${property.slug}`} property={property} index={index} />
               ))}
         </div>
 
@@ -1118,7 +883,6 @@ export default function PropertiesPage() {
         )}
       </div>
 
-      {/* Scroll to Top */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.button

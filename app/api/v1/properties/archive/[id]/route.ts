@@ -1,4 +1,4 @@
-// app/api/v1/properties/archive/[id]/route.ts - FIXED VERSION
+// app/api/v1/properties/archive/[id]/route.ts - COMPLETE FIXED VERSION
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -7,6 +7,12 @@ import {
   updateProperty,
   permanentDeleteProperty,
 } from '@/lib/models/properties';
+
+// ─── CONSTANTS ──────────────────────────────────────────────────────────
+
+const DEFAULT_CURRENCY = 'AED';
+const DEFAULT_SYMBOL = 'AED';
+const FALLBACK_DISPLAY = 'Price on Request';
 
 // ─── STATUS LABELS ──────────────────────────────────────────────────────
 
@@ -24,6 +30,94 @@ const STATUS_LABELS: Record<number, string> = {
 
 function getStatusLabel(status: number): string {
   return STATUS_LABELS[status] || `Status ${status}`;
+}
+
+// ─── STRONG PRICE FIXER ───────────────────────────────────────────────
+
+function fixPropertyPrice(property: any): any {
+  if (!property) return property;
+
+  // If price doesn't exist, create it
+  if (!property.price) {
+    property.price = {
+      amount: null,
+      amount_end: null,
+      display: FALLBACK_DISPLAY,
+      display_end: '',
+      currency: DEFAULT_CURRENCY,
+      symbol: DEFAULT_SYMBOL,
+      is_price_on_request: true,
+      sale_price: null,
+      listing_price: null,
+      rental_price: null,
+    };
+    return property;
+  }
+
+  const price = property.price;
+
+  // ─── TRY TO GET AMOUNT ─────────────────────────────────────────────
+  let amount = null;
+  
+  if (price.amount && price.amount !== 'null' && !isNaN(parseFloat(price.amount))) {
+    amount = parseFloat(price.amount);
+  } else if (price.sale_price && price.sale_price !== 'null' && !isNaN(parseFloat(price.sale_price))) {
+    amount = parseFloat(price.sale_price);
+  } else if (price.listing_price && price.listing_price !== 'null' && !isNaN(parseFloat(price.listing_price))) {
+    amount = parseFloat(price.listing_price);
+  } else if (price.rental_price && price.rental_price !== 'null' && !isNaN(parseFloat(price.rental_price))) {
+    amount = parseFloat(price.rental_price);
+  }
+
+  price.amount = amount;
+
+  // ─── GET CURRENCY AND SYMBOL ──────────────────────────────────────
+  let currency = price.currency || DEFAULT_CURRENCY;
+  let symbol = price.symbol || DEFAULT_SYMBOL;
+
+  if (currency === 'null' || !currency) currency = DEFAULT_CURRENCY;
+  if (symbol === 'null' || !symbol) symbol = DEFAULT_SYMBOL;
+
+  price.currency = currency;
+  price.symbol = symbol;
+
+  // ─── GENERATE DISPLAY ─────────────────────────────────────────────
+  if (amount && amount > 0) {
+    const formattedAmount = Number(amount).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+
+    const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+    price.display = `${prefix} ${formattedAmount}`;
+
+    // Handle amount_end
+    let amountEnd = null;
+    if (price.amount_end && price.amount_end !== 'null' && !isNaN(parseFloat(price.amount_end))) {
+      amountEnd = parseFloat(price.amount_end);
+    }
+
+    if (amountEnd && amountEnd > 0 && amountEnd !== amount) {
+      const formattedEnd = Number(amountEnd).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+      price.display = `${prefix} ${formattedAmount} - ${formattedEnd}`;
+      price.display_end = `${prefix} ${formattedEnd}`;
+      price.amount_end = amountEnd;
+    }
+
+    price.is_price_on_request = false;
+  } else {
+    price.display = FALLBACK_DISPLAY;
+    price.is_price_on_request = true;
+  }
+
+  if (!price.amount_end || price.amount_end === 'null') {
+    price.amount_end = null;
+  }
+
+  return property;
 }
 
 // ─── CACHE ─────────────────────────────────────────────────────────────
@@ -100,8 +194,13 @@ export async function GET(
       );
     }
 
+    // ─── FIX PRICE ──────────────────────────────────────────────────
+    const fixedProperty = fixPropertyPrice(property);
+
     // ─── Check if property is inactive ───────────────────────────────
-    const isInactive = property.status === 0 || property.status === 1 || property.status === 2 || property.status === 4 || property.status === 6;
+    const isInactive = fixedProperty.status === 0 || fixedProperty.status === 1 || 
+                       fixedProperty.status === 2 || fixedProperty.status === 4 || 
+                       fixedProperty.status === 6;
 
     if (!isInactive) {
       return NextResponse.json(
@@ -109,10 +208,10 @@ export async function GET(
           success: false,
           message: 'Property is not archived or inactive',
           data: {
-            id: property.id,
-            name: property.property_name,
-            status: property.status,
-            status_label: getStatusLabel(property.status),
+            id: fixedProperty.id,
+            name: fixedProperty.property_name,
+            status: fixedProperty.status,
+            status_label: getStatusLabel(fixedProperty.status),
           },
         },
         { status: 400 }
@@ -123,20 +222,22 @@ export async function GET(
     const response = {
       success: true,
       data: {
-        ...property,
-        status_label: getStatusLabel(property.status),
-        is_archived: property.status === 0,
-        is_draft: property.status === 1,
-        is_pending: property.status === 2,
+        ...fixedProperty,
+        status_label: getStatusLabel(fixedProperty.status),
+        is_archived: fixedProperty.status === 0,
+        is_draft: fixedProperty.status === 1,
+        is_pending: fixedProperty.status === 2,
+        price_display: fixedProperty.price?.display || FALLBACK_DISPLAY,
       },
       meta: {
-        id: property.id,
-        slug: property.property_slug,
-        status: property.status,
-        status_label: getStatusLabel(property.status),
-        can_restore: property.status === 0,
-        can_edit: property.status === 0 || property.status === 1 || property.status === 2,
-        can_permanently_delete: property.status === 0,
+        id: fixedProperty.id,
+        slug: fixedProperty.property_slug,
+        status: fixedProperty.status,
+        status_label: getStatusLabel(fixedProperty.status),
+        can_restore: fixedProperty.status === 0,
+        can_edit: fixedProperty.status === 0 || fixedProperty.status === 1 || fixedProperty.status === 2,
+        can_permanently_delete: fixedProperty.status === 0,
+        price_fixed: true,
         timestamp: new Date().toISOString(),
       },
       cached: false,
@@ -168,7 +269,7 @@ export async function PUT(
     const { id } = await params;
     const idNum = parseInt(id);
     const body = await request.json();
-    const targetStatus = body.status || 5; // Default restore to Active
+    const targetStatus = body.status || 5;
 
     const property = await getPropertyById(idNum);
     if (!property) {
@@ -178,7 +279,6 @@ export async function PUT(
       );
     }
 
-    // Only archived (status 0) can be restored
     if (property.status !== 0) {
       return NextResponse.json(
         {
@@ -195,6 +295,9 @@ export async function PUT(
     }
 
     const updated = await updateProperty(idNum, { status: targetStatus });
+    
+    // Fix price after update
+    const fixedUpdated = fixPropertyPrice(updated);
 
     // Clear cache
     clearCache('archive');
@@ -205,13 +308,14 @@ export async function PUT(
     return NextResponse.json({
       success: true,
       message: `Property restored successfully to ${getStatusLabel(targetStatus)}`,
-      data: updated,
+      data: fixedUpdated,
       meta: {
         id: idNum,
         restored: true,
         previous_status: 0,
         new_status: targetStatus,
         new_label: getStatusLabel(targetStatus),
+        price_fixed: true,
         timestamp: new Date().toISOString(),
       },
     });
@@ -248,7 +352,6 @@ export async function PATCH(
       );
     }
 
-    // Only allow updates for inactive properties
     const isInactive = property.status === 0 || property.status === 1 || property.status === 2;
     if (!isInactive) {
       return NextResponse.json(
@@ -265,29 +368,12 @@ export async function PATCH(
       );
     }
 
-    // Allowed fields to update
     const allowedFields = [
-      'property_name',
-      'description',
-      'price',
-      'area',
-      'bedroom',
-      'bathrooms',
-      'completion_date',
-      'exclusive_status',
-      'dld_permit',
-      'property_slug',
-      'video_url',
-      'whatsapp_url',
-      'furnishing',
-      'parking',
-      'seo_title',
-      'meta_description',
-      'keyword',
-      'amenities',
-      'property_features',
-      'flooring',
-      'property_status',
+      'property_name', 'description', 'price', 'area', 'bedroom',
+      'bathrooms', 'completion_date', 'exclusive_status', 'dld_permit',
+      'property_slug', 'video_url', 'whatsapp_url', 'furnishing',
+      'parking', 'seo_title', 'meta_description', 'keyword',
+      'amenities', 'property_features', 'flooring', 'property_status',
     ];
 
     const updateData: any = {};
@@ -305,6 +391,9 @@ export async function PATCH(
     }
 
     const updated = await updateProperty(idNum, updateData);
+    
+    // Fix price after update
+    const fixedUpdated = fixPropertyPrice(updated);
 
     // Clear cache
     clearCache('archive');
@@ -314,10 +403,11 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       message: 'Property updated successfully',
-      data: updated,
+      data: fixedUpdated,
       meta: {
         id: idNum,
         updated_fields: Object.keys(updateData),
+        price_fixed: true,
         timestamp: new Date().toISOString(),
       },
     });

@@ -1,7 +1,131 @@
-// app/api/properties/buy/[slug]/route.ts
+// app/api/properties/buy/[slug]/route.ts - COMPLETE FIXED VERSION
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
+
+// ─── CONSTANTS ──────────────────────────────────────────────────────────
+
+const DEFAULT_CURRENCY = 'AED';
+const DEFAULT_SYMBOL = 'AED';
+const FALLBACK_DISPLAY = 'Price on Request';
+
+// ─── STRONG PRICE FIXER ───────────────────────────────────────────────
+
+function fixPropertyPrice(property: any): any {
+  if (!property) return property;
+
+  // If price doesn't exist or is null, create it
+  if (!property.price) {
+    property.price = {
+      amount: null,
+      amount_end: null,
+      display: FALLBACK_DISPLAY,
+      display_end: '',
+      currency: DEFAULT_CURRENCY,
+      symbol: DEFAULT_SYMBOL,
+      is_price_on_request: true,
+      sale_price: null,
+      listing_price: null,
+      rental_price: null,
+    };
+    return property;
+  }
+
+  const price = property.price;
+
+  // ─── TRY TO GET AMOUNT FROM VARIOUS SOURCES ──────────────────────
+  let amount = null;
+  
+  // Check all possible price fields
+  if (price.amount && price.amount !== 'null' && !isNaN(parseFloat(price.amount))) {
+    amount = parseFloat(price.amount);
+  } else if (price.sale_price && price.sale_price !== 'null' && !isNaN(parseFloat(price.sale_price))) {
+    amount = parseFloat(price.sale_price);
+  } else if (price.listing_price && price.listing_price !== 'null' && !isNaN(parseFloat(price.listing_price))) {
+    amount = parseFloat(price.listing_price);
+  } else if (price.rental_price && price.rental_price !== 'null' && !isNaN(parseFloat(price.rental_price))) {
+    amount = parseFloat(price.rental_price);
+  } else if (price.amount_from && price.amount_from !== 'null' && !isNaN(parseFloat(price.amount_from))) {
+    amount = parseFloat(price.amount_from);
+  }
+
+  // Store the amount
+  price.amount = amount;
+
+  // ─── GET CURRENCY AND SYMBOL ──────────────────────────────────────
+  let currency = price.currency || DEFAULT_CURRENCY;
+  let symbol = price.symbol || DEFAULT_SYMBOL;
+
+  // Clean up null strings
+  if (currency === 'null' || !currency) currency = DEFAULT_CURRENCY;
+  if (symbol === 'null' || !symbol) symbol = DEFAULT_SYMBOL;
+
+  price.currency = currency;
+  price.symbol = symbol;
+
+  // ─── GENERATE DISPLAY ─────────────────────────────────────────────
+  if (amount && amount > 0) {
+    // Format the amount with proper locale
+    const formattedAmount = Number(amount).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+
+    // Use symbol if available, otherwise use currency code
+    const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+    price.display = `${prefix} ${formattedAmount}`;
+
+    // If there's an end amount, add range
+    let amountEnd = null;
+    if (price.amount_end && price.amount_end !== 'null' && !isNaN(parseFloat(price.amount_end))) {
+      amountEnd = parseFloat(price.amount_end);
+    } else if (price.amount_to && price.amount_to !== 'null' && !isNaN(parseFloat(price.amount_to))) {
+      amountEnd = parseFloat(price.amount_to);
+    }
+
+    if (amountEnd && amountEnd > 0 && amountEnd !== amount) {
+      const formattedEnd = Number(amountEnd).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+      price.display = `${prefix} ${formattedAmount} - ${formattedEnd}`;
+      price.display_end = `${prefix} ${formattedEnd}`;
+      price.amount_end = amountEnd;
+    }
+
+    price.is_price_on_request = false;
+  } else {
+    // No valid amount found
+    price.display = FALLBACK_DISPLAY;
+    price.is_price_on_request = true;
+  }
+
+  // ─── FIX AMOUNT_END ───────────────────────────────────────────────
+  if (!price.amount_end || price.amount_end === 'null') {
+    price.amount_end = null;
+  }
+
+  return property;
+}
+
+// ─── FORMAT PRICE FOR DISPLAY ─────────────────────────────────────────
+
+function formatPriceDisplay(price: any): string {
+  if (!price) return FALLBACK_DISPLAY;
+  
+  if (price.display && !price.display.includes('null') && !price.display.startsWith('null ')) {
+    return price.display;
+  }
+  
+  const amount = price.amount || price.sale_price || price.listing_price || price.rental_price;
+  if (!amount) return FALLBACK_DISPLAY;
+  
+  const currency = price.currency || DEFAULT_CURRENCY;
+  const symbol = price.symbol || DEFAULT_SYMBOL;
+  const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+  
+  return `${prefix} ${Number(amount).toLocaleString()}`;
+}
 
 export async function GET(
   request: NextRequest,
@@ -143,6 +267,25 @@ export async function GET(
       );
     }
     
+    // ─── FIX PRICE ──────────────────────────────────────────────────
+    // Convert property to have proper price structure
+    const priceData = {
+      amount: property.price || null,
+      amount_end: property.price_end || null,
+      display: null,
+      display_end: '',
+      currency: property.currency_code || 'AED',
+      symbol: property.currency_symbol || 'AED',
+      is_price_on_request: !property.price || property.price <= 0,
+      sale_price: property.sale_price || null,
+      listing_price: property.listing_price || null,
+      rental_price: property.rental_price || null,
+    };
+
+    // Fix the price
+    const fixedPriceData = fixPropertyPrice({ price: priceData });
+    const formattedPrice = formatPriceDisplay(fixedPriceData.price);
+    
     // FETCH MEDIA / GALLERY IMAGES
     let galleryImages: string[] = [];
     let featuredImage: string | null = null;
@@ -255,12 +398,6 @@ export async function GET(
       console.error("Error fetching payment plans:", error.message);
     }
     
-    // FORMAT PRICE
-    const formatPrice = (amount: number | null): string => {
-      if (!amount || amount <= 0) return 'Price on Request';
-      return `AED ${amount.toLocaleString('en-US')}`;
-    };
-    
     // BUILD RESPONSE
     const developerName = property.international_developer_name || property.developer_name;
     const developerImage = property.international_developer_image || property.developer_image;
@@ -281,11 +418,16 @@ export async function GET(
           name: property.property_type || null,
         },
         price: {
-          amount: property.price || null,
-          currency: property.currency_code || 'AED',
-          symbol: property.currency_symbol || 'AED',
-          display: formatPrice(property.price),
-          is_price_on_request: !property.price || property.price <= 0,
+          amount: fixedPriceData.price.amount,
+          amount_end: fixedPriceData.price.amount_end,
+          currency: fixedPriceData.price.currency,
+          symbol: fixedPriceData.price.symbol,
+          display: formattedPrice,
+          display_end: fixedPriceData.price.display_end || null,
+          is_price_on_request: fixedPriceData.price.is_price_on_request,
+          sale_price: fixedPriceData.price.sale_price,
+          listing_price: fixedPriceData.price.listing_price,
+          rental_price: fixedPriceData.price.rental_price,
         },
         bedrooms: property.bedroom || 'Studio',
         bathrooms: property.bathrooms || '1 Bath',
@@ -331,6 +473,7 @@ export async function GET(
         slug: property.property_slug,
         found_by: foundMethod,
         listing_type: property.listing_type,
+        price_fixed: true,
         timestamp: new Date().toISOString(),
       }
     };

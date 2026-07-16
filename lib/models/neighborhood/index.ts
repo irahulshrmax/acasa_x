@@ -46,6 +46,7 @@ const CACHE_KEYS = {
   bySlug: (slug: string) => `neighborhood:slug:${slug}`,
   featured: () => `neighborhood:featured`,
   cities: () => `neighborhood:cities`,
+  byCity: (citySlug: string, filters: any) => `neighborhood:city:${citySlug}:${JSON.stringify(filters)}`,
 };
 
 function getImageUrl(rawPath: string | null | undefined): string {
@@ -57,7 +58,6 @@ function getImageUrl(rawPath: string | null | undefined): string {
   const clean = rawPath.replace(/^\/+/, '');
   const baseName = clean.replace(/\.[^.]+$/, '');
   
-  // Try locations folder with .jpg first (most common)
   return `${UPLOAD_BASE_URL}/locations/${baseName}.jpg`;
 }
 
@@ -265,26 +265,45 @@ export async function getFeaturedNeighborhoods(limit: number = 6): Promise<Neigh
   return result;
 }
 
-export async function getNeighborhoodCities(): Promise<{ id: number; name: string; count: number }[]> {
+export async function getNeighborhoodCities(): Promise<{ id: number; name: string; slug: string; count: number }[]> {
   const cacheKey = CACHE_KEYS.cities();
-  const cached = await cache.get<{ id: number; name: string; count: number }[]>(cacheKey);
+  const cached = await cache.get<{ id: number; name: string; slug: string; count: number }[]>(cacheKey);
   if (cached) return cached;
 
   const knex = await db();
   const cities = await knex('community as c')
     .leftJoin('cities as ci', 'c.city_id', 'ci.id')
     .where('c.status', 1)
-    .select('ci.id', 'ci.name')
+    .select('ci.id', 'ci.name', 'ci.slug')
     .count('c.id as count')
-    .groupBy('ci.id', 'ci.name')
+    .groupBy('ci.id', 'ci.name', 'ci.slug')
     .orderBy('count', 'desc');
 
   const result = cities.map((row: any) => ({
     id: row.id,
     name: row.name || 'Dubai',
+    slug: row.slug || 'dubai',
     count: Number(row.count),
   }));
 
   await cache.set(cacheKey, result, { ttl: 600, tags: ['neighborhood', 'cities'] });
   return result;
+}
+
+export async function getNeighborhoodsByCity(citySlug: string, filters: Omit<NeighborhoodFilters, 'city_id'> = {}) {
+  const cacheKey = CACHE_KEYS.byCity(citySlug, filters);
+  const cached = await cache.get<NeighborhoodListResult>(cacheKey);
+  if (cached) return { ...cached, meta: { ...cached.meta, cached: true } };
+
+  const knex = await db();
+  const city = await knex('cities').where('slug', citySlug).first();
+  
+  if (!city) {
+    return { data: [], meta: { total: 0, page: filters.page || 1, limit: filters.limit || 20, totalPages: 0 } };
+  }
+
+  return getNeighborhoods({
+    ...filters,
+    city_id: city.id,
+  });
 }

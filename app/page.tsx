@@ -1,7 +1,11 @@
+// app/page.tsx
 "use client";
 
-import { useEffect, useState, lazy, Suspense, memo } from "react";
+import { useEffect, useState, lazy, Suspense, memo, useRef } from "react";
 import { motion, type Variants } from "framer-motion";
+import { Eye, EyeOff, Lock, Shield, CheckCircle, XCircle } from "lucide-react";
+
+// ─── LAZY IMPORTS ──────────────────────────────────────────────────────
 
 const Navbar = lazy(() => import("@/components/Navbar"));
 const Hero = lazy(() => import("@/components/Hero"));
@@ -15,6 +19,12 @@ const About = lazy(() => import("@/components/About"));
 const Blogs = lazy(() => import("@/components/Blogs"));
 const Footer = lazy(() => import("@/components/Footer"));
 
+// ─── CONSTANTS ──────────────────────────────────────────────────────────
+
+const PASSWORD = "1234567";
+const PASSWORD_CORRECT = "✅ Password correct!";
+const PASSWORD_INCORRECT = "❌ Incorrect password. Try again.";
+
 const SECTION_BG = {
   white: "bg-white",
   cream: "bg-[#F8F6F3]",
@@ -23,6 +33,8 @@ const SECTION_BG = {
 } as const;
 
 type SectionBg = keyof typeof SECTION_BG;
+
+// ─── SKELETONS ──────────────────────────────────────────────────────────
 
 const SectionSkeleton = memo(function SectionSkeleton({
   bg = "white",
@@ -81,6 +93,8 @@ const FooterSkeleton = memo(function FooterSkeleton() {
   return <div className="h-64 bg-[#0D1520] animate-pulse" />;
 });
 
+// ─── SECTION VARIANT ────────────────────────────────────────────────────
+
 const sectionVariants: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: {
@@ -112,6 +126,8 @@ const Section = memo(function Section({
     </motion.section>
   );
 });
+
+// ─── SECTION CONFIG ─────────────────────────────────────────────────────
 
 type SectionConfig = {
   id: string;
@@ -171,7 +187,160 @@ const SECTIONS: SectionConfig[] = [
   },
 ];
 
-export default function HomePage() {
+// ─── PASSWORD LOCK SCREEN ─────────────────────────────────────────────
+
+function PasswordLockScreen({ onSuccess }: { onSuccess: () => void }) {
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [shake, setShake] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const maxAttempts = 5;
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (password === PASSWORD) {
+      setError(false);
+      localStorage.setItem("acasa_auth", "true");
+      localStorage.setItem("acasa_auth_time", Date.now().toString());
+      onSuccess();
+    } else {
+      setError(true);
+      setShake(true);
+      setAttempts(prev => prev + 1);
+      setTimeout(() => setShake(false), 500);
+      setPassword("");
+      
+      if (attempts + 1 >= maxAttempts) {
+        // Block after max attempts
+        setTimeout(() => {
+          alert(`Too many failed attempts. Please try again after 30 seconds.`);
+          setAttempts(0);
+        }, 100);
+      }
+    }
+  };
+
+  const isLocked = attempts >= maxAttempts;
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0D1520] via-[#1A2F4A] to-[#0D1520]">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="w-full max-w-md px-6"
+      >
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+          {/* Logo / Icon */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/10 border border-white/20 mb-4">
+              <Shield className="w-10 h-10 text-[#C8AA78]" />
+            </div>
+            <h1 className="text-2xl font-light text-white" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+              ACASA
+            </h1>
+            <p className="text-sm text-white/40 mt-1 tracking-widest uppercase">
+              Private Access
+            </p>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2"
+            >
+              <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              <p className="text-sm text-red-400">{PASSWORD_INCORRECT}</p>
+            </motion.div>
+          )}
+
+          {/* Attempts Warning */}
+          {attempts > 0 && attempts < maxAttempts && (
+            <div className="mb-4 text-center text-sm text-white/30">
+              Attempt {attempts} of {maxAttempts}
+            </div>
+          )}
+
+          {/* Locked State */}
+          {isLocked ? (
+            <div className="text-center py-8">
+              <Lock className="w-12 h-12 text-red-400/50 mx-auto mb-4" />
+              <p className="text-white/50 text-sm">Too many attempts. Please try again later.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                <input
+                  ref={inputRef}
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(false);
+                  }}
+                  placeholder="Enter password..."
+                  className={`
+                    w-full pl-12 pr-12 py-3.5 bg-white/10 border rounded-xl
+                    text-white placeholder:text-white/30
+                    focus:outline-none focus:ring-2 focus:ring-[#C8AA78]/50 focus:border-[#C8AA78]/50
+                    transition-all duration-200
+                    ${error ? 'border-red-500/50 ring-red-500/20' : 'border-white/20'}
+                    ${shake ? 'animate-shake' : ''}
+                  `}
+                  style={{ fontFamily: "'Inter', sans-serif" }}
+                  disabled={isLocked}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="submit"
+                disabled={isLocked}
+                className={`
+                  w-full py-3.5 rounded-xl font-medium tracking-widest uppercase text-sm
+                  transition-all duration-200
+                  ${isLocked 
+                    ? 'bg-white/10 text-white/30 cursor-not-allowed' 
+                    : 'bg-[#C8AA78] text-white hover:bg-[#B89A68] shadow-lg shadow-[#C8AA78]/20'
+                  }
+                `}
+                style={{ fontFamily: "'Inter', sans-serif" }}
+              >
+                {isLocked ? 'Locked' : 'Unlock'}
+              </motion.button>
+            </form>
+          )}
+
+          <p className="mt-6 text-center text-xs text-white/20">
+            Restricted Access • Authorized Personnel Only
+          </p>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ─── HOME CONTENT ──────────────────────────────────────────────────────
+
+function HomeContent() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -220,4 +389,50 @@ export default function HomePage() {
       </div>
     </main>
   );
+}
+
+// ─── MAIN PAGE ─────────────────────────────────────────────────────────
+
+export default function HomePage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    // Check if already authenticated
+    const auth = localStorage.getItem("acasa_auth");
+    const authTime = localStorage.getItem("acasa_auth_time");
+    
+    if (auth === "true" && authTime) {
+      const time = parseInt(authTime);
+      const now = Date.now();
+      const hour = 60 * 60 * 1000;
+      
+      // Auto logout after 1 hour
+      if (now - time < hour) {
+        setIsAuthenticated(true);
+      } else {
+        localStorage.removeItem("acasa_auth");
+        localStorage.removeItem("acasa_auth_time");
+      }
+    }
+    setChecking(false);
+  }, []);
+
+  const handleAuthSuccess = () => {
+    setIsAuthenticated(true);
+  };
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0D1520] via-[#1A2F4A] to-[#0D1520]">
+        <div className="w-12 h-12 border-2 border-[#C8AA78]/30 border-t-[#C8AA78] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <PasswordLockScreen onSuccess={handleAuthSuccess} />;
+  }
+
+  return <HomeContent />;
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, Suspense } from "react";
 import {
   Phone,
   Mail,
@@ -80,7 +80,6 @@ type FormErrors = Partial<Record<keyof FormState | "phone", string>>;
 
 // ==================== CONSTANTS ====================
 
-// ✅ FIXED: Use Zoho API route
 const CONTACT_API_URL = "/api/v1/zoho/contact";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -128,6 +127,7 @@ const ENQUIRY_TYPES = [
   { value: "Investment", label: "Investment" },
   { value: "Property Management", label: "Property Management" },
   { value: "General Inquiry", label: "General Inquiry" },
+  { value: "Schedule Viewing", label: "Schedule Viewing" },
 ];
 
 const PROPERTY_TYPES = [
@@ -492,10 +492,11 @@ function FAQItem({ faq }: { faq: FAQ }) {
   );
 }
 
-// ==================== MAIN COMPONENT ====================
+// ==================== CONTENT COMPONENT (uses useSearchParams) ====================
 
-export default function ContactSection() {
+function ContactContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [formData, setFormData] = useState<FormState>({
     ...INITIAL_FORM_STATE,
@@ -510,6 +511,39 @@ export default function ContactSection() {
     synced: boolean; 
     message?: string;
   } | null>(null);
+
+  // ✅ Handle URL query params - Auto select enquiry type
+  useEffect(() => {
+    const type = searchParams.get('type');
+    
+    if (type === 'viewing') {
+      setFormData(prev => ({
+        ...prev,
+        enquiryType: 'Schedule Viewing',
+        message: 'I would like to schedule a property viewing. Please contact me to arrange a suitable time.'
+      }));
+    } else if (type === 'buy') {
+      setFormData(prev => ({
+        ...prev,
+        enquiryType: 'Buy Property'
+      }));
+    } else if (type === 'sell') {
+      setFormData(prev => ({
+        ...prev,
+        enquiryType: 'Sell Property'
+      }));
+    } else if (type === 'rent') {
+      setFormData(prev => ({
+        ...prev,
+        enquiryType: 'Rent Property'
+      }));
+    } else if (type === 'investment') {
+      setFormData(prev => ({
+        ...prev,
+        enquiryType: 'Investment'
+      }));
+    }
+  }, [searchParams]);
 
   const inputClass = useCallback(
     (field: keyof FormErrors) => {
@@ -680,7 +714,6 @@ export default function ContactSection() {
         .filter(Boolean)
         .join("\n\n");
 
-      // ✅ FIXED: Simplified payload
       const payload: Record<string, any> = {
         first_name: formData.first_name.trim(),
         last_name: trimToNull(formData.last_name) || '',
@@ -695,7 +728,6 @@ export default function ContactSection() {
         lead_status: 1,
       };
 
-      // ✅ Add optional fields only if they have values
       const optionalFields: Record<string, string> = {
         company: formData.company,
         nationality: formData.nationality,
@@ -780,30 +812,7 @@ export default function ContactSection() {
   ]);
 
   return (
-    <section className="w-full overflow-hidden bg-white">
-      <Toaster position="top-center" />
-      <style>{PHONE_STYLES}</style>
-
-      <div className="sticky top-0 z-50 border-b border-neutral-100 bg-white/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-[1680px] items-center px-4 py-3 sm:px-6 lg:px-8">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="group flex items-center gap-2 text-[#1A2437] transition-colors hover:text-[#55708F]"
-            aria-label="Go back"
-          >
-            <ArrowLeft
-              className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5 sm:h-5 sm:w-5"
-              strokeWidth={1.5}
-            />
-          </button>
-
-          <h1 className="font-playfair ml-3 text-[16px] font-medium text-[#1A2437] sm:ml-4 sm:text-[18px] lg:text-[20px]">
-            Contact Us
-          </h1>
-        </div>
-      </div>
-
+    <>
       <section className="px-4 pt-6 pb-8 sm:px-6 sm:pt-10 sm:pb-12 lg:px-8 lg:pt-12 lg:pb-14">
         <div className="relative mx-auto max-w-[1680px]">
           <div className="relative hidden h-[200px] w-full overflow-hidden sm:block sm:h-[300px] md:h-[340px] lg:h-[380px]">
@@ -1600,6 +1609,45 @@ export default function ContactSection() {
           </div>
         </div>
       </section>
+    </>
+  );
+}
+
+// ==================== MAIN EXPORT (with Suspense) ====================
+
+export default function ContactSection() {
+  return (
+    <section className="w-full overflow-hidden bg-white">
+      <Toaster position="top-center" />
+      <style>{PHONE_STYLES}</style>
+
+      <div className="sticky top-0 z-50 border-b border-neutral-100 bg-white/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-[1680px] items-center px-4 py-3 sm:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="group flex items-center gap-2 text-[#1A2437] transition-colors hover:text-[#55708F]"
+            aria-label="Go back"
+          >
+            <ArrowLeft
+              className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5 sm:h-5 sm:w-5"
+              strokeWidth={1.5}
+            />
+          </button>
+
+          <h1 className="font-playfair ml-3 text-[16px] font-medium text-[#1A2437] sm:ml-4 sm:text-[18px] lg:text-[20px]">
+            Contact Us
+          </h1>
+        </div>
+      </div>
+
+      <Suspense fallback={
+        <div className="flex min-h-[400px] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-[#1A2437]" />
+        </div>
+      }>
+        <ContactContent />
+      </Suspense>
     </section>
   );
 }

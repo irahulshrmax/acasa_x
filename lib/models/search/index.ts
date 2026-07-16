@@ -1,13 +1,20 @@
-// lib/models/search.ts
+// lib/models/search.ts - COMPLETE WITH IMAGE RESOLVER + LOCATION FUNCTIONS
+
 import { db } from '@/lib/database';
 import { cache } from '@/lib/cache';
+import {
+  getImageUrl,
+  getProjectImageUrl,
+  getImageUrlVariations,
+  getProjectImageVariations,
+  getNoImageUrl,
+  getGalleryImages,
+  getProjectGalleryImages,
+} from '@/lib/image-resolver';
 
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
-const UPLOAD_BASE_URL = 'https://acasa.ae/upload';
-const IMAGE_DIRS = ['media', 'media/thumbnail', 'media/medium', 'properties', 'blogs'] as const;
 const CACHE_TTL = 300;
-const MAX_RESULTS = 100;
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 
@@ -45,9 +52,6 @@ export interface SearchResult {
   created_at: string | null;
   updated_at: string | null;
   project_id?: number;
-  ProjectName?: string;
-  project_slug?: string;
-  LogoUrl?: string | null;
   extra?: Record<string, any>;
 }
 
@@ -89,43 +93,16 @@ export interface SearchResponse {
   };
 }
 
-export interface ProjectSpecs {
+export interface LocationWithCount {
   id: number;
-  project_id: number;
-  kitchen_open_plan: string | null;
-  kitchen_closed: string | null;
-  maid_quarters: string | null;
-  storage_room: string | null;
-  laundry_room: string | null;
-  study_room: string | null;
-  furnished: string | null;
-  swimming_pool: string | null;
-  gymnasium: string | null;
-  tennis_court: string | null;
-  basketball_court: string | null;
-  parking: string | null;
-  child_play_area: string | null;
-  allocated_parking_qty: string | null;
-  status: number;
-}
-
-export interface ProjectGallery {
-  id: number;
-  project_id: number | null;
-  Url: string | null;
-  created_at: Date | null;
-  updated_at: Date | null;
-}
-
-export interface ProjectContact {
-  id: number;
-  project_id: number | null;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  message: string | null;
-  created_at: Date | null;
-  updated_at: Date | null;
+  name: string;
+  slug: string;
+  latitude: string | null;
+  longitude: string | null;
+  property_count: number;
+  is_popular: number;
+  city_name?: string;
+  city_id?: number;
 }
 
 // ─── CACHE KEYS ─────────────────────────────────────────────────────────────
@@ -133,7 +110,11 @@ export interface ProjectContact {
 const CACHE_KEYS = {
   search: (filters: SearchFilters) => `search:${JSON.stringify(filters)}`,
   single: (id: string) => `search:single:${id}`,
-  stats: () => `search:stats`,
+  locations: (cityId: number, search: string, limit: number) =>
+    `locations:${cityId}:${search}:${limit}`,
+  popularLocations: (cityId: number) => `locations:popular:${cityId}`,
+  searchLocations: (query: string, cityId: number, limit: number) =>
+    `locations:search:${cityId}:${query}:${limit}`,
 };
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
@@ -161,196 +142,88 @@ function formatArea(area: number | null): string | null {
 }
 
 function getBedroomDisplay(bedroom: string | null): string {
-  if (!bedroom) return "Studio";
+  if (!bedroom) return 'Studio';
   const t = bedroom.toLowerCase().trim();
-  if (t.includes("studio")) return "Studio";
+  if (t.includes('studio')) return 'Studio';
   const match = bedroom.match(/(\d+)/);
   if (match) {
     const num = parseInt(match[1]);
-    if (num === 0) return "Studio";
-    if (num === 1) return "1 Bed";
+    if (num === 0) return 'Studio';
+    if (num === 1) return '1 Bed';
     return `${num} Beds`;
   }
   return bedroom;
 }
 
 function getBathroomDisplay(bathrooms: string | null): string {
-  if (!bathrooms) return "1 Bath";
+  if (!bathrooms) return '1 Bath';
   const match = bathrooms.match(/(\d+)/);
   if (match) {
     const num = parseInt(match[1]);
-    if (num === 0) return "1 Bath";
+    if (num === 0) return '1 Bath';
     return `${num} Bath${num > 1 ? 's' : ''}`;
   }
   return bathrooms;
 }
 
 function getOccupancyLabel(occupancy: string | null): string {
-  if (!occupancy) return "Available";
+  if (!occupancy) return 'Available';
   const map: Record<string, string> = {
-    "under construction": "Under Construction",
-    "ready to move": "Ready to Move",
-    vacant: "Vacant",
-    "ready": "Ready to Move",
-    "off plan": "Off Plan",
+    'under construction': 'Under Construction',
+    'ready to move': 'Ready to Move',
+    vacant: 'Vacant',
+    ready: 'Ready to Move',
+    'off plan': 'Off Plan',
   };
   const key = occupancy.toLowerCase().trim();
   return map[key] || occupancy;
 }
 
 function getCompletionStatus(completionDate: string | null): string {
-  if (!completionDate) return "Date TBC";
+  if (!completionDate) return 'Date TBC';
   try {
     const now = new Date();
     const comp = new Date(completionDate);
-    if (isNaN(comp.getTime())) return "Date TBC";
-    const diffMonths = (comp.getFullYear() - now.getFullYear()) * 12 + (comp.getMonth() - now.getMonth());
-    if (diffMonths < 0) return "Ready to Move";
-    if (diffMonths <= 3) return "Handover in 3 Months";
-    if (diffMonths <= 6) return "Handover in 6 Months";
+    if (isNaN(comp.getTime())) return 'Date TBC';
+    const diffMonths =
+      (comp.getFullYear() - now.getFullYear()) * 12 +
+      (comp.getMonth() - now.getMonth());
+    if (diffMonths < 0) return 'Ready to Move';
+    if (diffMonths <= 3) return 'Handover in 3 Months';
+    if (diffMonths <= 6) return 'Handover in 6 Months';
     return `Handover ${comp.getFullYear()}`;
   } catch {
-    return "Date TBC";
+    return 'Date TBC';
   }
-}
-
-function parseCommaIds(ids: string | null): number[] {
-  if (!ids) return [];
-  return ids
-    .split(',')
-    .map((id) => parseInt(id.trim(), 10))
-    .filter((id) => !isNaN(id));
 }
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-function cleanPath(val: string): string {
-  return val.replace(/\\/g, '/').trim().replace(/^\/+/, '');
-}
-
-function isAbsoluteUrl(val: string): boolean {
-  return /^https?:\/\//i.test(val);
-}
-
-function stripUploadPrefix(val: string): string {
-  return cleanPath(val).replace(/^upload\//i, '').replace(/^\/+/, '');
-}
-
-// ─── IMAGE HELPERS ──────────────────────────────────────────────────────────
-
-export function getNoImageUrl(): string {
-  return `${UPLOAD_BASE_URL}/no-image.png`;
-}
-
-function resolvePropertyImage(imagePath: string | null): string {
-  if (!imagePath) return getNoImageUrl();
-  if (isAbsoluteUrl(imagePath)) return imagePath;
-
-  const clean = stripUploadPrefix(imagePath);
-  if (!clean) return getNoImageUrl();
-
-  const paths = [
-    `${UPLOAD_BASE_URL}/media/${clean}`,
-    `${UPLOAD_BASE_URL}/properties/${clean}`,
-    `${UPLOAD_BASE_URL}/uploads/${clean}`,
-    `${UPLOAD_BASE_URL}/${clean}`,
-  ];
-
-  for (const path of paths) {
-    if (!path.includes('no-image')) {
-      return path;
-    }
-  }
-
-  return getNoImageUrl();
-}
-
-function resolveProjectImage(imagePath: string | null): string {
-  if (!imagePath) return getNoImageUrl();
-  if (isAbsoluteUrl(imagePath)) return imagePath;
-
-  const clean = stripUploadPrefix(imagePath);
-  if (!clean) return getNoImageUrl();
-
-  const paths = [
-    `${UPLOAD_BASE_URL}/media/${clean}`,
-    `${UPLOAD_BASE_URL}/projects/${clean}`,
-    `${UPLOAD_BASE_URL}/uploads/${clean}`,
-    `${UPLOAD_BASE_URL}/${clean}`,
-  ];
-
-  for (const path of paths) {
-    if (!path.includes('no-image')) {
-      return path;
-    }
-  }
-
-  return getNoImageUrl();
-}
-
-function getImageUrlVariations(imagePath: string | null): string[] {
-  if (!imagePath) return [getNoImageUrl()];
-
-  const mainUrl = resolvePropertyImage(imagePath);
-  const variations = [mainUrl];
-
-  const clean = stripUploadPrefix(imagePath);
-  if (clean) {
-    const sizes = ['thumbnail', 'medium', 'large'];
-    for (const size of sizes) {
-      const url = `${UPLOAD_BASE_URL}/media/${size}/${clean}`;
-      if (!url.includes('no-image')) {
-        variations.push(url);
-      }
-    }
-  }
-
-  return uniqueStrings(variations);
-}
-
-function getProjectImageVariations(imagePath: string | null): string[] {
-  if (!imagePath) return [getNoImageUrl()];
-
-  const mainUrl = resolveProjectImage(imagePath);
-  const variations = [mainUrl];
-
-  const clean = stripUploadPrefix(imagePath);
-  if (clean) {
-    const sizes = ['thumbnail', 'medium', 'large'];
-    for (const size of sizes) {
-      const url = `${UPLOAD_BASE_URL}/media/${size}/${clean}`;
-      if (!url.includes('no-image')) {
-        variations.push(url);
-      }
-    }
-  }
-
-  return uniqueStrings(variations);
-}
-
 // ─── TABLE CHECK HELPERS ────────────────────────────────────────────────────
 
 async function tableExists(knex: any, tableName: string): Promise<boolean> {
   try {
-    return await knex.schema.hasTable(tableName);
+    const result = await knex.raw(`SHOW TABLES LIKE '${tableName}'`);
+    return result[0]?.length > 0;
   } catch {
     return false;
   }
 }
 
-// ─── FETCH FUNCTIONS WITH SAFE TABLE CHECKS ───────────────────────────────
+// ─── FETCH FUNCTIONS ──────────────────────────────────────────────────────
 
-async function fetchMediaRecords(knex: any, propertyIds: number[]): Promise<Map<number, any[]>> {
+async function fetchMediaRecords(
+  knex: any,
+  propertyIds: number[]
+): Promise<Map<number, any[]>> {
   const mediaByPropertyId = new Map<number, any[]>();
   if (!propertyIds.length) return mediaByPropertyId;
 
   try {
     const exists = await tableExists(knex, 'media');
-    if (!exists) {
-      return mediaByPropertyId;
-    }
+    if (!exists) return mediaByPropertyId;
 
     const rows = await knex('media')
       .whereIn('module_id', propertyIds)
@@ -365,21 +238,23 @@ async function fetchMediaRecords(knex: any, propertyIds: number[]): Promise<Map<
         mediaByPropertyId.set(row.module_id, existing);
       }
     }
-  } catch (error: any) {
+  } catch (error) {
     // Silent fail
   }
+
   return mediaByPropertyId;
 }
 
-async function fetchProjectGallery(knex: any, projectIds: number[]): Promise<Map<number, any[]>> {
+async function fetchProjectGallery(
+  knex: any,
+  projectIds: number[]
+): Promise<Map<number, any[]>> {
   const galleryByProjectId = new Map<number, any[]>();
   if (!projectIds.length) return galleryByProjectId;
 
   try {
     const exists = await tableExists(knex, 'project_gallery');
-    if (!exists) {
-      return galleryByProjectId;
-    }
+    if (!exists) return galleryByProjectId;
 
     const rows = await knex('project_gallery')
       .whereIn('project_id', projectIds)
@@ -392,172 +267,143 @@ async function fetchProjectGallery(knex: any, projectIds: number[]): Promise<Map
         galleryByProjectId.set(row.project_id, existing);
       }
     }
-  } catch (error: any) {
+  } catch (error) {
     // Silent fail
   }
+
   return galleryByProjectId;
 }
 
-async function fetchProjectSpecs(knex: any, projectIds: number[]): Promise<Map<number, ProjectSpecs>> {
-  const result = new Map<number, ProjectSpecs>();
-  if (!projectIds.length) return result;
+// ─── TRANSFORM FUNCTIONS WITH IMAGE RESOLVER ──────────────────────────────
 
-  try {
-    const exists = await tableExists(knex, 'project_specs');
-    if (!exists) {
-      return result;
-    }
+function transformProperty(
+  property: any,
+  mediaRecords: any[] = []
+): SearchResult {
+  // ✅ Use image helper for property images
+  const imagePath = property.featured_image || property.image || null;
 
-    const rows: ProjectSpecs[] = await knex('project_specs')
-      .whereIn('project_id', projectIds)
-      .select('*');
+  // Get image URL using helper
+  const imageUrl = getImageUrl(imagePath);
 
-    for (const row of rows) {
-      if (row.project_id) result.set(row.project_id, row);
-    }
-  } catch (error: any) {
-    // Silent fail
-  }
-  return result;
-}
-
-async function fetchProjectContacts(knex: any, projectIds: number[]): Promise<Map<number, ProjectContact[]>> {
-  const result = new Map<number, ProjectContact[]>();
-  if (!projectIds.length) return result;
-
-  try {
-    const exists = await tableExists(knex, 'project_contacts');
-    if (!exists) {
-      return result;
-    }
-
-    const rows: ProjectContact[] = await knex('project_contacts')
-      .whereIn('project_id', projectIds)
-      .select('*')
-      .orderBy('created_at', 'desc');
-
-    for (const row of rows) {
-      if (row.project_id !== null) {
-        const list = result.get(row.project_id) ?? [];
-        list.push(row);
-        result.set(row.project_id, list);
-      }
-    }
-  } catch (error: any) {
-    // Silent fail
-  }
-  return result;
-}
-
-// ─── TRANSFORM FUNCTIONS ────────────────────────────────────────────────────
-
-function transformProperty(property: any, mediaRecords: any[] = []): SearchResult {
-  const imagePath = property.featured_image || property.image || property.imageurl || property.img || null;
-  let imageUrl = resolvePropertyImage(imagePath);
-
-  let galleryImages: string[] = [];
-  if (mediaRecords && mediaRecords.length > 0) {
-    galleryImages = mediaRecords
-      .map((m) => resolvePropertyImage(m.path))
-      .filter((url) => !url.includes('no-image'));
-  }
-
-  if (imageUrl.includes('no-image') && galleryImages.length > 0) {
-    imageUrl = galleryImages[0];
-  }
-
+  // Get image variations
   const imageVariations = getImageUrlVariations(imagePath);
-  const finalGallery = galleryImages.length > 0 ? galleryImages : [imageUrl];
+
+  // Get gallery images from media records
+  const galleryImages =
+    mediaRecords.length > 0 ? getGalleryImages(mediaRecords) : [imageUrl];
+
+  console.log(`🖼️ [Property ${property.id}] Image:`, {
+    featured_image: property.featured_image,
+    image_path: imagePath,
+    resolved_url: imageUrl,
+    variations_count: imageVariations.length,
+    gallery_count: galleryImages.length,
+  });
 
   return {
     id: property.id,
     result_type: 'property',
-    name: property.property_name || property.name || 'Property',
-    slug: property.property_slug || property.slug || `property-${property.id}`,
+    name: property.property_name || 'Property',
+    slug: property.property_slug || `property-${property.id}`,
     listing_type: property.listing_type || null,
     price: toNullableNumber(property.price),
     price_display: formatPrice(toNullableNumber(property.price)),
     bedroom: property.bedroom ? getBedroomDisplay(property.bedroom) : null,
-    bathrooms: property.bathrooms ? getBathroomDisplay(property.bathrooms) : null,
+    bathrooms: property.bathrooms
+      ? getBathroomDisplay(property.bathrooms)
+      : null,
     area: toNullableNumber(property.area),
     area_display: formatArea(toNullableNumber(property.area)),
     location: property.location || property.address || null,
-    city_name: property.city_name || property.city || null,
-    community_name: property.community_name || property.community || null,
-    developer_name: property.developer_name || property.developer || null,
-    description: property.description || property.descriptions || null,
+    city_name: property.city_name || null,
+    community_name: property.community_name || null,
+    developer_name: property.developer_name || null,
+    description: property.description || null,
     featured_image: imagePath,
     image_url: imageUrl,
-    image_variations: imageVariations.length > 0 ? imageVariations : [imageUrl],
-    gallery_images: finalGallery,
+    image_variations:
+      imageVariations.length > 0 ? imageVariations : [imageUrl],
+    gallery_images: galleryImages.length > 0 ? galleryImages : [imageUrl],
     completion_date: property.completion_date || null,
-    occupancy: property.occupancy ? getOccupancyLabel(property.occupancy) : null,
+    occupancy: property.occupancy
+      ? getOccupancyLabel(property.occupancy)
+      : null,
     property_type: property.property_type || null,
     furnishing: property.furnishing || null,
     parking: property.parking || null,
-    rera_number: property.ReraNumber || property.rera_number || null,
+    rera_number: property.ReraNumber || null,
     dld_permit: property.dld_permit || null,
     video_url: property.video_url || null,
     amenities: property.amenities
-      ? property.amenities.split(',').filter(Boolean).map((a: string) => a.trim())
+      ? property.amenities
+          .split(',')
+          .filter(Boolean)
+          .map((a: string) => a.trim())
       : [],
     status: property.status || 0,
     created_at: property.created_at || null,
     updated_at: property.updated_at || null,
     extra: {
       completion_status: getCompletionStatus(property.completion_date),
-      p_id: property.p_id || null,
       project_id: property.project_id || null,
-      featured_property: property.featured_property || null,
-      agent_id: property.agent_id || null,
-      user_id: property.user_id || null,
-      community_id: property.community_id || null,
       city_id: property.city_id || null,
+      community_id: property.community_id || null,
     },
   };
 }
 
-function transformProject(project: any, galleryRecords: any[] = []): SearchResult {
-  const imagePath = project.featured_image || project.image || project.imageurl || project.Img || project.LogoUrl || null;
-  let imageUrl = resolveProjectImage(imagePath);
+function transformProject(
+  project: any,
+  galleryRecords: any[] = []
+): SearchResult {
+  // ✅ Use image helper for project images
+  const imagePath = project.featured_image || project.image || null;
 
-  let galleryImages: string[] = [];
-  if (galleryRecords && galleryRecords.length > 0) {
-    galleryImages = galleryRecords
-      .map((g) => resolveProjectImage(g.Url))
-      .filter((url) => !url.includes('no-image'));
-  }
+  // Get image URL using project image helper
+  const imageUrl = getProjectImageUrl(imagePath);
 
-  if (imageUrl.includes('no-image') && galleryImages.length > 0) {
-    imageUrl = galleryImages[0];
-  }
-
+  // Get image variations
   const imageVariations = getProjectImageVariations(imagePath);
-  const finalGallery = galleryImages.length > 0 ? galleryImages : [imageUrl];
 
-  const logoUrl = project.LogoUrl ? resolveProjectImage(project.LogoUrl) : null;
+  // Get gallery images from project gallery records
+  const galleryImages =
+    galleryRecords.length > 0
+      ? getProjectGalleryImages(galleryRecords)
+      : [imageUrl];
+
+  console.log(`🖼️ [Project ${project.id}] Image:`, {
+    featured_image: project.featured_image,
+    image_path: imagePath,
+    resolved_url: imageUrl,
+    variations_count: imageVariations.length,
+    gallery_count: galleryImages.length,
+  });
 
   return {
     id: project.id,
     result_type: 'project',
-    name: project.ProjectName || project.name || 'Project',
-    slug: project.project_slug || project.slug || `project-${project.id}`,
+    name: project.name || 'Project',
+    slug: project.slug || `project-${project.id}`,
     listing_type: project.listing_type || 'Project',
     price: toNullableNumber(project.price),
     price_display: formatPrice(toNullableNumber(project.price)),
     bedroom: project.bedroom ? getBedroomDisplay(project.bedroom) : null,
-    bathrooms: project.bathrooms ? getBathroomDisplay(project.bathrooms) : null,
+    bathrooms: project.bathrooms
+      ? getBathroomDisplay(project.bathrooms)
+      : null,
     area: toNullableNumber(project.area),
     area_display: formatArea(toNullableNumber(project.area)),
-    location: project.LocationName || project.location || project.address || null,
-    city_name: project.city_name || project.CityName || project.city || null,
-    community_name: project.community_name || project.CommunityName || project.community || null,
-    developer_name: project.developer_name || project.developer || null,
-    description: project.Description || project.description || null,
+    location: project.location || null,
+    city_name: project.city_name || null,
+    community_name: project.community_name || null,
+    developer_name: project.developer_name || null,
+    description: project.description || null,
     featured_image: imagePath,
     image_url: imageUrl,
-    image_variations: imageVariations.length > 0 ? imageVariations : [imageUrl],
-    gallery_images: finalGallery,
+    image_variations:
+      imageVariations.length > 0 ? imageVariations : [imageUrl],
+    gallery_images: galleryImages.length > 0 ? galleryImages : [imageUrl],
     completion_date: project.completion_date || null,
     occupancy: project.occupancy ? getOccupancyLabel(project.occupancy) : null,
     property_type: project.property_type || null,
@@ -567,31 +413,28 @@ function transformProject(project: any, galleryRecords: any[] = []): SearchResul
     dld_permit: project.dld_permit || null,
     video_url: project.video_url || null,
     amenities: project.amenities
-      ? project.amenities.split(',').filter(Boolean).map((a: string) => a.trim())
+      ? project.amenities
+          .split(',')
+          .filter(Boolean)
+          .map((a: string) => a.trim())
       : [],
     status: project.status || 0,
     created_at: project.created_at || null,
     updated_at: project.updated_at || null,
     project_id: project.id,
-    ProjectName: project.ProjectName || project.name,
-    project_slug: project.project_slug || project.slug,
-    LogoUrl: logoUrl,
     extra: {
       completion_status: getCompletionStatus(project.completion_date),
-      featured_project: project.featured_project || null,
       city_id: project.city_id || null,
       community_id: project.community_id || null,
-      sub_community_id: project.sub_community_id || null,
-      price_end: project.price_end || null,
-      area_end: project.area_end || null,
-      total_units: project.total_units || null,
     },
   };
 }
 
 // ─── MAIN SEARCH FUNCTION ──────────────────────────────────────────────────
 
-export async function search(filters: SearchFilters = {}): Promise<SearchResponse> {
+export async function search(
+  filters: SearchFilters = {}
+): Promise<SearchResponse> {
   const {
     q = '',
     type = 'buy',
@@ -610,7 +453,7 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     featured,
     sort_by = 'newest',
     page = 1,
-    limit = 12,
+    limit = 100,
     include_properties = true,
     include_projects = true,
   } = filters;
@@ -631,6 +474,7 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
   let propertyIds: number[] = [];
   let projectIds: number[] = [];
 
+  // ─── SEARCH PROPERTIES ──────────────────────────────────────────────────
   if (include_properties) {
     const propQuery = knex('properties as p')
       .distinct('p.id')
@@ -642,18 +486,29 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
 
     if (q) {
       propQuery.where(function (this: any) {
-        this.where('p.property_name', 'like', `%${q}%`)
-          .orWhere('p.location', 'like', `%${q}%`)
-          .orWhere('p.address', 'like', `%${q}%`)
-          .orWhere('p.keyword', 'like', `%${q}%`)
-          .orWhere('p.property_slug', 'like', `%${q}%`);
+        const searchTerm = `%${q}%`;
+        this.where('p.property_name', 'like', searchTerm)
+          .orWhere('p.location', 'like', searchTerm)
+          .orWhere('p.address', 'like', searchTerm)
+          .orWhere('p.keyword', 'like', searchTerm)
+          .orWhere('p.property_slug', 'like', searchTerm)
+          .orWhere('p.description', 'like', searchTerm)
+          .orWhere('p.title_deep', 'like', searchTerm)
+          .orWhere('p.building', 'like', searchTerm)
+          .orWhere('p.landmark', 'like', searchTerm)
+          .orWhere('p.property_locations', 'like', searchTerm);
       });
     }
 
     if (type === 'rent') {
       propQuery.where('p.listing_type', 'Rent');
     } else if (type === 'buy') {
-      propQuery.where('p.listing_type', 'in', ['Sale', 'Off plan', 'Off-plan', 'Offplan']);
+      propQuery.whereIn('p.listing_type', [
+        'Sale',
+        'Off plan',
+        'Off-plan',
+        'Offplan',
+      ]);
     } else if (listing_type) {
       propQuery.where('p.listing_type', listing_type);
     }
@@ -662,7 +517,8 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       propQuery.where(function (this: any) {
         for (const loc of locations) {
           this.orWhere('p.location', 'like', `%${loc}%`)
-            .orWhere('p.address', 'like', `%${loc}%`);
+            .orWhere('p.address', 'like', `%${loc}%`)
+            .orWhere('p.property_slug', 'like', `%${loc}%`);
         }
       });
     }
@@ -670,18 +526,8 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     if (city_id) propQuery.where('p.city_id', city_id);
     if (community_id) propQuery.where('p.community_id', community_id);
 
-    if (min_price) {
-      propQuery.where(function (this: any) {
-        this.where('p.price', '>=', min_price)
-          .orWhere('p.price_end', '>=', min_price);
-      });
-    }
-    if (max_price) {
-      propQuery.where(function (this: any) {
-        this.where('p.price', '<=', max_price)
-          .orWhere('p.price_end', '<=', max_price);
-      });
-    }
+    if (min_price) propQuery.where('p.price', '>=', min_price);
+    if (max_price) propQuery.where('p.price', '<=', max_price);
 
     if (min_bedrooms !== undefined && min_bedrooms !== null) {
       propQuery.whereRaw('CAST(p.bedroom AS UNSIGNED) >= ?', [min_bedrooms]);
@@ -710,15 +556,11 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
       case 'oldest':
         propQuery.orderBy('p.created_at', 'asc');
         break;
-      case 'popular':
-        propQuery.orderBy('p.featured_property', 'desc');
-        break;
       default:
         propQuery.orderBy('p.created_at', 'desc');
     }
 
-    const propertyLimit = Math.ceil(limit / 2);
-    propQuery.limit(propertyLimit).offset(offset);
+    propQuery.limit(limit).offset(offset);
 
     properties = await propQuery.select(
       'p.*',
@@ -730,108 +572,43 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     propertyIds = properties.map((p) => p.id);
   }
 
+  // ─── SEARCH PROJECTS ────────────────────────────────────────────────────
   if (include_projects) {
-    const projQuery = knex('project_listing as pl')
-      .distinct('pl.id')
-      .leftJoin('cities as c', 'pl.city_id', 'c.id')
-      .leftJoin('community as com', 'pl.community_id', 'com.id')
-      .leftJoin('developers as d', 'pl.developer_id', 'd.id')
-      .leftJoin('internationaldevelopers as idev', 'pl.developer_id', 'idev.id')
-      .where('pl.status', status);
+    try {
+      const projQuery = knex('project_data as pl')
+        .distinct('pl.id')
+        .where('pl.status', status);
 
-    if (q) {
-      projQuery.where(function (this: any) {
-        this.where('pl.ProjectName', 'like', `%${q}%`)
-          .orWhere('pl.LocationName', 'like', `%${q}%`)
-          .orWhere('pl.Description', 'like', `%${q}%`)
-          .orWhere('pl.keyword', 'like', `%${q}%`)
-          .orWhere('pl.project_slug', 'like', `%${q}%`);
-      });
+      if (q) {
+        projQuery.where(function (this: any) {
+          const searchTerm = `%${q}%`;
+          this.where('pl.name', 'like', searchTerm);
+        });
+      }
+
+      const countQuery2 = projQuery.clone();
+      const [{ total: projTotal }] = await countQuery2.count('* as total');
+      totalProjects = Number(projTotal) || 0;
+
+      const projectLimit = Math.ceil(limit / 2);
+      projQuery.limit(projectLimit).offset(offset);
+
+      projects = await projQuery.select('pl.*');
+      projectIds = projects.map((p) => p.id);
+    } catch (err) {
+      console.log('⚠️ Error in project search:', err);
+      totalProjects = 0;
+      projects = [];
     }
-
-    if (listing_type) {
-      projQuery.where('pl.listing_type', listing_type);
-    } else if (type === 'buy') {
-      projQuery.where('pl.listing_type', 'in', ['Sale', 'Off plan', 'Off-plan', 'Offplan']);
-    } else if (type === 'rent') {
-      projQuery.where('pl.listing_type', 'Rent');
-    }
-
-    if (locations.length > 0) {
-      projQuery.where(function (this: any) {
-        for (const loc of locations) {
-          this.orWhere('pl.LocationName', 'like', `%${loc}%`);
-        }
-      });
-    }
-
-    if (city_id) projQuery.where('pl.city_id', city_id);
-    if (community_id) projQuery.where('pl.community_id', community_id);
-
-    if (min_price) {
-      projQuery.where(function (this: any) {
-        this.where('pl.price', '>=', min_price)
-          .orWhere('pl.price_end', '>=', min_price);
-      });
-    }
-    if (max_price) {
-      projQuery.where(function (this: any) {
-        this.where('pl.price', '<=', max_price)
-          .orWhere('pl.price_end', '<=', max_price);
-      });
-    }
-
-    if (min_bedrooms !== undefined && min_bedrooms !== null) {
-      projQuery.whereRaw('CAST(pl.bedroom AS UNSIGNED) >= ?', [min_bedrooms]);
-    }
-    if (max_bedrooms !== undefined && max_bedrooms !== null) {
-      projQuery.whereRaw('CAST(pl.bedroom AS UNSIGNED) <= ?', [max_bedrooms]);
-    }
-
-    if (min_area) projQuery.where('pl.area', '>=', min_area);
-    if (max_area) projQuery.where('pl.area', '<=', max_area);
-
-    if (featured) projQuery.where('pl.featured_project', '1');
-
-    const countQuery2 = projQuery.clone();
-    const [{ total: projTotal }] = await countQuery2.count('* as total');
-    totalProjects = Number(projTotal) || 0;
-
-    switch (sort_by) {
-      case 'price_asc':
-        projQuery.orderBy('pl.price', 'asc');
-        break;
-      case 'price_desc':
-        projQuery.orderBy('pl.price', 'desc');
-        break;
-      case 'oldest':
-        projQuery.orderBy('pl.created_at', 'asc');
-        break;
-      case 'popular':
-        projQuery.orderBy('pl.featured_project', 'desc');
-        break;
-      default:
-        projQuery.orderBy('pl.created_at', 'desc');
-    }
-
-    const projectLimit = Math.ceil(limit / 2);
-    projQuery.limit(projectLimit).offset(offset);
-
-    projects = await projQuery.select(
-      'pl.*',
-      'c.name as city_name',
-      'com.name as community_name',
-      knex.raw('COALESCE(d.name, idev.name) as developer_name')
-    );
-
-    projectIds = projects.map((p) => p.id);
   }
 
+  // ─── FETCH MEDIA & GALLERY ──────────────────────────────────────────────
   const [mediaByPropertyId, galleryByProjectId] = await Promise.all([
     fetchMediaRecords(knex, propertyIds),
     fetchProjectGallery(knex, projectIds),
   ]);
 
+  // ─── TRANSFORM WITH IMAGES ──────────────────────────────────────────────
   const transformedProperties = properties.map((p) => {
     const mediaRecords = mediaByPropertyId.get(p.id) ?? [];
     return transformProperty(p, mediaRecords);
@@ -842,8 +619,13 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
     return transformProject(p, galleryRecords);
   });
 
+  // ─── COMBINE RESULTS ───────────────────────────────────────────────────
   const allResults = [...transformedProperties, ...transformedProjects];
   const total = totalProperties + totalProjects;
+
+  console.log(
+    `📊 [Search] Final: ${allResults.length} results (${transformedProperties.length} properties, ${transformedProjects.length} projects)`
+  );
 
   const response: SearchResponse = {
     data: allResults,
@@ -864,7 +646,11 @@ export async function search(filters: SearchFilters = {}): Promise<SearchRespons
   return response;
 }
 
-export async function getSearchResult(slugOrId: string): Promise<SearchResult | null> {
+// ─── GET SINGLE RESULT ──────────────────────────────────────────────────────
+
+export async function getSearchResult(
+  slugOrId: string
+): Promise<SearchResult | null> {
   const cacheKey = CACHE_KEYS.single(slugOrId);
   const cached = await cache.get<SearchResult>(cacheKey);
   if (cached) {
@@ -874,6 +660,7 @@ export async function getSearchResult(slugOrId: string): Promise<SearchResult | 
   const knex = await db();
   const isNumeric = /^\d+$/.test(slugOrId);
 
+  // ─── TRY PROPERTY FIRST ─────────────────────────────────────────────────
   try {
     let property = null;
 
@@ -885,18 +672,19 @@ export async function getSearchResult(slugOrId: string): Promise<SearchResult | 
       .where('p.status', 1);
 
     if (isNumeric) {
-      property = await propertyQuery.where('p.id', parseInt(slugOrId)).first();
+      property = await propertyQuery
+        .where('p.id', parseInt(slugOrId))
+        .first();
     } else {
       property = await propertyQuery
         .where('p.property_slug', slugOrId)
-        .orWhere('p.slug', slugOrId)
         .first();
     }
 
     if (property) {
       let mediaRecords: any[] = [];
       try {
-        const exists = await knex.schema.hasTable('media');
+        const exists = await tableExists(knex, 'media');
         if (exists) {
           mediaRecords = await knex('media')
             .where('module_id', property.id)
@@ -912,7 +700,11 @@ export async function getSearchResult(slugOrId: string): Promise<SearchResult | 
         .leftJoin('cities as c', 'p.city_id', 'c.id')
         .leftJoin('community as com', 'p.community_id', 'com.id')
         .leftJoin('developers as d', 'p.developer_id', 'd.id')
-        .leftJoin('internationaldevelopers as idev', 'p.developer_id', 'idev.id')
+        .leftJoin(
+          'internationaldevelopers as idev',
+          'p.developer_id',
+          'idev.id'
+        )
         .where('p.id', property.id)
         .select(
           'p.*',
@@ -927,32 +719,24 @@ export async function getSearchResult(slugOrId: string): Promise<SearchResult | 
       return result;
     }
   } catch (err) {
-    // Silent fail
+    console.log('⚠️ Error in property lookup:', err);
   }
 
+  // ─── TRY PROJECT ────────────────────────────────────────────────────────
   try {
+    const projectQuery = knex('project_data').where('status', 1);
+
     let project = null;
-
-    const projectQuery = knex('project_listing as pl')
-      .leftJoin('cities as c', 'pl.city_id', 'c.id')
-      .leftJoin('community as com', 'pl.community_id', 'com.id')
-      .leftJoin('developers as d', 'pl.developer_id', 'd.id')
-      .leftJoin('internationaldevelopers as idev', 'pl.developer_id', 'idev.id')
-      .where('pl.status', 1);
-
     if (isNumeric) {
-      project = await projectQuery.where('pl.id', parseInt(slugOrId)).first();
+      project = await projectQuery.where('id', parseInt(slugOrId)).first();
     } else {
-      project = await projectQuery
-        .where('pl.project_slug', slugOrId)
-        .orWhere('pl.slug', slugOrId)
-        .first();
+      project = await projectQuery.where('slug', slugOrId).first();
     }
 
     if (project) {
       let galleryRecords: any[] = [];
       try {
-        const exists = await knex.schema.hasTable('project_gallery');
+        const exists = await tableExists(knex, 'project_gallery');
         if (exists) {
           galleryRecords = await knex('project_gallery')
             .where('project_id', project.id)
@@ -962,36 +746,226 @@ export async function getSearchResult(slugOrId: string): Promise<SearchResult | 
         // Silent fail
       }
 
-      const fullProject = await knex('project_listing as pl')
-        .leftJoin('cities as c', 'pl.city_id', 'c.id')
-        .leftJoin('community as com', 'pl.community_id', 'com.id')
-        .leftJoin('developers as d', 'pl.developer_id', 'd.id')
-        .leftJoin('internationaldevelopers as idev', 'pl.developer_id', 'idev.id')
-        .where('pl.id', project.id)
-        .select(
-          'pl.*',
-          'c.name as city_name',
-          'com.name as community_name',
-          knex.raw('COALESCE(d.name, idev.name) as developer_name')
-        )
-        .first();
-
-      const result = transformProject(fullProject || project, galleryRecords);
+      const result = transformProject(project, galleryRecords);
       await cache.set(cacheKey, result, { ttl: CACHE_TTL * 2 });
       return result;
     }
   } catch (err) {
-    // Silent fail
+    console.log('⚠️ Error in project lookup:', err);
   }
 
   return null;
 }
 
-// ─── EXPORT ─────────────────────────────────────────────────────────────
+// ─── GET LOCATIONS WITH PROPERTY COUNTS ──────────────────────────────────
+
+export async function getLocationsWithCounts(
+  cityId: number = 71,
+  search: string = '',
+  limit: number = 20
+): Promise<LocationWithCount[]> {
+  const cacheKey = CACHE_KEYS.locations(cityId, search, limit);
+  const cached = await cache.get<LocationWithCount[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const knex = await db();
+
+    let query = knex('community as c')
+      .leftJoin('properties as p', function (this: any) {
+        this.on('p.community_id', '=', 'c.id').andOn(
+          knex.raw('p.status = 1')
+        );
+      })
+      .select(
+        'c.id',
+        'c.name',
+        'c.slug',
+        'c.latitude',
+        'c.longitude',
+        knex.raw('COUNT(p.id) as property_count'),
+        knex.raw(`
+          CASE
+            WHEN c.name LIKE '%Palm%Jumeirah%' THEN 1
+            WHEN c.name LIKE '%Dubai%Marina%' THEN 1
+            WHEN c.name LIKE '%Downtown%Dubai%' THEN 1
+            WHEN c.name LIKE '%Yas%Island%' THEN 1
+            WHEN c.name LIKE '%Dubai Hills%' THEN 1
+            WHEN c.name LIKE '%Jumeirah%' THEN 1
+            ELSE 0
+          END as is_popular
+        `)
+      )
+      .where('c.city_id', cityId)
+      .where('c.status', 1)
+      .groupBy('c.id', 'c.name', 'c.slug', 'c.latitude', 'c.longitude')
+      .having(knex.raw('COUNT(p.id)'), '>', 0);
+
+    if (search && search.length > 0) {
+      query = query.where('c.name', 'like', `%${search}%`);
+    }
+
+    const locations = await query
+      .orderBy('property_count', 'desc')
+      .limit(limit);
+
+    const result = locations.map((loc: any) => ({
+      ...loc,
+      property_count: Number(loc.property_count) || 0,
+      is_popular: Number(loc.is_popular) || 0,
+    }));
+
+    await cache.set(cacheKey, result, { ttl: CACHE_TTL, tags: ['locations'] });
+
+    return result;
+  } catch (error) {
+    console.error('Error fetching locations with counts:', error);
+    return [];
+  }
+}
+
+// ─── GET POPULAR LOCATIONS ───────────────────────────────────────────────
+
+export async function getPopularLocations(
+  cityId: number = 71
+): Promise<LocationWithCount[]> {
+  const cacheKey = CACHE_KEYS.popularLocations(cityId);
+  const cached = await cache.get<LocationWithCount[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const knex = await db();
+
+    const locations = await knex('community as c')
+      .leftJoin('properties as p', function (this: any) {
+        this.on('p.community_id', '=', 'c.id').andOn(
+          knex.raw('p.status = 1')
+        );
+      })
+      .select(
+        'c.id',
+        'c.name',
+        'c.slug',
+        knex.raw('COUNT(p.id) as property_count'),
+        knex.raw(`
+          CASE
+            WHEN c.name LIKE '%Palm%Jumeirah%' THEN 1
+            WHEN c.name LIKE '%Dubai%Marina%' THEN 1
+            WHEN c.name LIKE '%Downtown%Dubai%' THEN 1
+            WHEN c.name LIKE '%Yas%Island%' THEN 1
+            WHEN c.name LIKE '%Dubai Hills%' THEN 1
+            WHEN c.name LIKE '%Jumeirah%' THEN 1
+            ELSE 0
+          END as is_popular
+        `)
+      )
+      .where('c.city_id', cityId)
+      .where('c.status', 1)
+      .groupBy('c.id', 'c.name', 'c.slug')
+      .having(knex.raw('COUNT(p.id)'), '>', 0)
+      .orderBy('property_count', 'desc')
+      .limit(10);
+
+    const mapped = locations.map((loc: any) => ({
+      ...loc,
+      latitude: null,
+      longitude: null,
+      property_count: Number(loc.property_count) || 0,
+      is_popular: Number(loc.is_popular) || 0,
+    }));
+
+    // Popular locations filter karo
+    const popular = mapped.filter((loc: LocationWithCount) => loc.is_popular === 1);
+
+    let result: LocationWithCount[];
+
+    if (popular.length < 4) {
+      const remaining = mapped
+        .filter((loc: LocationWithCount) => loc.is_popular !== 1)
+        .slice(0, 4 - popular.length);
+      result = [...popular, ...remaining];
+    } else {
+      result = popular.slice(0, 4);
+    }
+
+    await cache.set(cacheKey, result, {
+      ttl: CACHE_TTL * 2,
+      tags: ['locations', 'popular'],
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error fetching popular locations:', error);
+    return [];
+  }
+}
+
+// ─── SEARCH LOCATIONS (Autocomplete) ────────────────────────────────────
+
+export async function searchLocations(
+  query: string,
+  cityId: number = 71,
+  limit: number = 10
+): Promise<LocationWithCount[]> {
+  if (!query || query.length < 2) return [];
+
+  const cacheKey = CACHE_KEYS.searchLocations(query, cityId, limit);
+  const cached = await cache.get<LocationWithCount[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const knex = await db();
+
+    const locations = await knex('community as c')
+      .leftJoin('properties as p', function (this: any) {
+        this.on('p.community_id', '=', 'c.id').andOn(
+          knex.raw('p.status = 1')
+        );
+      })
+      .select(
+        'c.id',
+        'c.name',
+        'c.slug',
+        'c.latitude',
+        'c.longitude',
+        knex.raw('COUNT(p.id) as property_count'),
+        knex.raw('0 as is_popular')
+      )
+      .where('c.city_id', cityId)
+      .where('c.status', 1)
+      .where('c.name', 'like', `%${query}%`)
+      .groupBy('c.id', 'c.name', 'c.slug', 'c.latitude', 'c.longitude')
+      .having(knex.raw('COUNT(p.id)'), '>', 0)
+      .orderBy('property_count', 'desc')
+      .limit(limit);
+
+    const result = locations.map((loc: any) => ({
+      ...loc,
+      property_count: Number(loc.property_count) || 0,
+      is_popular: Number(loc.is_popular) || 0,
+    }));
+
+    // Short TTL for search queries
+    await cache.set(cacheKey, result, {
+      ttl: 60,
+      tags: ['locations', 'search'],
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Error searching locations:', error);
+    return [];
+  }
+}
+
+// ─── DEFAULT EXPORT ──────────────────────────────────────────────────────
 
 export default {
   search,
   getSearchResult,
   transformProperty,
   transformProject,
+  getLocationsWithCounts,
+  getPopularLocations,
+  searchLocations,
 };

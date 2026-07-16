@@ -1,12 +1,13 @@
-"use client";
+// app/neighborhoods/page.tsx
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
   SlidersHorizontal,
-  Building2,
   ChevronDown,
   MapPin,
   ArrowRight,
@@ -18,35 +19,30 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  Eye,
-  ImageOff,
-  TrendingUp,
-  Clock,
   Home,
-  Filter,
   Globe,
   Map as MapIcon,
-  Heart,
-  Star,
-} from "lucide-react";
+  TrendingUp,
+  Clock,
+} from 'lucide-react';
 
-const API_URL = "/api/v1/neighborhoods";
+const API_URL = '/api/v1/neighborhoods';
 const DEFAULT_LIMIT = 12;
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
 
 const THEME = {
-  primary: "#0F1C2E",
-  secondary: "#1A2F4A",
-  accent: "#C9A96E",
-  accentLight: "#F5ECD7",
-  muted: "#6B7A8D",
-  border: "#E2E8F0",
-  surface: "#F8FAFC",
-  success: "#10B981",
-  error: "#EF4444",
-  warning: "#F59E0B",
+  primary: '#0F1C2E',
+  secondary: '#1A2F4A',
+  accent: '#C9A96E',
+  accentLight: '#F5ECD7',
+  muted: '#6B7A8D',
+  border: '#E2E8F0',
+  surface: '#F8FAFC',
+  success: '#10B981',
+  error: '#EF4444',
+  warning: '#F59E0B',
 };
 
 interface Neighborhood {
@@ -67,6 +63,7 @@ interface Neighborhood {
 interface City {
   id: number;
   name: string;
+  slug: string;
   count: number;
 }
 
@@ -84,47 +81,49 @@ interface FilterOption {
 }
 
 const SORT_OPTIONS: FilterOption[] = [
-  { value: "name_asc", label: "Name A-Z" },
-  { value: "name_desc", label: "Name Z-A" },
-  { value: "newest", label: "Newest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "popular", label: "Most Popular" },
+  { value: 'name_asc', label: 'Name A-Z' },
+  { value: 'name_desc', label: 'Name Z-A' },
+  { value: 'popular', label: 'Most Popular' },
 ];
 
+function getImageUrl(image: string | null | undefined): string {
+  if (!image) return '/images/placeholder-neighborhood.jpg';
+  if (image.startsWith('http')) return image;
+  if (image.startsWith('/')) return image;
+  return image;
+}
+
 function stripHtml(html: string | null): string {
-  if (!html) return "";
-  return html.replace(/<[^>]*>/g, "").trim();
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, '').trim();
 }
 
-function getNeighborhoodImage(neighborhood: Neighborhood): string {
-  if (neighborhood.image) return neighborhood.image;
-  return "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=600&h=400&fit=crop";
-}
-
-function getSlugWithName(slug: string, name: string): string {
-  const nameSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return `${slug}-${nameSlug}`;
+function getNeighborhoodSlug(neighborhood: Neighborhood): string {
+  if (neighborhood.slug && neighborhood.slug !== '') {
+    return neighborhood.slug;
+  }
+  return String(neighborhood.id);
 }
 
 function NeighborhoodCard({ neighborhood, index = 0 }: { neighborhood: Neighborhood; index?: number }) {
   const [imageError, setImageError] = useState(false);
   const imageSrc = imageError
-    ? "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=600&h=400&fit=crop"
-    : getNeighborhoodImage(neighborhood);
+    ? '/images/placeholder-neighborhood.jpg'
+    : getImageUrl(neighborhood.image);
 
   const description = stripHtml(neighborhood.description);
   const shortDescription = description.slice(0, 120);
-  const linkSlug = getSlugWithName(neighborhood.slug, neighborhood.name);
+  const slug = getNeighborhoodSlug(neighborhood);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
-      className="group bg-white border transition-all duration-300 hover:shadow-xl"
+      className="group bg-white border transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
       style={{ borderColor: THEME.border }}
     >
-      <Link href={`/neighborhoods/${linkSlug}`} className="block">
+      <Link href={`/neighborhood-guide/${slug}`} className="block">
         <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
           <img
             src={imageSrc}
@@ -136,41 +135,38 @@ function NeighborhoodCard({ neighborhood, index = 0 }: { neighborhood: Neighborh
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
           {neighborhood.featured === 1 && (
-            <span className="absolute left-3 top-3 rounded-[3px] bg-[#0F1C2E] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
+            <span className="absolute left-3 top-3 rounded-[3px] bg-[#C9A96E] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white shadow-lg">
               Featured
             </span>
           )}
 
           {neighborhood.property_count > 0 && (
-            <span className="absolute right-3 top-3 rounded-[3px] bg-black/60 px-2.5 py-1 text-[9px] text-white backdrop-blur-sm">
+            <span className="absolute right-3 top-3 rounded-[3px] bg-black/60 px-2.5 py-1 text-[9px] text-white backdrop-blur-sm shadow-lg">
               <Home className="inline h-3 w-3 mr-1" />
-              {neighborhood.property_count} properties
+              {neighborhood.property_count}
             </span>
           )}
 
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[9px] text-white/80">
-            <MapPin className="h-3 w-3" />
-            <span>{neighborhood.city_name || "Dubai"}</span>
+          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[9px] text-white/90">
+              <MapPin className="h-3 w-3" />
+              {neighborhood.city_name || 'Dubai'}
+            </span>
           </div>
         </div>
 
         <div className="p-4">
           <h3
-            className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-opacity group-hover:opacity-70"
+            className="text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-colors group-hover:text-[#C9A96E]"
             style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
           >
             {neighborhood.name}
           </h3>
 
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[#6B7A8D]">
-            <Globe className="h-3 w-3" />
-            <span>{neighborhood.city_name || "Dubai"}</span>
-          </div>
-
           {description && (
             <p className="mt-2 text-[12px] leading-relaxed text-[#6B7A8D] line-clamp-2">
               {shortDescription}
-              {description.length > 120 && "..."}
+              {description.length > 120 && '...'}
             </p>
           )}
 
@@ -178,8 +174,9 @@ function NeighborhoodCard({ neighborhood, index = 0 }: { neighborhood: Neighborh
             <span className="text-[9px] font-medium uppercase tracking-[0.12em] text-[#6B7A8D]">
               {neighborhood.property_count || 0} properties
             </span>
-            <span className="text-[9px] font-medium uppercase tracking-[0.12em] transition-colors group-hover:text-[#C9A96E]" style={{ color: THEME.primary }}>
-              Explore →
+            <span className="flex items-center gap-1 text-[9px] font-medium uppercase tracking-[0.12em] text-[#C9A96E] transition-all group-hover:gap-2">
+              Explore
+              <ArrowRight className="h-3 w-3" />
             </span>
           </div>
         </div>
@@ -194,7 +191,6 @@ function SkeletonCard() {
       <div className="aspect-[4/3] animate-pulse bg-gray-200" />
       <div className="p-4 space-y-3">
         <div className="h-4 w-32 animate-pulse rounded bg-gray-200" />
-        <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
         <div className="space-y-2">
           <div className="h-3 w-full animate-pulse rounded bg-gray-200" />
           <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200" />
@@ -223,7 +219,7 @@ function FilterDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const hasValue = value && value !== "";
+  const hasValue = value && value !== '';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -231,8 +227,8 @@ function FilterDropdown({
         setIsOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const selectedLabel = options.find((o) => o.value === value)?.label || label;
@@ -243,12 +239,12 @@ function FilterDropdown({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[11px] font-medium transition-all duration-200 ${
-          hasValue ? "bg-[#0F1C2E] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+          hasValue ? 'bg-[#0F1C2E] text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
         }`}
       >
         {IconComponent && <IconComponent className="h-3.5 w-3.5" />}
         <span>{hasValue ? selectedLabel : label}</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       <AnimatePresence>
@@ -262,7 +258,7 @@ function FilterDropdown({
           >
             <button
               onClick={() => {
-                onChange("");
+                onChange('');
                 setIsOpen(false);
               }}
               className="block w-full px-4 py-2.5 text-left text-[11px] text-gray-400 hover:bg-gray-50"
@@ -278,8 +274,8 @@ function FilterDropdown({
                 }}
                 className={`block w-full px-4 py-2.5 text-left text-[11px] transition-colors ${
                   value === opt.value
-                    ? "bg-[#0F1C2E]/5 font-medium text-[#0F1C2E]"
-                    : "text-gray-700 hover:bg-gray-50"
+                    ? 'bg-[#0F1C2E]/5 font-medium text-[#0F1C2E]'
+                    : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
                 {opt.label}
@@ -309,7 +305,7 @@ function Pagination({
       if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 1) {
         pages.push(i);
       } else if (Math.abs(i - currentPage) === 2) {
-        pages.push("...");
+        pages.push('...');
       }
     }
     return pages;
@@ -327,7 +323,7 @@ function Pagination({
       </button>
 
       {getPageNumbers().map((page, idx) => {
-        if (page === "...") {
+        if (page === '...') {
           return (
             <span key={`dots-${idx}`} className="px-2 py-2 text-[12px] text-gray-400">
               ...
@@ -341,7 +337,7 @@ function Pagination({
             key={pageNum}
             onClick={() => onPageChange(pageNum)}
             className={`flex h-9 w-9 items-center justify-center rounded-[4px] text-[12px] font-medium transition-all ${
-              isActive ? "bg-[#0F1C2E] text-white shadow-md" : "text-gray-700 hover:bg-gray-100"
+              isActive ? 'bg-[#0F1C2E] text-white shadow-md' : 'text-gray-700 hover:bg-gray-100'
             }`}
           >
             {pageNum}
@@ -375,17 +371,17 @@ export default function NeighborhoodsPage() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isCached, setIsCached] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [filters, setFilters] = useState({
     page: 1,
     limit: DEFAULT_LIMIT,
-    city_id: "",
-    sort_by: "name_asc",
-    keyword: "",
+    city_id: '',
+    sort_by: 'name_asc',
+    keyword: '',
   });
 
-  const hasActiveFilters = filters.city_id !== "" || searchTerm !== "";
+  const hasActiveFilters = filters.city_id !== '' || searchTerm !== '';
   const hasMore = pagination ? filters.page < pagination.totalPages : false;
 
   const fetchNeighborhoods = useCallback(
@@ -401,19 +397,19 @@ export default function NeighborhoodsPage() {
 
       try {
         const params = new URLSearchParams();
-        params.append("page", String(page));
-        params.append("limit", String(filters.limit));
-        params.append("sort_by", filters.sort_by);
-        params.append("status", "1");
+        params.append('page', String(page));
+        params.append('limit', String(filters.limit));
+        params.append('sort_by', filters.sort_by);
+        params.append('status', '1');
         
         const keyword = searchTerm || filters.keyword;
-        if (keyword) params.append("keyword", keyword);
-        if (filters.city_id) params.append("city_id", filters.city_id);
+        if (keyword) params.append('keyword', keyword);
+        if (filters.city_id) params.append('city_id', filters.city_id);
 
         const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
 
-        if (!data.success) throw new Error(data.error || "Failed to fetch neighborhoods");
+        if (!data.success) throw new Error(data.error || 'Failed to fetch neighborhoods');
 
         let newNeighborhoods: Neighborhood[] = data.data || [];
 
@@ -424,7 +420,7 @@ export default function NeighborhoodsPage() {
           return true;
         });
 
-        if (data.cached) setIsCached(true);
+        if (data.meta?.cached) setIsCached(true);
 
         if (isReset) {
           setNeighborhoods(newNeighborhoods);
@@ -438,7 +434,7 @@ export default function NeighborhoodsPage() {
 
         setPagination(data.meta || null);
       } catch (err: any) {
-        setError(err.message || "Failed to load neighborhoods");
+        setError(err.message || 'Failed to load neighborhoods');
         if (isReset) {
           setNeighborhoods([]);
           setIsInitialLoad(false);
@@ -478,7 +474,7 @@ export default function NeighborhoodsPage() {
           setFilters((prev) => ({ ...prev, page: prev.page + 1 }));
         }
       },
-      { threshold: 0.1, rootMargin: "200px" }
+      { threshold: 0.1, rootMargin: '200px' }
     );
 
     observerRef.current.observe(currentLoader);
@@ -487,8 +483,8 @@ export default function NeighborhoodsPage() {
 
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const updateFilter = useCallback((key: string, value: string) => {
@@ -507,17 +503,17 @@ export default function NeighborhoodsPage() {
     setFilters({
       page: 1,
       limit: DEFAULT_LIMIT,
-      city_id: "",
-      sort_by: "name_asc",
-      keyword: "",
+      city_id: '',
+      sort_by: 'name_asc',
+      keyword: '',
     });
-    setSearchTerm("");
+    setSearchTerm('');
   }, []);
 
   const handlePageChange = useCallback((page: number) => {
     setNeighborhoods([]);
     setFilters((prev) => ({ ...prev, page }));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   return (
@@ -539,7 +535,7 @@ export default function NeighborhoodsPage() {
             className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#6B7A8D]"
           >
             {loading ? (
-              "Loading..."
+              'Loading...'
             ) : pagination ? (
               <>
                 <span>{pagination.total.toLocaleString()} neighborhoods</span>
@@ -574,7 +570,7 @@ export default function NeighborhoodsPage() {
 
               <select
                 value={filters.city_id}
-                onChange={(e) => updateFilter("city_id", e.target.value)}
+                onChange={(e) => updateFilter('city_id', e.target.value)}
                 className="h-9 border border-gray-200 bg-white px-3 text-[11px] focus:outline-none"
               >
                 <option value="">All Cities</option>
@@ -588,7 +584,7 @@ export default function NeighborhoodsPage() {
               <FilterDropdown
                 label="Sort"
                 value={filters.sort_by}
-                onChange={(v) => updateFilter("sort_by", v)}
+                onChange={(v) => updateFilter('sort_by', v)}
                 options={SORT_OPTIONS}
                 icon={ArrowUpDown}
               />
@@ -619,7 +615,7 @@ export default function NeighborhoodsPage() {
         {showMobileFilters && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
+            animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="border-b bg-white lg:hidden"
             style={{ borderColor: THEME.border }}
@@ -640,7 +636,7 @@ export default function NeighborhoodsPage() {
               <div className="grid grid-cols-2 gap-2">
                 <select
                   value={filters.city_id}
-                  onChange={(e) => updateFilter("city_id", e.target.value)}
+                  onChange={(e) => updateFilter('city_id', e.target.value)}
                   className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
                 >
                   <option value="">All Cities</option>
@@ -652,7 +648,7 @@ export default function NeighborhoodsPage() {
                 </select>
                 <select
                   value={filters.sort_by}
-                  onChange={(e) => updateFilter("sort_by", e.target.value)}
+                  onChange={(e) => updateFilter('sort_by', e.target.value)}
                   className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
                 >
                   {SORT_OPTIONS.map((opt) => (
@@ -748,7 +744,7 @@ export default function NeighborhoodsPage() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="fixed bottom-6 right-6 z-50 flex h-11 w-11 items-center justify-center text-white shadow-lg transition-transform hover:scale-105"
             style={{ backgroundColor: THEME.primary }}
           >

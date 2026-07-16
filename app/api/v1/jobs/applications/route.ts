@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // Check for email lookup
     const email = searchParams.get('email');
     if (email) {
       const applications = await getApplicationsByEmail(email);
@@ -23,7 +22,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Check for job_id lookup
     const jobId = searchParams.get('job_id');
     if (jobId) {
       const filters: JobApplicationFilters = {
@@ -40,7 +38,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Build filters
     const filters: JobApplicationFilters = {
       job_id: searchParams.get('job_id') ? parseInt(searchParams.get('job_id')!) : undefined,
       status: searchParams.get('status') ? parseInt(searchParams.get('status')!) : undefined,
@@ -72,7 +69,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate required fields
     if (!body.job_id) {
       return NextResponse.json(
         { success: false, message: 'Job ID is required' },

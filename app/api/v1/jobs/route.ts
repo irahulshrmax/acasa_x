@@ -7,6 +7,7 @@ import {
   getJobStatistics,
   getJobBySlug,
   getFeaturedJobs,
+  getJobByTitle,
 } from '@/lib/models/jobs';
 import { JobFilters } from '@/types/jobs';
 
@@ -14,7 +15,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // Check for statistics
     if (searchParams.get('stats') === 'true') {
       const stats = await getJobStatistics();
       return NextResponse.json({
@@ -23,7 +23,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Check for featured jobs
     if (searchParams.get('featured') === 'true') {
       const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 6;
       const jobs = await getFeaturedJobs(limit);
@@ -33,17 +32,26 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Check for slug lookup
     const slug = searchParams.get('slug');
     if (slug) {
-      const job = await getJobBySlug(slug);
+      let job = await getJobBySlug(slug);
+      
+      if (!job) {
+        const titleSearch = slug.replace(/-/g, ' ');
+        job = await getJobByTitle(titleSearch);
+      }
+      
+      if (!job) {
+        const fallbackJobs = await getJobs({ status: 1, limit: 1, page: 1 });
+        job = fallbackJobs.data && fallbackJobs.data.length > 0 ? fallbackJobs.data[0] : null;
+      }
+
       return NextResponse.json({
         success: true,
         data: job,
       });
     }
 
-    // Build filters
     const filters: JobFilters = {
       type: searchParams.get('type') || undefined,
       city_name: searchParams.get('city_name') || undefined,
@@ -74,7 +82,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate required fields
     if (!body.title) {
       return NextResponse.json(
         { success: false, message: 'Job title is required' },

@@ -1,6 +1,6 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
+import PopularLinksSection from "@/components/PopularLinksSection";
 export default function PropertiesLayout({
   children,
 }: {
@@ -10,6 +10,7 @@ export default function PropertiesLayout({
     <>
       <Navbar />
       {children}
+      <PopularLinksSection />
       <Footer />
     </>
   );

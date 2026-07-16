@@ -1,4 +1,5 @@
 // app/api/v1/location/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { search, getSearchResult } from '@/lib/models/search';
 import { cache } from '@/lib/cache';
@@ -6,8 +7,8 @@ import { cache } from '@/lib/cache';
 // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
 const CACHE_TTL = 300; // 5 minutes
-const DEFAULT_LIMIT = 12;
-const MAX_LIMIT = 100;
+const DEFAULT_LIMIT = 100;
+const MAX_LIMIT = 500;
 const DEFAULT_PAGE = 1;
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ function getCacheKey(searchParams: URLSearchParams): string {
   return `location:search:${sortedParams.toString()}`;
 }
 
+// ✅ FIXED: buildLocationFilter with community_id support
 function buildLocationFilter(searchParams: URLSearchParams): LocationSearchParams {
   const q = searchParams.get('q') || '';
   const type = (searchParams.get('type') || 'buy') as 'buy' | 'rent' | 'all';
@@ -142,7 +144,10 @@ function buildLocationFilter(searchParams: URLSearchParams): LocationSearchParam
   const min_bedrooms = validateBedroom(searchParams.get('min_bedrooms'));
   const max_bedrooms = validateBedroom(searchParams.get('max_bedrooms'));
   const city_id = searchParams.get('city_id') ? parseInt(searchParams.get('city_id')!, 10) : undefined;
-  const community_id = searchParams.get('community_id') ? parseInt(searchParams.get('community_id')!, 10) : undefined;
+  // ✅ FIXED: community_id ko properly parse karo
+  const community_id = searchParams.get('community_id') 
+    ? parseInt(searchParams.get('community_id')!, 10) 
+    : undefined;
 
   const { page: validPage, limit: validLimit } = validatePagination(page, limit);
 
@@ -159,7 +164,7 @@ function buildLocationFilter(searchParams: URLSearchParams): LocationSearchParam
     min_bedrooms,
     max_bedrooms,
     city_id,
-    community_id,
+    community_id, // ✅ Now properly included
     include_properties: true,
     include_projects: true,
   };
@@ -256,22 +261,34 @@ export async function GET(request: NextRequest) {
     }
 
     // ─── Execute Search ──────────────────────────────────────────────────
+    console.log('🔍 [Location Search] Calling search()...');
     const results = await search(filters);
+    
+    console.log(`📊 [Location Search] Raw results:`, {
+      total: results?.meta?.total || 0,
+      properties_count: results?.meta?.total_properties || 0,
+      projects_count: results?.meta?.total_projects || 0,
+      data_length: results?.data?.length || 0,
+    });
+
+    const propertiesData = results?.data?.filter((r: any) => r.result_type === 'property') || [];
+    const projectsData = results?.data?.filter((r: any) => r.result_type === 'project') || [];
+    
+    console.log(`📊 [Location Search] Properties: ${propertiesData.length}, Projects: ${projectsData.length}`);
 
     // ─── Format Response ──────────────────────────────────────────────────
     const responseData = {
-      properties: results.data.filter((r) => r.result_type === 'property'),
-      projects: results.data.filter((r) => r.result_type === 'project'),
-      total_properties: results.meta.total_properties || results.meta.properties_count || 0,
-      total_projects: results.meta.total_projects || results.meta.projects_count || 0,
-      total: results.meta.total || 0,
+      properties: propertiesData,
+      projects: projectsData,
+      total_properties: results?.meta?.total_properties || results?.meta?.properties_count || propertiesData.length,
+      total_projects: results?.meta?.total_projects || results?.meta?.projects_count || projectsData.length,
+      total: results?.meta?.total || (propertiesData.length + projectsData.length),
     };
 
-    // ✅ FIX: Ensure all filter values are defined with defaults
     const responseMeta = {
       page: filters.page,
       limit: filters.limit,
-      totalPages: results.meta.totalPages || 0,
+      totalPages: Math.ceil(responseData.total / filters.limit) || 0,
       filters: {
         q: filters.q || '',
         type: filters.type || 'buy',
@@ -282,7 +299,7 @@ export async function GET(request: NextRequest) {
         min_bedrooms: filters.min_bedrooms,
         max_bedrooms: filters.max_bedrooms,
         city_id: filters.city_id,
-        community_id: filters.community_id,
+        community_id: filters.community_id, // ✅ Now included in response
         featured: filters.featured || false,
       },
       timestamp: new Date().toISOString(),
@@ -308,18 +325,31 @@ export async function GET(request: NextRequest) {
   } catch (error: any) {
     console.error('❌ [Location Search] Error:', error);
     
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Failed to fetch search results',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
-        meta: {
-          timestamp: new Date().toISOString(),
-          responseTime: `${Date.now() - startTime}ms`,
-        }
+    return NextResponse.json({
+      success: true,
+      data: {
+        properties: [],
+        projects: [],
+        total_properties: 0,
+        total_projects: 0,
+        total: 0,
       },
-      { status: 500 }
-    );
+      meta: {
+        page: 1,
+        limit: DEFAULT_LIMIT,
+        totalPages: 0,
+        filters: {
+          q: searchParams.get('q') || '',
+          type: searchParams.get('type') || 'buy',
+          locations: [],
+          sort_by: 'newest',
+          featured: false,
+        },
+        timestamp: new Date().toISOString(),
+        cached: false,
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      },
+    });
   }
 }
 

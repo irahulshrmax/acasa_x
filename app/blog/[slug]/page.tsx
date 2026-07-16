@@ -23,20 +23,16 @@ import {
 } from "lucide-react";
 
 const API_URL = "/api/v1/blogs";
-const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
+const FONT_DISPLAY = "'Display Pro', 'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
 
 const THEME = {
-  primary: "#0F1C2E",
-  secondary: "#1A2F4A",
-  accent: "#C9A96E",
-  accentLight: "#F5ECD7",
-  muted: "#6B7A8D",
-  border: "#E2E8F0",
+  primary: "#192334",
+  muted: "#8A94A3",
+  border: "#E8E6E1",
+  accent: "#C8AA78",
+  gold: "#C9A96E",
   surface: "#F8FAFC",
-  success: "#10B981",
-  error: "#EF4444",
-  warning: "#F59E0B",
 };
 
 interface Blog {
@@ -45,30 +41,23 @@ interface Blog {
   slug: string;
   category: string;
   descriptions: string;
-  content: string;
-  image: string;
-  banner_image: string;
+  imageurl: string;
   image_urls: {
     main: string;
     thumbnail: string;
     medium: string;
     variations: string[];
   };
-  author: string;
-  author_image: string | null;
-  author_designation: string | null;
-  featured: number;
+  writer: string;
   status: number;
-  views: number;
-  likes: number;
-  comments_count: number;
-  meta_title: string | null;
-  meta_description: string | null;
-  published_at: string;
+  publish_date: string;
   formatted_date: string;
   excerpt: string;
   reading_time: number;
   tags_list: string[];
+  views: number;
+  likes: number;
+  comments_count: number;
   related: Blog[];
 }
 
@@ -110,9 +99,10 @@ function PageLoader() {
 function RelatedBlogCard({ blog, index }: { blog: Blog; index: number }) {
   const router = useRouter();
   const [imageError, setImageError] = useState(false);
+
   const imageSrc = imageError
     ? "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop"
-    : blog.image_urls?.thumbnail || "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop";
+    : blog.image_urls?.main || "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=400&h=300&fit=crop";
 
   return (
     <motion.div
@@ -132,21 +122,21 @@ function RelatedBlogCard({ blog, index }: { blog: Blog; index: number }) {
           onError={() => setImageError(true)}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        <span className="absolute left-3 top-3 rounded-[3px] bg-[#0F1C2E]/80 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
+        <span className="absolute left-3 top-3 rounded-[3px] bg-[#192334]/80 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
           {blog.category}
         </span>
       </div>
       <div className="mt-3 space-y-1">
         <h4
-          className="truncate text-[13px] font-medium uppercase tracking-wide transition-colors group-hover:text-[#C9A96E]"
+          className="truncate text-[13px] font-medium uppercase tracking-wide transition-colors group-hover:text-[#C8AA78]"
           style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
         >
           {blog.title}
         </h4>
-        <p className="line-clamp-2 text-[11px] text-[#6B7A8D]">
-          {blog.excerpt || blog.descriptions?.replace(/<[^>]*>/g, '').slice(0, 100) + '...' || ""}
+        <p className="line-clamp-2 text-[11px]" style={{ color: THEME.muted }}>
+          {blog.excerpt || blog.descriptions?.replace(/<[^>]*>/g, '').slice(0, 100) || ""}
         </p>
-        <div className="flex items-center gap-3 text-[10px] text-[#6B7A8D]">
+        <div className="flex items-center gap-3 text-[10px]" style={{ color: THEME.muted }}>
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {blog.reading_time || 1} min
@@ -224,7 +214,7 @@ export default function BlogDetailPage() {
     );
   }
 
-  const imageSrc = blog.image_urls?.main || blog.image || "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=1200&h=600&fit=crop";
+  const imageSrc = blog.image_urls?.main || "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=1200&h=600&fit=crop";
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
@@ -248,7 +238,7 @@ export default function BlogDetailPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleShare}
-                className="flex h-9 w-9 items-center justify-center border border-gray-200 bg-white text-gray-500 transition-all hover:border-gray-300 hover:text-gray-700"
+                className="flex h-9 w-9 items-center justify-center border border-[#E8E6E1] bg-white text-[#8A94A3] transition-all hover:border-[#192334] hover:text-[#192334]"
               >
                 {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
               </button>
@@ -260,15 +250,10 @@ export default function BlogDetailPage() {
       <article>
         <div className="mx-auto max-w-[880px] px-4 pt-8 pb-6 md:px-6">
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <span className="rounded-[3px] bg-[#0F1C2E] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
+            <span className="rounded-[3px] bg-[#192334] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
               {blog.category}
             </span>
-            {blog.featured === 1 && (
-              <span className="rounded-[3px] bg-[#C9A96E] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-                Featured
-              </span>
-            )}
-            <span className="flex items-center gap-1 rounded-[3px] bg-gray-100 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-[#6B7A8D]">
+            <span className="flex items-center gap-1 rounded-[3px] bg-gray-100 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em]" style={{ color: THEME.muted }}>
               <Clock className="h-3 w-3" />
               {blog.reading_time || 1} min read
             </span>
@@ -281,24 +266,13 @@ export default function BlogDetailPage() {
             {blog.title}
           </h1>
 
-          <div className="mt-4 flex flex-wrap items-center gap-4 text-[12px] text-[#6B7A8D]">
-            {blog.author && (
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-[12px]" style={{ color: THEME.muted }}>
+            {blog.writer && (
               <span className="flex items-center gap-2">
-                {blog.author_image ? (
-                  <img
-                    src={blog.author_image}
-                    alt={blog.author}
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-[11px] font-medium text-[#6B7A8D]">
-                    {blog.author.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <span className="font-medium text-[#0F1C2E]">{blog.author}</span>
-                {blog.author_designation && (
-                  <span className="text-[11px]">• {blog.author_designation}</span>
-                )}
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#192334]/10 text-[11px] font-medium" style={{ color: THEME.primary }}>
+                  {blog.writer.charAt(0).toUpperCase()}
+                </div>
+                <span className="font-medium" style={{ color: THEME.primary }}>{blog.writer}</span>
               </span>
             )}
             <span className="flex items-center gap-1">
@@ -324,22 +298,18 @@ export default function BlogDetailPage() {
         </div>
 
         <div className="mx-auto max-w-[880px] px-4 py-10 md:px-6">
-          <div className="prose prose-lg max-w-none text-[15px] leading-relaxed" style={{ color: "#333" }}>
-            {blog.content ? (
-              <div dangerouslySetInnerHTML={{ __html: blog.content }} />
-            ) : (
-              <div dangerouslySetInnerHTML={{ __html: blog.descriptions || "" }} />
-            )}
+          <div className="prose prose-lg max-w-none text-[15px] leading-relaxed text-[#333]">
+            <div dangerouslySetInnerHTML={{ __html: blog.descriptions || "" }} />
           </div>
 
           {blog.tags_list && blog.tags_list.length > 0 && (
             <div className="mt-8 border-t pt-8" style={{ borderColor: THEME.border }}>
               <div className="flex flex-wrap items-center gap-2">
-                <Tag className="h-4 w-4 text-[#6B7A8D]" />
+                <Tag className="h-4 w-4" style={{ color: THEME.muted }} />
                 {blog.tags_list.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded bg-gray-100 px-3 py-1 text-[11px] text-[#6B7A8D]"
+                    className="rounded bg-gray-100 px-3 py-1 text-[11px] text-[#8A94A3]"
                   >
                     #{tag}
                   </span>
@@ -349,7 +319,7 @@ export default function BlogDetailPage() {
           )}
 
           <div className="mt-8 flex items-center justify-between border-t pt-8" style={{ borderColor: THEME.border }}>
-            <div className="flex items-center gap-4 text-[13px] text-[#6B7A8D]">
+            <div className="flex items-center gap-4 text-[13px]" style={{ color: THEME.muted }}>
               <span className="flex items-center gap-1.5">
                 <Heart className="h-4 w-4" />
                 {blog.likes || 0}

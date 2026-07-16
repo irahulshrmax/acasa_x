@@ -1,10 +1,9 @@
-// components/Navbar.tsx
-'use client';
+"use client";
 
-import Link from 'next/link';
-import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X,
   Search,
@@ -16,7 +15,6 @@ import {
   Landmark,
   Briefcase,
   MapPin,
-  Map,
   User,
   LayoutDashboard,
   Heart,
@@ -27,177 +25,141 @@ import {
   ChevronRight,
   Globe,
   BookOpen,
-} from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import toast from 'react-hot-toast';
+  Compass,
+  Sparkles,
+  Phone,
+} from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import toast from "react-hot-toast";
 
-// ════════════════════════════════════════════════════════════════
-//  CONSTANTS
-// ════════════════════════════════════════════════════════════════
+interface NavLink {
+  name: string;
+  href: string;
+}
 
-const NAV_LINKS = [
-  { name: 'BUY',      href: '/properties-for-sale-in-dubai'  },
-  { name: 'RENT',     href: '/properties-for-rent-in-dubai'  },
-  { name: 'SELL',     href: '/sell-your-property-in-dubai'   },
-  { name: 'OFF PLAN', href: '/off-plan-properties-in-dubai'  },
-  { name: 'JOURNAL',  href: '/blog'                          },
+interface SlideLink {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+  badge?: string;
+}
+
+interface UserData {
+  full_name?: string | null;
+  name?: string;
+  photo?: string | null;
+  email?: string;
+  usertype?: string;
+}
+
+const NAV_LINKS: NavLink[] = [
+  { name: "BUY", href: "/properties-for-sale-dubai" },
+  { name: "SELL", href: "/sell-your-property-in-dubai" },
+  { name: "OFF PLAN", href: "/off-plan-properties-in-dubai" },
+  { name: "JOURNAL", href: "/blog" },
 ];
 
-const SLIDE_LINKS = [
-  { name: 'Properties For Sale',      href: '/properties-for-sale-in-dubai',      icon: Building2 },
-  { name: 'Properties For Rent',      href: '/properties-for-rent-in-dubai',      icon: Home      },
-  { name: 'Apartments For Sale',      href: '/apartments-for-sale-in-dubai',      icon: Building  },
-  { name: 'Off Plan Properties',      href: '/off-plan-properties-in-dubai',      icon: Landmark  },
-  { name: 'New Projects',             href: '/new-projects-in-dubai',             icon: Building  },
-  { name: 'Luxury Properties',        href: '/luxury-properties-in-dubai',        icon: Landmark  },
-  { name: 'International Properties', href: '/international-properties-for-sale', icon: Globe     },
-  { name: 'Developers',               href: '/developers',                        icon: Users     },
-  { name: 'Neighborhood Guide',       href: '/dubai-neighborhood-guide',          icon: Map       },
-  { name: 'Sell Your Property',       href: '/sell-your-property-in-dubai',       icon: MapPin    },
-  { name: 'Seller Guide',             href: '/seller-guide',                      icon: BookOpen  },
-  { name: 'Journal',                  href: '/blog',                              icon: BookOpen  },
-  { name: 'About Us',                 href: '/about-us',                          icon: Users     },
-  { name: 'Careers',                  href: '/careers',                           icon: Briefcase },
-  { name: 'Contact Us',               href: '/contact-us',                        icon: Mail      },
+const SLIDE_LINKS: SlideLink[] = [
+  { name: "Properties For Sale", href: "/properties-for-sale-dubai", icon: Building2 },
+  { name: "Properties For Rent", href: "/properties-for-rent-dubai", icon: Home },
+  { name: "Apartments For Sale", href: "/apartments-for-sale-in-dubai", icon: Building },
+  { name: "Off Plan Properties", href: "/off-plan-properties-in-dubai", icon: Landmark, badge: "Popular" },
+  { name: "New Projects", href: "/new-projects-in-dubai", icon: Building, badge: "New" },
+  { name: "Developers", href: "/developers", icon: Users },
+  { name: "Neighborhood Guide", href: "/neighborhood-guide", icon: Compass },
+  { name: "Sell Your Property", href: "/sell-your-property-in-dubai", icon: MapPin },
+  { name: "Seller Guide", href: "/seller-guide", icon: BookOpen },
+  { name: "Journal", href: "/blog", icon: BookOpen },
+  { name: "About Us", href: "/about-us", icon: Users },
+  { name: "Careers", href: "/careers", icon: Briefcase },
+  { name: "Contact Us", href: "/contact-us", icon: Mail },
 ];
 
 const ALLOWED_IMAGE_HOSTS = [
-  'lh3.googleusercontent.com',
-  'graph.facebook.com',
-  'www.gravatar.com',
-  'acasa.ae',
+  "lh3.googleusercontent.com",
+  "graph.facebook.com",
+  "www.gravatar.com",
+  "acasa.ae",
 ];
 
-// ════════════════════════════════════════════════════════════════
-//  HELPERS
-// ════════════════════════════════════════════════════════════════
-
-function isValidPhotoUrl(photo?: string | null): boolean {
+function isValidPhotoUrl(photo: string | null | undefined): boolean {
   if (!photo) return false;
   try {
     const url = new URL(photo);
     return ALLOWED_IMAGE_HOSTS.includes(url.hostname);
   } catch {
-    return photo.startsWith('/');
+    return photo.startsWith("/");
   }
 }
 
-function getUserRole(usertype?: string): string {
+function getUserRole(usertype: string | undefined): string {
   switch (usertype) {
-    case 'Admin':      return 'Administrator';
-    case 'admin_user': return 'Admin User';
-    case 'agents':     return 'Agent';
-    default:           return 'Member';
+    case "Admin": return "Administrator";
+    case "admin_user": return "Admin User";
+    case "agents": return "Agent";
+    default: return "Member";
   }
 }
 
 function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0] || '')
-    .join('')
-    .toUpperCase();
+  return name.split(" ").slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
 }
 
-// ════════════════════════════════════════════════════════════════
-//  LOADING SPINNER
-// ════════════════════════════════════════════════════════════════
-
-function LoadingSpinner() {
-  return (
-    <div className="navbar-loader">
-      <div className="navbar-loader-ring" />
-      <div className="navbar-loader-ring" />
-      <div className="navbar-loader-ring" />
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════
-//  AVATAR
-// ════════════════════════════════════════════════════════════════
-
-function UserAvatar({
-  user,
-  size = 'sm',
-  onClick,
-}: {
-  user: {
-    full_name?: string | null;
-    name?: string;
-    photo?: string | null;
-    email?: string;
-  };
-  size?: 'sm' | 'md' | 'lg';
-  onClick?: () => void;
-}) {
+function UserAvatar({ user, size = "sm", onClick }: { user: UserData; size?: "sm" | "md"; onClick?: () => void }) {
   const [imgError, setImgError] = useState(false);
-  const dims     = size === 'lg' ? 'h-14 w-14' : size === 'md' ? 'h-10 w-10' : 'h-8 w-8';
-  const imgSize  = size === 'lg' ? 56           : size === 'md' ? 40           : 32;
-  const textSize = size === 'lg' ? 'text-lg'    : size === 'md' ? 'text-sm'    : 'text-xs';
+  const isSmall = size === "sm";
+  const dims = isSmall ? "h-8 w-8" : "h-11 w-11";
+  const textSize = isSmall ? "text-[10px]" : "text-xs";
+  const displayName = user.full_name || user.name || user.email || "U";
+  const initials = getInitials(displayName);
+  const hasPhoto = isValidPhotoUrl(user.photo) && !imgError;
 
-  const displayName = user.full_name || user.name || user.email || 'U';
-  const initials    = getInitials(displayName);
-  const hasPhoto    = isValidPhotoUrl(user.photo) && !imgError;
-
-  if (hasPhoto) {
-    return (
-      <button
-        onClick={onClick}
-        className={`${dims} relative overflow-hidden rounded-full border-2 border-[#C9A96E]/40 transition-all duration-300 hover:border-[#C9A96E] hover:shadow-[0_0_12px_rgba(201,169,110,0.3)]`}
-      >
+  return (
+    <button
+      onClick={onClick}
+      className={`${dims} relative flex items-center justify-center overflow-hidden rounded-full ring-2 ring-[#C9A96E]/30 ring-offset-2 ring-offset-[#0a1628]`}
+    >
+      {hasPhoto ? (
         <Image
           src={user.photo!}
           alt={displayName}
           fill
           className="object-cover"
-          sizes={`${imgSize}px`}
+          sizes={isSmall ? "32px" : "44px"}
           onError={() => setImgError(true)}
         />
-      </button>
-    );
-  }
-
-  return (
-    <button
-      onClick={onClick}
-      className={`${dims} flex items-center justify-center rounded-full border-2 border-[#C9A96E]/40 bg-gradient-to-br from-[#C9A96E]/20 to-[#C9A96E]/5 ${textSize} font-semibold text-[#C9A96E] transition-all duration-300 hover:border-[#C9A96E] hover:shadow-[0_0_12px_rgba(201,169,110,0.3)]`}
-    >
-      {initials}
+      ) : (
+        <span className={`${textSize} flex h-full w-full items-center justify-center bg-gradient-to-br from-[#C9A96E] to-[#a88a4e] font-bold text-[#0a1628]`}>
+          {initials}
+        </span>
+      )}
     </button>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-//  USER DROPDOWN (Desktop only)
-// ════════════════════════════════════════════════════════════════
-
 function UserDropdown() {
   const { user, isAuthenticated, hasAdminAccess, logout: handleLogout } = useAuth();
   const [open, setOpen] = useState(false);
-  const dropdownRef     = useRef<HTMLDivElement>(null);
-  const router          = useRouter();
-  const pathname        = usePathname();
+  const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    if (open) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (open) document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
   useEffect(() => setOpen(false), [pathname]);
 
   useEffect(() => {
-    function handleEsc(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
     }
-    if (open) document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
+    if (open) document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
   }, [open]);
 
   const navigate = (href: string) => {
@@ -208,15 +170,15 @@ function UserDropdown() {
   const onLogout = async () => {
     setOpen(false);
     await handleLogout();
-    toast.success('Logged out successfully');
+    toast.success("Logged out successfully");
   };
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="hidden items-center gap-2 lg:flex">
+      <div className="hidden items-center gap-3 lg:flex">
         <Link
           href="/login"
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/80 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
+          className="flex items-center gap-2 rounded-full border border-[#C9A96E]/40 px-5 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-[#C9A96E] hover:bg-[#C9A96E] hover:text-[#0a1628] transition-colors duration-300"
         >
           <LogIn className="h-3.5 w-3.5" />
           Sign In
@@ -225,110 +187,85 @@ function UserDropdown() {
     );
   }
 
-  const displayName = user.full_name || user.name || 'User';
-  const userRole    = getUserRole(user.usertype);
+  const displayName = user.full_name || user.name || "User";
+  const userRole = getUserRole(user.usertype);
 
   const menuItems = [
-    { label: 'My Profile',       icon: User,            href: '/profile'  },
-    ...(hasAdminAccess
-      ? [{ label: 'Dashboard',   icon: LayoutDashboard, href: '/admin'    }]
-      : []),
-    { label: 'Saved Properties', icon: Heart,           href: '/saved'    },
-    { label: 'Settings',         icon: Settings,        href: '/settings' },
+    { label: "My Profile", icon: User, href: "/profile" },
+    ...(hasAdminAccess ? [{ label: "Dashboard", icon: LayoutDashboard, href: "/admin" }] : []),
+    { label: "Saved Properties", icon: Heart, href: "/saved" },
+    { label: "Settings", icon: Settings, href: "/settings" },
   ];
 
   return (
-    <div ref={dropdownRef} className="relative hidden lg:block">
+    <div ref={ref} className="relative hidden lg:block">
       <div className="relative">
         <UserAvatar user={user} size="sm" onClick={() => setOpen(!open)} />
-        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0F1C2E] bg-emerald-400" />
+        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0a1628] bg-emerald-400" />
       </div>
 
-      <div
-        className={`absolute right-0 top-[calc(100%+12px)] w-[280px] overflow-hidden rounded-2xl border border-white/10 bg-[#0F1C2E] shadow-[0_20px_60px_rgba(0,0,0,0.4)] transition-all duration-300 ${
-          open
-            ? 'visible translate-y-0 opacity-100'
-            : 'invisible -translate-y-2 opacity-0'
-        }`}
-      >
-        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#C9A96E]/10 blur-[50px]" />
-
-        <div className="relative border-b border-white/10 p-5">
-          <div className="flex items-center gap-3">
-            <UserAvatar user={user} size="md" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-white">{displayName}</p>
-              <p className="truncate text-[11px] text-white/40">{user.email}</p>
-              <span className="mt-1 inline-flex items-center rounded-full bg-[#C9A96E]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#C9A96E]">
-                {userRole}
-              </span>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+12px)] w-[280px] overflow-hidden rounded-2xl border border-white/10 bg-[#0a1628] shadow-2xl">
+          <div className="border-b border-white/10 p-5">
+            <div className="flex items-center gap-3">
+              <UserAvatar user={user} size="md" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+                <p className="truncate text-[11px] text-white/30">{user.email}</p>
+                <span className="mt-1.5 inline-block rounded-full bg-[#C9A96E]/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#C9A96E]">
+                  {userRole}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-2">
-          {menuItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => navigate(item.href)}
-              className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-200 hover:bg-white/[0.05]"
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/50 transition-all duration-200 group-hover:border-[#C9A96E]/40 group-hover:bg-[#C9A96E]/10 group-hover:text-[#C9A96E]">
-                <item.icon className="h-4 w-4" />
-              </span>
-              <span className="text-[13px] font-medium text-white/70 transition-colors group-hover:text-white">
+          <div className="p-2">
+            {menuItems.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => navigate(item.href)}
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-[13px] text-white/60 hover:bg-white/5 hover:text-white transition-colors"
+              >
+                <item.icon className="h-4 w-4 text-white/30" />
                 {item.label}
-              </span>
-              <ChevronRight className="ml-auto h-3.5 w-3.5 text-white/20 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-white/40" />
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
 
-        <div className="border-t border-white/10 p-2">
-          <button
-            onClick={onLogout}
-            className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 hover:bg-red-500/10"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-white/50 transition-all duration-200 group-hover:border-red-500/40 group-hover:bg-red-500/10 group-hover:text-red-400">
+          <div className="border-t border-white/10 p-2">
+            <button
+              onClick={onLogout}
+              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-[13px] text-red-400/70 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+            >
               <LogOut className="h-4 w-4" />
-            </span>
-            <span className="text-[13px] font-medium text-white/70 transition-colors group-hover:text-red-400">
               Sign Out
-            </span>
-          </button>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-//  SLIDE PANEL (Mobile)
-// ════════════════════════════════════════════════════════════════
-
 function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const pathname = usePathname();
-  const router   = useRouter();
+  const router = useRouter();
   const { user, isAuthenticated, hasAdminAccess, logout: handleLogout } = useAuth();
-  const [loadingHref, setLoadingHref] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const isActive = useCallback(
     (href: string) => {
       if (!pathname) return false;
-      if (href === '/') return pathname === '/';
-      return pathname === href || pathname.startsWith(href + '/');
+      if (href === "/") return pathname === "/";
+      return pathname === href || pathname.startsWith(href + "/");
     },
     [pathname]
   );
 
   const handleLinkClick = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-      e.preventDefault();
-      setLoadingHref(href);
-      setTimeout(() => {
-        router.push(href);
-        onClose();
-      }, 400);
+    (href: string) => {
+      router.push(href);
+      onClose();
     },
     [router, onClose]
   );
@@ -336,375 +273,248 @@ function SlidePanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void 
   const onLogout = async () => {
     onClose();
     await handleLogout();
-    toast.success('Logged out successfully');
+    toast.success("Logged out successfully");
   };
 
-  const displayName = user?.full_name || user?.name || 'User';
-  const userRole    = getUserRole(user?.usertype);
+  const displayName = user?.full_name || user?.name || "User";
+  const userRole = getUserRole(user?.usertype);
+
+  const filteredLinks = searchQuery
+    ? SLIDE_LINKS.filter((l) => l.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : SLIDE_LINKS;
 
   useEffect(() => {
-    function handleEsc(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
     }
-    if (isOpen) document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
+    if (isOpen) document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) setSearchQuery("");
+  }, [isOpen]);
 
   return (
     <>
-      <div
-        className={`fixed inset-0 z-[60] bg-black/70 backdrop-blur-[6px] transition-opacity duration-500 ${
-          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
-        }`}
-        onClick={onClose}
-      />
+      {isOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/70" onClick={onClose} />
+      )}
 
       <aside
-        className={`fixed left-0 top-0 z-[70] h-full w-[390px] max-w-[88vw] overflow-hidden bg-[#0F1C2E] shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed left-0 top-0 z-[70] flex h-full w-[380px] max-w-[90vw] flex-col bg-[#0a1628] border-r border-white/10 transition-transform duration-300 ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-[#C9A96E]/10 blur-[90px]" />
-          <div className="absolute -right-28 bottom-20 h-80 w-80 rounded-full bg-[#5B7FBF]/10 blur-[100px]" />
-          <div className="absolute inset-y-0 right-0 w-px bg-gradient-to-b from-transparent via-[#C9A96E]/35 to-transparent" />
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#C9A96E]/60 to-transparent" />
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+          <Link href="/" onClick={() => handleLinkClick("/")}>
+            <Image
+              src="/acasa.png"
+              alt="ACASA"
+              width={112}
+              height={34}
+              className="h-8 w-auto brightness-0 invert"
+              priority
+            />
+          </Link>
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 text-white/50 hover:text-white transition-colors"
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        <div className="relative flex h-full flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
-            <Link
-              href="/"
-              onClick={(e) => {
-                e.preventDefault();
-                setLoadingHref('/');
-                setTimeout(() => {
-                  router.push('/');
-                  onClose();
-                }, 400);
-              }}
-              className="inline-flex w-fit transition-opacity hover:opacity-80"
-            >
-              <Image
-                src="/acasa.png"
-                alt="ACASA"
-                width={112}
-                height={34}
-                className="h-8 w-auto brightness-0 invert"
-                priority
-              />
-            </Link>
+        {isAuthenticated && user ? (
+          <div className="mx-5 my-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <div className="flex items-center gap-3">
+              <div className="relative flex-shrink-0">
+                <UserAvatar user={user} size="md" />
+                <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0a1628] bg-emerald-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+                <p className="truncate text-[11px] text-white/30">{user.email}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-[#C9A96E]/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#C9A96E]">
+                {userRole}
+              </span>
+            </div>
 
-            <button
-              onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E] hover:text-[#0F1C2E]"
-              aria-label="Close menu"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {[
+                { label: "Profile", icon: User, href: "/profile" },
+                ...(hasAdminAccess
+                  ? [{ label: "Dashboard", icon: LayoutDashboard, href: "/admin" }]
+                  : [{ label: "Saved", icon: Heart, href: "/saved" }]),
+                { label: "Settings", icon: Settings, href: "/settings" },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => handleLinkClick(item.href)}
+                  className="flex flex-col items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] py-2.5 text-white/40 hover:border-[#C9A96E]/30 hover:text-[#C9A96E] transition-colors"
+                >
+                  <item.icon className="h-4 w-4" />
+                  <span className="text-[8px] font-bold uppercase tracking-wider">{item.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-
-          {/* User Section */}
-          {isAuthenticated && user ? (
-            <div className="border-b border-white/10 px-6 py-5">
-              <div className="flex items-center gap-3">
-                <div className="relative flex-shrink-0">
-                  <UserAvatar user={user} size="md" />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0F1C2E] bg-emerald-400" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-white">{displayName}</p>
-                  <p className="truncate text-[11px] text-white/40">{user.email}</p>
-                </div>
-                <span className="flex-shrink-0 rounded-full bg-[#C9A96E]/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[#C9A96E]">
-                  {userRole}
-                </span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {[
-                  { label: 'Profile',   icon: User,            href: '/profile'  },
-                  ...(hasAdminAccess
-                    ? [{ label: 'Dashboard', icon: LayoutDashboard, href: '/admin' }]
-                    : [{ label: 'Saved',     icon: Heart,           href: '/saved' }]),
-                  { label: 'Settings',  icon: Settings,        href: '/settings' },
-                ].map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    onClick={(e) => handleLinkClick(e, item.href)}
-                    className="flex flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2 py-3 text-white/50 transition-all duration-200 hover:border-[#C9A96E]/40 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span className="text-[9px] font-semibold uppercase tracking-wider">{item.label}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="border-b border-white/10 px-6 py-5">
-              <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.2em] text-white/40">
-                Welcome to ACASA
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <a
-                  href="/login"
-                  onClick={(e) => handleLinkClick(e, '/login')}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-[#C9A96E]/40 bg-[#C9A96E]/10 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-[#C9A96E] transition-all hover:bg-[#C9A96E]/20"
-                >
-                  <LogIn className="h-3.5 w-3.5" />
-                  Sign In
-                </a>
-                <a
-                  href="/register"
-                  onClick={(e) => handleLinkClick(e, '/register')}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-white/60 transition-all hover:border-white/20 hover:text-white"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  Register
-                </a>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Links */}
-          <div className="px-4 pb-2 pt-4">
-            <p className="px-2 text-[10px] font-medium uppercase tracking-[0.28em] text-[#C9A96E]/80">
-              Explore
+        ) : (
+          <div className="mx-5 my-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <p className="mb-3 text-[11px] text-white/30">
+              Sign in to save properties and get personalized recommendations.
             </p>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
-            <div className="space-y-1">
-              {SLIDE_LINKS.map((link, index) => {
-                const active    = isActive(link.href);
-                const Icon      = link.icon;
-                const isLoading = loadingHref === link.href;
-
-                return (
-                  <a
-                    key={link.name}
-                    href={link.href}
-                    onClick={(e) => handleLinkClick(e, link.href)}
-                    className={`group relative flex items-center gap-4 overflow-hidden rounded-2xl px-4 py-3 transition-all duration-300 ${
-                      active && !isLoading
-                        ? 'bg-[#C9A96E] text-[#0F1C2E] shadow-[0_12px_30px_rgba(201,169,110,0.18)]'
-                        : isLoading
-                        ? 'cursor-wait bg-[#C9A96E] text-[#0F1C2E] shadow-[0_12px_30px_rgba(201,169,110,0.18)]'
-                        : 'text-white/62 hover:bg-white/[0.05] hover:text-white'
-                    }`}
-                    style={{ transitionDelay: isOpen ? `${index * 25}ms` : '0ms' }}
-                  >
-                    {!active && !isLoading && (
-                      <span className="absolute inset-0 origin-left scale-x-0 bg-gradient-to-r from-[#C9A96E]/15 to-transparent transition-transform duration-500 group-hover:scale-x-100" />
-                    )}
-
-                    <span
-                      className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-300 ${
-                        active || isLoading
-                          ? 'border-[#0F1C2E]/15 bg-[#0F1C2E]/10'
-                          : 'border-white/10 bg-white/[0.035] text-[#C9A96E] group-hover:border-[#C9A96E]/40 group-hover:bg-[#C9A96E]/10'
-                      }`}
-                    >
-                      {isLoading ? <LoadingSpinner /> : <Icon className="h-4 w-4" />}
-                    </span>
-
-                    <span className="relative z-10 text-[13px] font-medium tracking-wide">
-                      {isLoading ? (
-                        <span className="opacity-50">{link.name}</span>
-                      ) : (
-                        link.name
-                      )}
-                    </span>
-
-                    <span
-                      className={`relative z-10 ml-auto h-[2px] rounded-full transition-all duration-300 ${
-                        active || isLoading
-                          ? 'w-6 bg-[#0F1C2E]'
-                          : 'w-0 bg-[#C9A96E] group-hover:w-6'
-                      }`}
-                    />
-                  </a>
-                );
-              })}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => handleLinkClick("/login")}
+                className="flex items-center justify-center gap-2 rounded-lg bg-[#C9A96E] py-2.5 text-[10px] font-bold uppercase tracking-wider text-[#0a1628]"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                Sign In
+              </button>
+              <button
+                onClick={() => handleLinkClick("/register")}
+                className="flex items-center justify-center gap-2 rounded-lg border border-white/10 py-2.5 text-[10px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Register
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Footer */}
-          <div className="border-t border-white/10 p-5">
-            {isAuthenticated && user && (
+        <div className="mx-5 mb-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/25" />
+            <input
+              type="text"
+              placeholder="Search pages..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-white/[0.03] py-2.5 pl-10 pr-4 text-[13px] text-white/80 placeholder-white/25 outline-none focus:border-[#C9A96E]/30"
+            />
+            {searchQuery && (
               <button
-                onClick={onLogout}
-                className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-red-400 transition-all hover:border-red-500/40 hover:bg-red-500/10"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
               >
-                <LogOut className="h-3.5 w-3.5" />
-                Sign Out
+                <X className="h-3 w-3" />
               </button>
             )}
-
-            <a
-              href="/contact-us"
-              onClick={(e) => handleLinkClick(e, '/contact-us')}
-              className="nav-golden-cta mb-4 inline-flex w-full items-center justify-center overflow-hidden px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-white"
-            >
-              <span>Contact Us</span>
-            </a>
-
-            <p className="text-center text-[10px] text-white/35">
-              © {new Date().getFullYear()} ACASA. All rights reserved.
-            </p>
           </div>
+        </div>
+
+        <div className="px-6 pb-2">
+          <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-[#C9A96E]/50">
+            {searchQuery ? `Results (${filteredLinks.length})` : "Explore"}
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          {filteredLinks.map((link) => {
+            const active = isActive(link.href);
+            const Icon = link.icon;
+
+            return (
+              <button
+                key={link.name}
+                onClick={() => handleLinkClick(link.href)}
+                className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left transition-colors ${
+                  active
+                    ? "bg-[#C9A96E] text-[#0a1628]"
+                    : "text-white/50 hover:bg-white/[0.04] hover:text-white/80"
+                }`}
+              >
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  active ? "bg-[#0a1628]/10" : "bg-white/[0.04]"
+                }`}>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="flex-1 text-[13px] font-medium">{link.name}</span>
+                {link.badge && !active && (
+                  <span className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase ${
+                    link.badge === "New"
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "bg-[#C9A96E]/10 text-[#C9A96E]"
+                  }`}>
+                    {link.badge}
+                  </span>
+                )}
+                <ChevronRight className={`h-3.5 w-3.5 shrink-0 ${active ? "text-[#0a1628]/40" : "text-white/15"}`} />
+              </button>
+            );
+          })}
+
+          {filteredLinks.length === 0 && (
+            <div className="flex flex-col items-center py-12 text-center">
+              <Search className="mb-3 h-8 w-8 text-white/15" />
+              <p className="text-sm text-white/30">No results found</p>
+              <p className="mt-1 text-[11px] text-white/20">Try a different search term</p>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-white/10 p-5">
+          {isAuthenticated && user && (
+            <button
+              onClick={onLogout}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/20 py-2.5 text-[10px] font-bold uppercase tracking-wider text-red-400/70 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign Out
+            </button>
+          )}
+
+          <button
+            onClick={() => handleLinkClick("/contact-us")}
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#C9A96E]/50 bg-[#C9A96E]/10 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#C9A96E] hover:bg-[#C9A96E] hover:text-[#0a1628] transition-colors"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            Get In Touch
+          </button>
+
+          <p className="text-center text-[10px] text-white/20">
+            © {new Date().getFullYear()} ACASA
+          </p>
         </div>
       </aside>
     </>
   );
 }
 
-// ════════════════════════════════════════════════════════════════
-//  MAIN NAVBAR
-// ════════════════════════════════════════════════════════════════
-
 export default function Navbar() {
-  const [isOpen, setIsOpen]           = useState(false);
-  const [loadingHref, setLoadingHref] = useState<string | null>(null);
-  const pathname                      = usePathname();
-  const router                        = useRouter();
-  const { user, isAuthenticated }     = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
+  const { user, isAuthenticated } = useAuth();
 
-  useEffect(() => {
-    setIsOpen(false);
-    setLoadingHref(null);
-  }, [pathname]);
+  useEffect(() => setIsOpen(false), [pathname]);
 
   useEffect(() => {
     if (isOpen) {
-      const previous = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = previous;
-      };
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
     }
   }, [isOpen]);
 
   const isActive = useCallback(
     (href: string) => {
       if (!pathname) return false;
-      if (href === '/') return pathname === '/';
-      return pathname === href || pathname.startsWith(href + '/');
+      if (href === "/") return pathname === "/";
+      return pathname === href || pathname.startsWith(href + "/");
     },
     [pathname]
   );
 
-  const handleNavLinkClick = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-      e.preventDefault();
-      setLoadingHref(href);
-      setTimeout(() => router.push(href), 400);
-    },
-    [router]
-  );
-
-  const handleLogoClick = useCallback(
-    (e: React.MouseEvent<HTMLAnchorElement>) => {
-      e.preventDefault();
-      setLoadingHref('/');
-      setTimeout(() => router.push('/'), 400);
-    },
-    [router]
-  );
-
   return (
     <>
-      <style jsx global>{`
-        .navbar-loader {
-          display: inline-flex;
-          gap: 3px;
-          align-items: center;
-          justify-content: center;
-          width: 18px;
-          height: 18px;
-        }
-        .navbar-loader-ring {
-          width: 3px;
-          height: 3px;
-          border-radius: 50%;
-          background: currentColor;
-          animation: navbarLoaderBounce 1.2s ease-in-out infinite;
-        }
-        .navbar-loader-ring:nth-child(2) { animation-delay: 0.2s; }
-        .navbar-loader-ring:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes navbarLoaderBounce {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-          40%            { transform: scale(1.2); opacity: 1;   }
-        }
-        .nav-golden-cta {
-          position: relative;
-          border: 1px solid rgba(201, 169, 110, 0.55);
-          background: transparent;
-          transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), 0 4px 18px rgba(0,0,0,0.12);
-        }
-        .nav-golden-cta::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          z-index: 0;
-          background: linear-gradient(90deg, #c9a96e 0%, #d4b888 50%, #c9a96e 100%);
-          transform: scaleX(0);
-          transform-origin: left;
-          transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .nav-golden-cta::after {
-          content: "";
-          position: absolute;
-          inset: 0;
-          z-index: 0;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
-          transform: translateX(-120%);
-          transition: transform 0.7s ease;
-        }
-        .nav-golden-cta:hover::before { transform: scaleX(1); }
-        .nav-golden-cta:hover::after  { transform: translateX(120%); }
-        .nav-golden-cta:hover {
-          color: #0F1C2E;
-          border-color: #c9a96e;
-          transform: translateY(-2px);
-          box-shadow: 0 12px 32px rgba(201,169,110,0.2), 0 4px 16px rgba(0,0,0,0.18);
-        }
-        .nav-golden-cta span,
-        .nav-golden-cta .navbar-loader  { position: relative; z-index: 1; }
-        .nav-golden-cta .navbar-loader-ring { background: #0F1C2E; }
-        .nav-link-underline { position: relative; }
-        .nav-link-underline::after {
-          content: "";
-          position: absolute;
-          bottom: -2px;
-          left: 0;
-          width: 0;
-          height: 1.5px;
-          background: #C9A96E;
-          transition: width 0.3s ease;
-        }
-        .nav-link-underline:hover::after,
-        .nav-link-underline.active::after { width: 100%; }
-        .nav-link-underline.active        { color: #C9A96E; }
-      `}</style>
-
-      <header className="fixed left-0 top-0 z-50 w-full border-b border-white/10 bg-[#0F1C2E] shadow-[0_4px_20px_rgba(0,0,0,0.15)] transition-all duration-500">
+      <header className="fixed left-0 top-0 z-50 w-full bg-[#0a1628] border-b border-white/10">
         <div className="mx-auto max-w-[1500px] px-4 md:px-8">
-          <div className="flex h-[64px] items-center justify-between lg:h-[72px]">
+          <div className="flex h-16 items-center justify-between lg:h-[72px]">
 
-            {/* ═══════════════════════════════════════════ */}
-            {/* MOBILE LAYOUT (< lg) — Logo Left + Hamburger Right */}
-            {/* ═══════════════════════════════════════════ */}
             <div className="flex w-full items-center justify-between lg:hidden">
-              {/* Mobile Logo */}
-              <Link
-                href="/"
-                className="inline-flex items-center"
-                onClick={handleLogoClick}
-              >
+              <Link href="/">
                 <Image
                   src="/acasa.png"
                   alt="ACASA"
@@ -715,140 +525,80 @@ export default function Navbar() {
                 />
               </Link>
 
-              {/* Mobile Right Icons */}
               <div className="flex items-center gap-2">
-                {/* Search */}
-                <button
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/80 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
-                  aria-label="Search"
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-
-                {/* Avatar / Login */}
                 {isAuthenticated && user ? (
                   <div className="relative">
-                    <UserAvatar
-                      user={user}
-                      size="sm"
-                      onClick={() => setIsOpen(true)}
-                    />
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border-[1.5px] border-[#0F1C2E] bg-emerald-400" />
+                    <UserAvatar user={user} size="sm" onClick={() => setIsOpen(true)} />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0a1628] bg-emerald-400" />
                   </div>
                 ) : (
                   <Link
                     href="/login"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-white/60 hover:text-white transition-colors"
                     aria-label="Sign In"
                   >
                     <User className="h-4 w-4" />
                   </Link>
                 )}
 
-                {/* Hamburger */}
                 <button
                   onClick={() => setIsOpen(true)}
-                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-white/60 hover:text-white transition-colors"
                   aria-label="Open menu"
                 >
-                  <div className="relative h-4 w-4">
-                    <span className="absolute left-0 top-1/2 h-[2px] w-4 -translate-y-[5px] rounded-full bg-current" />
-                    <span className="absolute left-0 top-1/2 h-[2px] w-4 -translate-y-1/2 rounded-full bg-current" />
-                    <span className="absolute left-0 top-1/2 h-[2px] w-4 translate-y-[3px] rounded-full bg-current" />
+                  <div className="flex flex-col gap-[5px]">
+                    <span className="h-[1.5px] w-4 rounded-full bg-current" />
+                    <span className="h-[1.5px] w-4 rounded-full bg-current" />
+                    <span className="h-[1.5px] w-4 rounded-full bg-current" />
                   </div>
                 </button>
               </div>
             </div>
 
-            {/* ═══════════════════════════════════════════ */}
-            {/* DESKTOP LAYOUT (lg+) — 3 columns */}
-            {/* ═══════════════════════════════════════════ */}
-
-            {/* Desktop Left — Menu button */}
             <div className="hidden flex-1 items-center lg:flex">
               <button
                 onClick={() => setIsOpen(true)}
-                className="group flex items-center gap-3 text-white transition-all duration-300 hover:text-[#C9A96E]"
+                className="flex items-center gap-3 text-white/70 hover:text-[#C9A96E] transition-colors"
                 aria-label="Open menu"
               >
-                <div className="relative h-5 w-5">
-                  <span className="absolute left-0 top-1 h-[2px] w-5 rounded-full bg-current" />
-                  <span className="absolute left-0 top-1/2 h-[2px] w-3 rounded-full bg-current transition-all duration-300 group-hover:w-5" />
-                  <span className="absolute bottom-1 left-0 h-[2px] w-5 rounded-full bg-current" />
+                <div className="flex flex-col gap-[5px]">
+                  <span className="h-[2px] w-5 rounded-full bg-current" />
+                  <span className="h-[2px] w-3.5 rounded-full bg-current" />
+                  <span className="h-[2px] w-5 rounded-full bg-current" />
                 </div>
-                <span className="text-xs font-semibold uppercase tracking-[0.22em]">Menu</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.25em]">Menu</span>
               </button>
             </div>
 
-            {/* Desktop Center Logo */}
             <div className="absolute left-1/2 hidden -translate-x-1/2 lg:block">
-              <Link
-                href="/"
-                className="inline-flex transition-opacity hover:opacity-85"
-                onClick={handleLogoClick}
-              >
-                {loadingHref === '/' ? (
-                  <div className="flex items-center gap-3">
-                    <Image
-                      src="/acasa.png"
-                      alt="ACASA"
-                      width={124}
-                      height={38}
-                      className="h-9 w-auto brightness-0 invert"
-                      priority
-                    />
-                    <LoadingSpinner />
-                  </div>
-                ) : (
-                  <Image
-                    src="/acasa.png"
-                    alt="ACASA"
-                    width={124}
-                    height={38}
-                    className="h-9 w-auto brightness-0 invert"
-                    priority
-                  />
-                )}
+              <Link href="/">
+                <Image
+                  src="/acasa.png"
+                  alt="ACASA"
+                  width={130}
+                  height={40}
+                  className="h-9 w-auto brightness-0 invert"
+                  priority
+                />
               </Link>
             </div>
 
-            {/* Desktop Right */}
-            <div className="hidden flex-1 items-center justify-end gap-5 lg:flex">
-              <nav className="flex items-center gap-7">
-                {NAV_LINKS.map((link) => {
-                  const active    = isActive(link.href);
-                  const isLoading = loadingHref === link.href;
-
-                  return (
-                    <a
-                      key={link.name}
-                      href={link.href}
-                      onClick={(e) => handleNavLinkClick(e, link.href)}
-                      className={`text-white/80 hover:text-[#C9A96E] nav-link-underline ${
-                        active ? 'active' : ''
-                      } group relative py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-colors duration-300 ${
-                        isLoading ? 'cursor-wait opacity-50' : ''
-                      }`}
-                    >
-                      {isLoading ? (
-                        <span className="flex items-center gap-2">
-                          <span className="opacity-50">{link.name}</span>
-                          <LoadingSpinner />
-                        </span>
-                      ) : (
-                        link.name
-                      )}
-                    </a>
-                  );
-                })}
+            <div className="hidden flex-1 items-center justify-end gap-6 lg:flex">
+              <nav className="flex items-center gap-8">
+                {NAV_LINKS.map((link) => (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className={`py-2 text-[11px] font-bold uppercase tracking-[0.2em] transition-colors ${
+                      isActive(link.href) ? "text-[#C9A96E]" : "text-white/60 hover:text-[#C9A96E]"
+                    }`}
+                  >
+                    {link.name}
+                  </Link>
+                ))}
               </nav>
 
-              <button
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/80 transition-all duration-300 hover:border-[#C9A96E]/60 hover:bg-[#C9A96E]/10 hover:text-[#C9A96E]"
-                aria-label="Search"
-              >
-                <Search className="h-4 w-4" />
-              </button>
+              <div className="h-5 w-px bg-white/10" />
 
               <UserDropdown />
             </div>
@@ -858,7 +608,7 @@ export default function Navbar() {
 
       <SlidePanel isOpen={isOpen} onClose={() => setIsOpen(false)} />
 
-      <div className="h-[64px] lg:h-[72px]" />
+      <div className="h-16 lg:h-[72px]" />
     </>
   );
 }

@@ -1,3 +1,5 @@
+// app/api/v1/properties/sell/route.ts - COMPLETE FIXED VERSION
+
 import { NextRequest, NextResponse } from 'next/server';
 import { 
   getProperties,
@@ -11,9 +13,141 @@ import {
   type PropertyFilters,
 } from '@/lib/models/properties';
 
+// ─── CONSTANTS ──────────────────────────────────────────────────────────
+
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const CACHE_TTL = 300;
+const DEFAULT_CURRENCY = 'AED';
+const DEFAULT_SYMBOL = 'AED';
+const FALLBACK_DISPLAY = 'Price on Request';
+
+// ─── STRONG PRICE FIXER ───────────────────────────────────────────────
+
+function fixPropertyPrice(property: any): any {
+  if (!property) return property;
+
+  // If price doesn't exist, create it
+  if (!property.price) {
+    property.price = {
+      amount: null,
+      amount_end: null,
+      display: FALLBACK_DISPLAY,
+      display_end: '',
+      currency: DEFAULT_CURRENCY,
+      symbol: DEFAULT_SYMBOL,
+      is_price_on_request: true,
+      sale_price: null,
+      listing_price: null,
+      rental_price: null,
+    };
+    return property;
+  }
+
+  const price = property.price;
+
+  // ─── TRY TO GET AMOUNT FROM VARIOUS SOURCES ──────────────────────
+  let amount = null;
+  
+  // Check all possible price fields
+  if (price.amount && price.amount !== 'null' && !isNaN(parseFloat(price.amount))) {
+    amount = parseFloat(price.amount);
+  } else if (price.sale_price && price.sale_price !== 'null' && !isNaN(parseFloat(price.sale_price))) {
+    amount = parseFloat(price.sale_price);
+  } else if (price.listing_price && price.listing_price !== 'null' && !isNaN(parseFloat(price.listing_price))) {
+    amount = parseFloat(price.listing_price);
+  } else if (price.rental_price && price.rental_price !== 'null' && !isNaN(parseFloat(price.rental_price))) {
+    amount = parseFloat(price.rental_price);
+  } else if (price.amount_from && price.amount_from !== 'null' && !isNaN(parseFloat(price.amount_from))) {
+    amount = parseFloat(price.amount_from);
+  }
+
+  // Store the amount
+  price.amount = amount;
+
+  // ─── GET CURRENCY AND SYMBOL ──────────────────────────────────────
+  let currency = price.currency || DEFAULT_CURRENCY;
+  let symbol = price.symbol || DEFAULT_SYMBOL;
+
+  // Clean up null strings
+  if (currency === 'null' || !currency) currency = DEFAULT_CURRENCY;
+  if (symbol === 'null' || !symbol) symbol = DEFAULT_SYMBOL;
+
+  price.currency = currency;
+  price.symbol = symbol;
+
+  // ─── GENERATE DISPLAY ─────────────────────────────────────────────
+  if (amount && amount > 0) {
+    // Format the amount with proper locale
+    const formattedAmount = Number(amount).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+
+    // Use symbol if available, otherwise use currency code
+    const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+    price.display = `${prefix} ${formattedAmount}`;
+
+    // If there's an end amount, add range
+    let amountEnd = null;
+    if (price.amount_end && price.amount_end !== 'null' && !isNaN(parseFloat(price.amount_end))) {
+      amountEnd = parseFloat(price.amount_end);
+    } else if (price.amount_to && price.amount_to !== 'null' && !isNaN(parseFloat(price.amount_to))) {
+      amountEnd = parseFloat(price.amount_to);
+    }
+
+    if (amountEnd && amountEnd > 0 && amountEnd !== amount) {
+      const formattedEnd = Number(amountEnd).toLocaleString('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      });
+      price.display = `${prefix} ${formattedAmount} - ${formattedEnd}`;
+      price.display_end = `${prefix} ${formattedEnd}`;
+      price.amount_end = amountEnd;
+    }
+
+    price.is_price_on_request = false;
+  } else {
+    // No valid amount found
+    price.display = FALLBACK_DISPLAY;
+    price.is_price_on_request = true;
+  }
+
+  // ─── FIX AMOUNT_END ───────────────────────────────────────────────
+  if (!price.amount_end || price.amount_end === 'null') {
+    price.amount_end = null;
+  }
+
+  return property;
+}
+
+// ─── FIX BATCH PROPERTIES ─────────────────────────────────────────────
+
+function fixPropertiesPrices(properties: any[]): any[] {
+  if (!properties || !Array.isArray(properties)) return [];
+  return properties.map(property => fixPropertyPrice(property));
+}
+
+// ─── FORMAT PRICE FOR DISPLAY ─────────────────────────────────────────
+
+function formatPriceDisplay(price: any): string {
+  if (!price) return FALLBACK_DISPLAY;
+  
+  if (price.display && !price.display.includes('null') && !price.display.startsWith('null ')) {
+    return price.display;
+  }
+  
+  const amount = price.amount || price.sale_price || price.listing_price || price.rental_price;
+  if (!amount) return FALLBACK_DISPLAY;
+  
+  const currency = price.currency || DEFAULT_CURRENCY;
+  const symbol = price.symbol || DEFAULT_SYMBOL;
+  const prefix = (symbol && symbol !== 'null') ? symbol : currency;
+  
+  return `${prefix} ${Number(amount).toLocaleString()}`;
+}
+
+// ─── PROPERTY QUALITY SORTING ─────────────────────────────────────────
 
 type PropertyQuality = {
   hasPrice: boolean;
@@ -27,6 +161,7 @@ type PropertyQuality = {
 };
 
 function getPropertyQuality(property: any): PropertyQuality {
+  // After price fix, check if price exists
   const hasPrice = !!(property.price?.amount || property.price?.sale_price);
   const hasArea = !!(property.area?.value || property.area?.display);
   const hasImages = !!(property.images?.length > 0 || property.gallery_urls?.length > 0);
@@ -77,6 +212,8 @@ function sortPropertiesByQuality(properties: any[]): any[] {
   });
 }
 
+// ─── VALIDATION ─────────────────────────────────────────────────────────
+
 function validatePagination(page: number, limit: number) {
   const validPage = Math.max(1, page);
   const validLimit = Math.min(MAX_LIMIT, Math.max(1, limit));
@@ -98,6 +235,8 @@ function validateBedroom(bedroom: string): string {
   }
   return valid;
 }
+
+// ─── CACHE ─────────────────────────────────────────────────────────────
 
 const cache = new Map<string, { data: any; timestamp: number }>();
 
@@ -130,6 +269,8 @@ function getCacheKey(req: NextRequest): string {
   const url = new URL(req.url);
   return url.pathname + url.search;
 }
+
+// ─── MAIN GET HANDLER ──────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
@@ -173,20 +314,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // ─── ACTION: FILTERS ─────────────────────────────────────────────
     if (action === 'filters') {
       const filters = await getSearchFilters();
-      const response = { success: true, data: filters, meta: { timestamp: new Date().toISOString() } };
-      setCached(cacheKey, response);
-      return NextResponse.json(response);
-    }
-
-    if (stats) {
-      const statistics = await getSellPropertiesStatistics();
       const response = { 
         success: true, 
-        data: statistics, 
+        data: filters, 
         meta: { 
-          type: 'sell_statistics',
           timestamp: new Date().toISOString() 
         } 
       };
@@ -194,27 +328,76 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(response);
     }
 
-    if (slug) {
-      const property = await getPropertyBySlug(slug);
-      if (!property) {
-        return NextResponse.json({ success: false, error: 'Property not found' }, { status: 404 });
-      }
-      const response = { success: true, data: property, meta: { slug, timestamp: new Date().toISOString() } };
+    // ─── ACTION: STATISTICS ──────────────────────────────────────────
+    if (stats) {
+      const statistics = await getSellPropertiesStatistics();
+      const response = { 
+        success: true, 
+        data: statistics, 
+        meta: { 
+          type: 'sell_statistics',
+          price_fixed: true,
+          timestamp: new Date().toISOString() 
+        } 
+      };
       setCached(cacheKey, response);
       return NextResponse.json(response);
     }
 
+    // ─── GET BY SLUG ──────────────────────────────────────────────────
+    if (slug) {
+      const property = await getPropertyBySlug(slug);
+      if (!property) {
+        return NextResponse.json(
+          { success: false, error: 'Property not found' }, 
+          { status: 404 }
+        );
+      }
+      
+      // Fix price for single property
+      const fixedProperty = fixPropertyPrice(property);
+      
+      const response = { 
+        success: true, 
+        data: fixedProperty, 
+        meta: { 
+          slug, 
+          price_fixed: true,
+          timestamp: new Date().toISOString() 
+        } 
+      };
+      setCached(cacheKey, response);
+      return NextResponse.json(response);
+    }
+
+    // ─── GET BY ID ────────────────────────────────────────────────────
     if (id) {
       const propertyId = parseInt(id, 10);
       const property = await getPropertyById(propertyId);
       if (!property) {
-        return NextResponse.json({ success: false, error: 'Property not found' }, { status: 404 });
+        return NextResponse.json(
+          { success: false, error: 'Property not found' }, 
+          { status: 404 }
+        );
       }
-      const response = { success: true, data: property, meta: { id: propertyId, timestamp: new Date().toISOString() } };
+      
+      // Fix price for single property
+      const fixedProperty = fixPropertyPrice(property);
+      
+      const response = { 
+        success: true, 
+        data: fixedProperty, 
+        meta: { 
+          id: propertyId, 
+          price_fixed: true,
+          timestamp: new Date().toISOString() 
+        } 
+      };
       setCached(cacheKey, response);
       return NextResponse.json(response);
     }
 
+    // ─── BUILD FILTERS ─────────────────────────────────────────────────
     const filters: PropertyFilters = { 
       page: validPage, 
       limit: validLimit, 
@@ -256,6 +439,7 @@ export async function GET(request: NextRequest) {
       filters.sort_by = sortBy as any;
     }
 
+    // ─── FETCH PROPERTIES ─────────────────────────────────────────────
     let result: any;
 
     if (validMin > 0 || validMax > 0) {
@@ -267,10 +451,15 @@ export async function GET(request: NextRequest) {
       result = await getSellProperties(filters);
     }
 
-    const sortedData = (sort === 'quality' || sortBy === 'quality') 
-      ? sortPropertiesByQuality(result.data) 
-      : result.data;
+    // ─── FIX PRICES ──────────────────────────────────────────────────
+    const fixedData = fixPropertiesPrices(result.data || []);
 
+    // ─── SORT BY QUALITY ─────────────────────────────────────────────
+    const sortedData = (sort === 'quality' || sortBy === 'quality') 
+      ? sortPropertiesByQuality(fixedData) 
+      : fixedData;
+
+    // ─── BUILD RESPONSE ──────────────────────────────────────────────
     const response = {
       success: true,
       data: sortedData,
@@ -295,6 +484,8 @@ export async function GET(request: NextRequest) {
           completion_to: completionTo || null,
         },
         show_all: showAll,
+        price_fixed: true,
+        total_price_fixed: fixedData.length,
         timestamp: new Date().toISOString(),
       },
     };
@@ -303,12 +494,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
 
   } catch (error) {
+    console.error('Sell API Error:', error);
     return NextResponse.json({
       success: false,
       error: 'Internal server error',
       message: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
+}
+
+// ─── OPTIONS: CORS ─────────────────────────────────────────────────────
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
 }
 
 export const runtime = 'nodejs';

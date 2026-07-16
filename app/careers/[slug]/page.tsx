@@ -1,3 +1,5 @@
+// app/careers/[slug]/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -146,20 +148,31 @@ export default function JobDetailPage() {
 
   useEffect(() => {
     if (!slug) return;
-    (async () => {
+
+    const fetchJob = async () => {
       setLoading(true);
       setError(null);
       try {
         const res = await fetch(`${API_URL}?slug=${slug}`);
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.message || "Job not found");
+        
+        if (!res.ok) {
+          throw new Error(data.message || "Job not found");
+        }
+        
+        if (!data.success || !data.data) {
+          throw new Error("Job not found");
+        }
+        
         setJob(data.data);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.message || "Failed to load job");
       } finally {
         setLoading(false);
       }
-    })();
+    };
+
+    fetchJob();
   }, [slug]);
 
   const handleShare = useCallback(async () => {
@@ -220,17 +233,35 @@ export default function JobDetailPage() {
   if (error || !job) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="text-center px-4">
+        <div className="text-center px-4 max-w-md">
           <Briefcase className="mx-auto h-12 w-12 text-gray-300 mb-4" />
-          <p className="text-sm text-red-500 mb-6">{error || "Job not found"}</p>
-          <Link
-            href="/careers"
-            className="inline-flex items-center gap-2 px-6 py-3 text-[11px] uppercase tracking-widest text-white transition-colors hover:opacity-90"
-            style={{ backgroundColor: THEME.primary }}
+          <h1
+            className="text-2xl font-light"
+            style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
           >
-            <ArrowLeft className="h-4 w-4" />
-            All Jobs
-          </Link>
+            Position Not Found
+          </h1>
+          <p className="text-sm text-red-500 my-4">{error || "The position you're looking for doesn't exist."}</p>
+          <div className="mt-4 p-4 bg-gray-50 rounded text-xs text-left font-mono overflow-auto max-h-32 border border-gray-200">
+            <p><strong>Slug:</strong> {slug}</p>
+            <p><strong>API:</strong> {API_URL}?slug={slug}</p>
+          </div>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link
+              href="/careers"
+              className="inline-flex items-center gap-2 px-6 py-2.5 text-[11px] tracking-widest text-white transition-colors hover:opacity-90"
+              style={{ backgroundColor: THEME.primary }}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              All Jobs
+            </Link>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-gray-200 px-6 py-2.5 text-[11px] tracking-widest text-gray-700 hover:bg-gray-300"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -238,7 +269,7 @@ export default function JobDetailPage() {
 
   const typeColor = getJobTypeColor(job.type || "");
   const daysAgo = getDaysAgo(job.created_at);
-  const description = stripHtml(job.description);
+  const jobSlug = job.link || job.slug || `job-${job.id}`;
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>

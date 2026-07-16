@@ -1,4 +1,5 @@
 // app/search/SearchPage.tsx
+
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -80,12 +81,10 @@ function getBedroomDisplay(bedroom: string | null): string {
 function getUnsplashFallback(name?: string | null, listingType?: string | null): string {
   const searchTerms = [];
   
-  // Add name
   if (name) {
     searchTerms.push(name);
   }
   
-  // Add listing type
   if (listingType) {
     const type = listingType.toLowerCase();
     if (type.includes('villa')) searchTerms.push('villa');
@@ -94,16 +93,12 @@ function getUnsplashFallback(name?: string | null, listingType?: string | null):
     else if (type.includes('townhouse')) searchTerms.push('townhouse');
   }
   
-  // Always add Dubai and real-estate
   searchTerms.push('dubai');
   searchTerms.push('real-estate');
-  
-  // Also add luxury
   searchTerms.push('luxury');
   
   const query = encodeURIComponent(searchTerms.join(' '));
   
-  // Use multiple Unsplash sources for better results
   const sources = [
     `https://source.unsplash.com/800x600/?${query}`,
     `https://source.unsplash.com/800x600/?${encodeURIComponent(name || 'dubai')},property`,
@@ -111,25 +106,17 @@ function getUnsplashFallback(name?: string | null, listingType?: string | null):
     `https://source.unsplash.com/800x600/?dubai,property`,
   ];
   
-  // Return first source, fallback chain will handle others
   return sources[0];
 }
 
-// ✅ NEW: Get image with proper fallback chain
 function getImageWithFallback(
   imageUrl: string | null | undefined,
   name?: string | null,
   listingType?: string | null
 ): string {
-  // If image_url exists and doesn't contain no-image
   if (imageUrl && !imageUrl.includes('no-image')) {
     return imageUrl;
   }
-  
-  // Try to construct from gallery if available
-  // This will be handled in the component
-  
-  // Return Unsplash fallback
   return getUnsplashFallback(name, listingType);
 }
 
@@ -177,15 +164,12 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
   const slug = isProperty ? item.property_slug : item.slug;
   const listingType = item.listing_type;
   
-  // ✅ Get all available images
   const allImages: string[] = [];
   
-  // Add image_url if exists and not no-image
   if (item.image_url && !item.image_url.includes('no-image')) {
     allImages.push(item.image_url);
   }
   
-  // Add gallery images
   if (item.gallery_images && item.gallery_images.length > 0) {
     for (const img of item.gallery_images) {
       if (!img.includes('no-image') && !allImages.includes(img)) {
@@ -194,7 +178,6 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
     }
   }
   
-  // Add image variations
   if (item.image_variations && item.image_variations.length > 0) {
     for (const img of item.image_variations) {
       if (!img.includes('no-image') && !allImages.includes(img)) {
@@ -203,12 +186,10 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
     }
   }
   
-  // If still no images, use Unsplash
   if (allImages.length === 0) {
     allImages.push(getUnsplashFallback(name, listingType));
   }
   
-  // Current image to display
   const currentImage = imgError 
     ? getUnsplashFallback(name, listingType) 
     : allImages[currentImageIndex] || getUnsplashFallback(name, listingType);
@@ -227,7 +208,6 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
     setTimeout(() => router.push(localUrl), 800);
   };
 
-  // Rotate through images
   useEffect(() => {
     if (hasMultipleImages && !imgError) {
       const interval = setInterval(() => {
@@ -254,7 +234,6 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
               loading={index < 6 ? "eager" : "lazy"}
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
               onError={(e) => {
-                // Try next image if available
                 if (currentImageIndex < allImages.length - 1) {
                   setCurrentImageIndex(prev => prev + 1);
                 } else {
@@ -264,14 +243,12 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
               }}
             />
 
-            {/* Image counter */}
             {hasMultipleImages && !imgError && (
               <div className="absolute bottom-4 right-4 z-10 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded">
                 {currentImageIndex + 1}/{allImages.length}
               </div>
             )}
 
-            {/* Badges */}
             <div className="absolute left-0 top-4 z-10 flex flex-col gap-1.5">
               <span className={`px-4 py-1.5 text-[9px] font-medium tracking-[0.2em] text-white ${
                 isProperty ? "bg-[#577C8E]" : "bg-[#192334]"
@@ -280,7 +257,6 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
               </span>
             </div>
 
-            {/* Location Badge */}
             {location && (
               <div className="absolute bottom-4 left-4 z-10 bg-white/95 px-3 py-1.5 text-[10px] text-gray-600 backdrop-blur-sm rounded">
                 <HiOutlineMapPin className="inline h-3 w-3 mr-1" />
@@ -288,7 +264,6 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
               </div>
             )}
 
-            {/* Unsplash badge (only for fallback images) */}
             {imgError && (
               <div className="absolute top-4 right-4 z-10 bg-orange-500/90 text-white text-[8px] px-2 py-0.5 rounded uppercase tracking-wider">
                 ⚡ Fallback
@@ -297,7 +272,6 @@ function ResultCard({ item, index }: { item: SearchItem; index: number }) {
           </div>
         </div>
 
-        {/* Card Info */}
         <div className="mt-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
@@ -382,6 +356,40 @@ function ScrollToTop() {
   );
 }
 
+// ─── POPULAR SEARCHES ──────────────────────────────────────────────────
+
+function PopularSearches() {
+  const searches = [
+    "Luxury homes for sale in United Arab Emirates",
+    "Waterfront properties in United Arab Emirates",
+    "Beachfront villas in United Arab Emirates",
+    "Investment properties in United Arab Emirates",
+    "Branded residences in United Arab Emirates",
+    "Golf course properties in United Arab Emirates",
+    "Properties with private pool in United Arab Emirates",
+    "Sea view properties in United Arab Emirates",
+    "New launch properties in United Arab Emirates",
+    "Ready to move properties in United Arab Emirates",
+  ];
+
+  return (
+    <div className="mt-12 border-t border-gray-100 pt-8">
+      <h3 className="text-[11px] font-medium tracking-[0.2em] text-gray-400 uppercase">Popular Searches</h3>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {searches.map((search, i) => (
+          <Link
+            key={i}
+            href={`/search?q=${encodeURIComponent(search)}`}
+            className="px-3 py-1.5 text-[10px] text-gray-500 border border-gray-200 hover:border-[#192334] hover:text-[#192334] transition-colors rounded-full"
+          >
+            {search}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN COMPONENT ─────────────────────────────────────────────────────
 
 export default function SearchPage() {
@@ -398,6 +406,8 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [totalProperties, setTotalProperties] = useState(0);
+  const [totalProjects, setTotalProjects] = useState(0);
   const fetchedRef = useRef(false);
 
   const fetchResults = useCallback(async () => {
@@ -409,6 +419,24 @@ export default function SearchPage() {
       if (query) params.set("q", query);
       params.set("type", type);
       if (locations.length) params.set("locations", locations.join(","));
+      // ✅ IMPORTANT: community_id bhi pass karo agar query se match ho
+      if (query) {
+        // Agar query "dubai hills" hai toh community_id 35 pass karo
+        const communityMap: Record<string, number> = {
+          "dubai hills": 35,
+          "palm jumeirah": 1125,
+          "dubai marina": 114,
+          "downtown dubai": 57,
+          "yas island": 1592,
+        };
+        const lowerQuery = query.toLowerCase();
+        for (const [key, id] of Object.entries(communityMap)) {
+          if (lowerQuery.includes(key)) {
+            params.set("community_id", String(id));
+            break;
+          }
+        }
+      }
 
       const apiUrl = `/api/v1/location?${params.toString()}`;
       console.log("🔍 [SearchPage] Fetching:", apiUrl);
@@ -433,6 +461,8 @@ export default function SearchPage() {
       
       setProperties(propertiesData);
       setProjects(projectsData);
+      setTotalProperties(data.data?.total_properties || 0);
+      setTotalProjects(data.data?.total_projects || 0);
       setTotal((data.data?.total_properties || 0) + (data.data?.total_projects || 0));
       
       console.log(`✅ [SearchPage] Found ${propertiesData.length} properties, ${projectsData.length} projects`);
@@ -456,7 +486,12 @@ export default function SearchPage() {
     fetchedRef.current = false;
   }, [query, type, locations.join(",")]);
 
-  const totalResults = properties.length + projects.length;
+  // ─── Community Name Display ──────────────────────────────────────────
+  const getCommunityDisplay = () => {
+    if (query) return query;
+    if (locations.length > 0) return locations.join(", ");
+    return "All Properties";
+  };
 
   return (
     <section className="bg-white min-h-screen" style={{ fontFamily: FONT_BODY }}>
@@ -522,6 +557,18 @@ export default function SearchPage() {
               >
                 RENT
               </button>
+              {locations.length > 0 && (
+                <button
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.delete("locations");
+                    router.push(`/search?${params.toString()}`);
+                  }}
+                  className="px-3 py-2 text-[10px] text-red-500 border border-red-200 hover:bg-red-50 transition-colors rounded"
+                >
+                  ✕ Clear Locations
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -536,15 +583,15 @@ export default function SearchPage() {
               Search Results
             </h1>
             <p className="mt-2 text-xs tracking-wider text-gray-500">
-              {loading ? "Searching..." : `${total} result${total !== 1 ? "s" : ""} found for "${query || locations.join(", ")}"`}
+              {loading ? "Searching..." : `${total} result${total !== 1 ? "s" : ""} found for "${getCommunityDisplay()}"`}
             </p>
           </div>
           <div className="flex items-center gap-3 text-xs text-gray-400">
             {!loading && total > 0 && (
               <>
-                <span>{properties.length} Properties</span>
+                <span>{totalProperties} Properties</span>
                 <span className="text-gray-300">|</span>
-                <span>{projects.length} Projects</span>
+                <span>{totalProjects} Projects</span>
               </>
             )}
           </div>
@@ -596,7 +643,7 @@ export default function SearchPage() {
             {projects.length > 0 && (
               <div className="mb-12">
                 <h2 className="mb-6 text-[20px] uppercase text-[#192334]" style={{ fontFamily: FONT_DISPLAY }}>
-                  Projects ({projects.length})
+                  Projects ({totalProjects})
                 </h2>
                 <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
                   {projects.map((project, index) => (
@@ -609,7 +656,7 @@ export default function SearchPage() {
             {properties.length > 0 && (
               <div>
                 <h2 className="mb-6 text-[20px] uppercase text-[#192334]" style={{ fontFamily: FONT_DISPLAY }}>
-                  Properties ({properties.length})
+                  Properties ({totalProperties})
                 </h2>
                 <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
                   {properties.map((property, index) => (
@@ -618,6 +665,9 @@ export default function SearchPage() {
                 </div>
               </div>
             )}
+
+            {/* Popular Searches */}
+            <PopularSearches />
           </>
         )}
       </div>

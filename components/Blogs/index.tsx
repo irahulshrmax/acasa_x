@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 
 const BLOGS_API_URL = "/api/v1/blogs";
-const PLACEHOLDER = "/placeholder-blog.png";
+const PLACEHOLDER = "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?w=600&h=800&fit=crop";
 const IMAGE_BASE_URL = "https://acasa.ae/upload/blogs";
 
 const FONT_BODY = "'Inter', sans-serif";
@@ -39,18 +39,52 @@ interface Blog {
     medium: string;
     variations: string[];
   };
+  descriptions?: string;
+  read_time?: string;
+  tags?: string[];
 }
 
+// ✅ FIXED: Get blog image with proper URL
 function getBlogImage(blog: Blog): string {
-  if (blog.image_urls?.main && !blog.image_urls.main.includes("no-image")) {
+  console.log("🔍 getBlogImage called for:", blog.id, blog.title);
+  console.log("📸 imageurl:", blog.imageurl);
+  console.log("📸 image_url:", blog.image_url);
+  console.log("📸 image_urls:", blog.image_urls);
+
+  // Priority 1: image_urls.main
+  if (blog.image_urls?.main && blog.image_urls.main !== "https://acasa.ae/upload/no-image.png") {
+    console.log("✅ Using image_urls.main:", blog.image_urls.main);
     return blog.image_urls.main;
   }
-  if (blog.image_url && !blog.image_url.includes("no-image")) {
+
+  // Priority 2: image_url (if exists and not no-image)
+  if (blog.image_url && blog.image_url !== "https://acasa.ae/upload/no-image.png") {
+    console.log("✅ Using image_url:", blog.image_url);
     return blog.image_url;
   }
+
+  // Priority 3: imageurl - try to build URL
   if (blog.imageurl) {
-    return `${IMAGE_BASE_URL}/${blog.imageurl}.webp`;
+    // If it's already a full URL
+    if (blog.imageurl.startsWith('http://') || blog.imageurl.startsWith('https://')) {
+      console.log("✅ Using imageurl (full URL):", blog.imageurl);
+      return blog.imageurl;
+    }
+    
+    // If it's a path like "blog-123.webp"
+    if (blog.imageurl.includes('.')) {
+      const url = `${IMAGE_BASE_URL}/${blog.imageurl}`;
+      console.log("✅ Using imageurl with extension:", url);
+      return url;
+    }
+    
+    // If it's just a name without extension
+    const url = `${IMAGE_BASE_URL}/${blog.imageurl}.webp`;
+    console.log("✅ Using imageurl with .webp:", url);
+    return url;
   }
+
+  console.log("⚠️ No image found, using placeholder");
   return PLACEHOLDER;
 }
 
@@ -64,6 +98,13 @@ function trimTitleForOverlay(title: string): string {
   if (words.length <= 5) return capitalizeFirst(title);
   const maxWords = words.length > 10 ? 6 : 5;
   return capitalizeFirst(words.slice(0, maxWords).join(" "));
+}
+
+function getReadTime(content: string): string {
+  const wordsPerMinute = 200;
+  const wordCount = content?.split(/\s+/).length || 0;
+  const minutes = Math.ceil(wordCount / wordsPerMinute);
+  return minutes > 0 ? `${minutes} min read` : "1 min read";
 }
 
 // ─── Skeletons ─────────────────────────────────────────────────────────
@@ -80,55 +121,65 @@ const BlogSkeleton = () => (
   </div>
 );
 
-// ─── Card Loader ──────────────────────────────────────────────────────
+// ─── Blog Image ────────────────────────────────────────────────────────
 
-function CardLoadingOverlay() {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-[3px]"
-      style={{ background: "rgba(15, 28, 46, 0.85)" }}
-    >
-      <div className="relative h-14 w-14">
-        <motion.div
-          className="absolute inset-0 rounded-full border-2 border-transparent"
-          style={{
-            borderTopColor: THEME.accent,
-            borderRightColor: THEME.accent,
-          }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        />
+const BlogImage = ({
+  blog,
+  className,
+}: {
+  blog: Blog;
+  className?: string;
+}) => {
+  const [imgSrc, setImgSrc] = useState<string>("");
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-        <motion.div
-          className="absolute inset-2 rounded-full border-2 border-transparent"
-          style={{
-            borderBottomColor: "rgba(255,255,255,0.7)",
-            borderLeftColor: "rgba(255,255,255,0.7)",
-          }}
-          animate={{ rotate: -360 }}
-          transition={{ duration: 1.3, repeat: Infinity, ease: "linear" }}
-        />
-      </div>
+  useEffect(() => {
+    const url = getBlogImage(blog);
+    console.log("🖼️ BlogImage setting src:", url);
+    setImgSrc(url);
+    setLoaded(false);
+    setFailed(false);
+  }, [blog]);
 
-      <motion.p
-        className="mt-4 text-[9px] uppercase text-white"
-        style={{
-          fontFamily: FONT_BODY,
-          letterSpacing: "0.3em",
-          fontWeight: 500,
-        }}
-        animate={{ opacity: [0.6, 1, 0.6] }}
-        transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+  if (failed || !imgSrc) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-gray-200 ${className}`}
       >
-        Opening
-      </motion.p>
-    </motion.div>
+        <span className="text-sm text-gray-400">No Image</span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {!loaded && (
+        <div className="absolute inset-0 z-[0] animate-pulse bg-gradient-to-br from-gray-100 to-gray-200" />
+      )}
+
+      <img
+        src={imgSrc}
+        alt={blog.title}
+        className={`${className} transition-opacity duration-500 ${
+          loaded ? "opacity-100" : "opacity-0"
+        }`}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onLoad={() => {
+          console.log("✅ Image loaded:", imgSrc);
+          setLoaded(true);
+        }}
+        onError={(e) => {
+          console.log("❌ Image failed to load:", imgSrc);
+          console.log("❌ Error:", e);
+          setFailed(true);
+        }}
+      />
+    </>
   );
-}
+};
 
 // ─── View All Button ──────────────────────────────────────────────────
 
@@ -247,76 +298,15 @@ function ViewAllButton() {
   );
 }
 
-// ─── Blog Image ────────────────────────────────────────────────────────
+// ─── Blog Card with Flip ──────────────────────────────────────────────────────
 
-const BlogImage = ({
-  blog,
-  className,
-}: {
-  blog: Blog;
-  className?: string;
-}) => {
-  const [imgSrc, setImgSrc] = useState<string>("");
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    const url = getBlogImage(blog);
-    setImgSrc(url);
-    setLoaded(false);
-    setFailed(false);
-  }, [blog]);
-
-  if (failed || !imgSrc) {
-    return (
-      <div
-        className={`flex items-center justify-center bg-gray-200 ${className}`}
-      >
-        <span className="text-sm text-gray-400">No Image</span>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {!loaded && (
-        <div className="absolute inset-0 z-[0] animate-pulse bg-gradient-to-br from-gray-100 to-gray-200" />
-      )}
-
-      <img
-        src={imgSrc}
-        alt={blog.title}
-        className={`${className} transition-opacity duration-500 ${
-          loaded ? "opacity-100" : "opacity-0"
-        }`}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          setFailed(true);
-        }}
-      />
-    </>
-  );
-};
-
-// ─── Desktop Card ──────────────────────────────────────────────────────
-
-const DesktopBlogCard = ({ blog }: { blog: Blog }) => {
-  const [isOpening, setIsOpening] = useState(false);
+const BlogCard = ({ blog }: { blog: Blog }) => {
+  const [isHovered, setIsHovered] = useState(false);
 
   const overlayTitle = trimTitleForOverlay(blog.title);
-  const href = `/blog/${blog.slug}`;
-
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.preventDefault();
-    if (isOpening) return;
-    setIsOpening(true);
-    setTimeout(() => {
-      window.location.href = href;
-    }, 700);
-  };
+  const readTime = blog.read_time || getReadTime(blog.descriptions || blog.excerpt || "");
+  const category = blog.category || "Lifestyle";
+  const writer = blog.writer || "ACASA Team";
 
   return (
     <motion.div
@@ -324,67 +314,205 @@ const DesktopBlogCard = ({ blog }: { blog: Blog }) => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.5 }}
-      className="flex flex-col"
+      className="perspective-1000"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <a href={href} onClick={handleClick} className="flex h-full flex-col">
+      <div
+        className={`relative transition-all duration-700 preserve-3d ${
+          isHovered ? "rotate-y-180" : ""
+        }`}
+        style={{ transformStyle: "preserve-3d" }}
+      >
+        {/* FRONT SIDE */}
         <div
-          className="relative w-full overflow-hidden rounded-2xl bg-[#f0f0f0]"
-          style={{
-            aspectRatio: "3/4",
-            boxShadow:
-              "0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)",
-          }}
+          className="relative w-full backface-hidden"
+          style={{ backfaceVisibility: "hidden" }}
         >
-          <BlogImage
-            blog={blog}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-
-          <AnimatePresence>
-            {isOpening && <CardLoadingOverlay />}
-          </AnimatePresence>
-
           <div
-            className="absolute inset-0 z-[1]"
+            className="relative w-full overflow-hidden rounded-2xl bg-[#f0f0f0]"
             style={{
-              background:
-                "linear-gradient(to top, rgba(15,28,46,0.85) 0%, rgba(15,28,46,0.40) 40%, rgba(15,28,46,0.08) 75%, transparent 100%)",
+              aspectRatio: "3/4",
+              boxShadow:
+                "0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)",
             }}
-          />
+          >
+            <BlogImage
+              blog={blog}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
 
-          <div className="absolute inset-x-0 bottom-0 z-[4] px-6 pb-8">
-            <h3
-              className="text-white/90"
+            <div
+              className="absolute inset-0 z-[1]"
               style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: "clamp(26px, 2.6vw, 42px)",
-                fontWeight: 400,
-                lineHeight: "1.2",
-                maxWidth: "85%",
-                textShadow: "0 2px 16px rgba(0,0,0,0.5)",
+                background:
+                  "linear-gradient(to top, rgba(15,28,46,0.85) 0%, rgba(15,28,46,0.40) 40%, rgba(15,28,46,0.08) 75%, transparent 100%)",
+              }}
+            />
+
+            <div className="absolute inset-x-0 bottom-0 z-[4] px-6 pb-8">
+              <h3
+                className="text-white/90"
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontSize: "clamp(26px, 2.6vw, 42px)",
+                  fontWeight: 400,
+                  lineHeight: "1.2",
+                  maxWidth: "85%",
+                  textShadow: "0 2px 16px rgba(0,0,0,0.5)",
+                }}
+              >
+                {overlayTitle}
+              </h3>
+            </div>
+          </div>
+
+          <div className="mt-5 px-1">
+            <h4
+              className="text-[#0F1C2E]"
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: "13px",
+                fontWeight: 500,
+                lineHeight: "1.55",
+                letterSpacing: "-0.01em",
               }}
             >
-              {overlayTitle}
-            </h3>
+              {capitalizeFirst(blog.title)}
+            </h4>
           </div>
         </div>
 
-        <div className="mt-5 px-1">
-          <h4
-            className="text-[#0F1C2E]"
+        {/* BACK SIDE */}
+        <div
+          className="absolute inset-0 w-full backface-hidden rotate-y-180"
+          style={{ backfaceVisibility: "hidden" }}
+        >
+          <div 
+            className="h-full w-full rounded-2xl bg-[#0F1C2E] p-6 shadow-xl flex flex-col justify-between"
+            style={{ aspectRatio: "3/4" }}
+          >
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[8px] uppercase tracking-[0.15em] text-[#C9A96E] font-semibold bg-[#C9A96E]/10 px-2.5 py-1 rounded-full">
+                  {category}
+                </span>
+                <span className="text-[8px] text-gray-400">
+                  {readTime}
+                </span>
+              </div>
+
+              <h3 className="text-lg font-semibold text-white mb-2 leading-tight">
+                {blog.title}
+              </h3>
+              
+              <p className="text-xs text-gray-300 leading-relaxed">
+                {blog.excerpt || "Discover insights and stories from the world of luxury real estate in Dubai."}
+              </p>
+
+              {blog.sub_title && (
+                <p className="text-xs text-[#C9A96E] mt-2 font-medium">
+                  {blog.sub_title}
+                </p>
+              )}
+
+              <div className="mt-4">
+                <p className="text-[8px] uppercase tracking-[0.15em] text-[#C9A96E] font-semibold mb-1.5">
+                  Tags
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {blog.tags?.slice(0, 3).map((tag, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[7px] bg-white/10 text-gray-300 px-2.5 py-1 rounded-full"
+                    >
+                      {tag}
+                    </span>
+                  )) || (
+                    <>
+                      <span className="text-[7px] bg-white/10 text-gray-300 px-2.5 py-1 rounded-full">Real Estate</span>
+                      <span className="text-[7px] bg-white/10 text-gray-300 px-2.5 py-1 rounded-full">Dubai</span>
+                      <span className="text-[7px] bg-white/10 text-gray-300 px-2.5 py-1 rounded-full">Luxury</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-gray-400">
+                  By {writer}
+                </span>
+                <span className="text-[7px] text-[#C9A96E] uppercase tracking-widest">
+                  {blog.publish_date ? new Date(blog.publish_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ─── Mobile Blog Card ──────────────────────────────────────────────────
+
+const MobileBlogCard = ({ blog }: { blog: Blog }) => {
+  const overlayTitle = trimTitleForOverlay(blog.title);
+
+  return (
+    <div>
+      <div
+        className="relative w-full overflow-hidden rounded-2xl bg-[#f0f0f0]"
+        style={{
+          aspectRatio: "3/4",
+          boxShadow:
+            "0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)",
+        }}
+      >
+        <BlogImage
+          blog={blog}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div
+          className="absolute inset-0 z-[1]"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(15,28,46,0.85) 0%, rgba(15,28,46,0.40) 40%, rgba(15,28,46,0.08) 75%, transparent 100%)",
+          }}
+        />
+        <div className="absolute inset-x-0 bottom-0 z-[4] px-6 pb-8">
+          <h3
+            className="text-white/90"
             style={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: "13px",
-              fontWeight: 500,
-              lineHeight: "1.55",
-              letterSpacing: "-0.01em",
+              fontFamily: "'Playfair Display', serif",
+              fontSize: "clamp(26px, 7vw, 38px)",
+              fontWeight: 400,
+              lineHeight: "1.2",
+              maxWidth: "80%",
+              textShadow: "0 2px 16px rgba(0,0,0,0.5)",
             }}
           >
-            {capitalizeFirst(blog.title)}
-          </h4>
+            {overlayTitle}
+          </h3>
         </div>
-      </a>
-    </motion.div>
+      </div>
+      <div className="mt-5 px-1">
+        <h4
+          className="text-[#0F1C2E]"
+          style={{
+            fontFamily: "'Inter', sans-serif",
+            fontSize: "14px",
+            fontWeight: 500,
+            lineHeight: "1.55",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {capitalizeFirst(blog.title)}
+        </h4>
+      </div>
+    </div>
   );
 };
 
@@ -406,12 +534,18 @@ export default function BlogsSection() {
 
       const data = await response.json();
 
+      console.log("📦 API Response:", data);
+
       if (data.success) {
+        console.log("✅ Blogs received:", data.data?.length);
+        console.log("📸 First blog image:", data.data?.[0]?.imageurl);
+        console.log("📸 First blog image_urls:", data.data?.[0]?.image_urls);
         setBlogs(data.data || []);
       } else {
         throw new Error(data.message || "Failed to fetch blogs");
       }
     } catch (err: any) {
+      console.error("❌ Error fetching blogs:", err);
       setError(err.message);
       setBlogs([]);
     } finally {
@@ -493,57 +627,7 @@ export default function BlogsSection() {
             blogList.length > 0 && (
               <>
                 {blogList.slice(0, 1).map((blog) => (
-                  <div key={blog.id}>
-                    <div
-                      className="relative w-full overflow-hidden rounded-2xl bg-[#f0f0f0]"
-                      style={{
-                        aspectRatio: "3/4",
-                        boxShadow:
-                          "0 8px 32px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06)",
-                      }}
-                    >
-                      <BlogImage
-                        blog={blog}
-                        className="absolute inset-0 h-full w-full object-cover"
-                      />
-                      <div
-                        className="absolute inset-0 z-[1]"
-                        style={{
-                          background:
-                            "linear-gradient(to top, rgba(15,28,46,0.85) 0%, rgba(15,28,46,0.40) 40%, rgba(15,28,46,0.08) 75%, transparent 100%)",
-                        }}
-                      />
-                      <div className="absolute inset-x-0 bottom-0 z-[4] px-6 pb-8">
-                        <h3
-                          className="text-white/90"
-                          style={{
-                            fontFamily: "'Playfair Display', serif",
-                            fontSize: "clamp(26px, 7vw, 38px)",
-                            fontWeight: 400,
-                            lineHeight: "1.2",
-                            maxWidth: "80%",
-                            textShadow: "0 2px 16px rgba(0,0,0,0.5)",
-                          }}
-                        >
-                          {trimTitleForOverlay(blog.title)}
-                        </h3>
-                      </div>
-                    </div>
-                    <div className="mt-5 px-1">
-                      <h4
-                        className="text-[#0F1C2E]"
-                        style={{
-                          fontFamily: "'Inter', sans-serif",
-                          fontSize: "14px",
-                          fontWeight: 500,
-                          lineHeight: "1.55",
-                          letterSpacing: "-0.01em",
-                        }}
-                      >
-                        {capitalizeFirst(blog.title)}
-                      </h4>
-                    </div>
-                  </div>
+                  <MobileBlogCard key={blog.id} blog={blog} />
                 ))}
 
                 <div className="mt-12 flex justify-center">
@@ -572,7 +656,7 @@ export default function BlogsSection() {
           ) : (
             !hasError &&
             blogList.map((blog) => (
-              <DesktopBlogCard key={blog.id} blog={blog} />
+              <BlogCard key={blog.id} blog={blog} />
             ))
           )}
         </div>
@@ -590,6 +674,22 @@ export default function BlogsSection() {
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        .perspective-1000 {
+          perspective: 1000px;
+        }
+        .preserve-3d {
+          transform-style: preserve-3d;
+        }
+        .backface-hidden {
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+          transform: rotateY(180deg);
+        }
+      `}</style>
     </section>
   );
 }

@@ -11,7 +11,6 @@ import {
   LinkedInIcon,
 } from "@/components/icon/footerIcon";
 
-// ─── Types ───
 type LinkItem = {
   label: string;
   href: string;
@@ -23,45 +22,41 @@ type SocialLink = {
   label: string;
 };
 
-// ─── Data ───
 const EXPLORE_LINKS: LinkItem[] = [
-  { label: "Properties For Sale",      href: "/properties-for-sale-in-dubai"      },
-  { label: "Properties For Rent",      href: "/properties-for-rent-in-dubai"      },
-  { label: "Apartments For Sale",      href: "/apartments-for-sale-in-dubai"      },
-  { label: "Off Plan Properties",      href: "/off-plan-properties-in-dubai"      },
-  { label: "New Projects",             href: "/new-projects-in-dubai"             },
-  { label: "Luxury Properties",        href: "/luxury-properties-in-dubai"        },
-  { label: "International Properties", href: "/international-properties-for-sale" },
-  { label: "Developers",               href: "/developers"                        },
-  { label: "Neighborhood Guide",       href: "/dubai-neighborhood-guide"          },
+  { label: "Properties For Sale", href: "/properties-for-sale-dubai" },
+  { label: "Properties For Rent", href: "/properties-for-rent-dubai" },
+  { label: "Apartments For Sale", href: "/apartments-for-sale-in-dubai" },
+  { label: "Off Plan Properties", href: "/off-plan-properties-in-dubai" },
+  { label: "New Projects", href: "/new-projects-in-dubai" },
+  { label: "Developers", href: "/developers" },
+  { label: "Neighborhood Guide", href: "/neighborhood-guide" },
 ];
 
 const COMPANY_LINKS: LinkItem[] = [
-  { label: "About Us",           href: "/about-us"           },
+  { label: "About Us", href: "/about-us" },
   { label: "Sell Your Property", href: "/sell-your-property-in-dubai" },
-  { label: "Seller's Guide",     href: "/seller-guide"       },
-  { label: "Journal",            href: "/blog"               },
+  { label: "Seller's Guide", href: "/seller-guide" },
+  { label: "Journal", href: "/blog" },
   { label: "Archive Properties", href: "/archive-properties" },
-  { label: "Archive Projects",   href: "/archive-projects"   },
-  { label: "Careers",            href: "/careers"            },
-  { label: "Contact Us",         href: "/contact-us"         },
+  { label: "Archive Projects", href: "/archive-projects" },
+  { label: "Careers", href: "/careers" },
+  { label: "Contact Us", href: "/contact-us" },
 ];
 
 const BOTTOM_LINKS: LinkItem[] = [
-  { label: "Journal",  href: "/blog"    },
-  { label: "Reviews",  href: "/reviews" },
-  { label: "Press",    href: "/press"   },
-  { label: "FAQ's",    href: "/faqs"    },
+  { label: "Journal", href: "/blog" },
+  { label: "Reviews", href: "/reviews" },
+  { label: "Press", href: "/press" },
+  { label: "FAQ's", href: "/faqs" },
 ];
 
 const SOCIAL_LINKS: SocialLink[] = [
-  { Icon: LinkedInIcon,  href: "https://linkedin.com",  label: "LinkedIn"  },
-  { Icon: YouTubeIcon,   href: "https://youtube.com",   label: "YouTube"   },
+  { Icon: LinkedInIcon, href: "https://linkedin.com", label: "LinkedIn" },
+  { Icon: YouTubeIcon, href: "https://youtube.com", label: "YouTube" },
   { Icon: InstagramIcon, href: "https://instagram.com", label: "Instagram" },
   { Icon: PinterestIcon, href: "https://pinterest.com", label: "Pinterest" },
 ];
 
-// ─── Loading Spinner Component ───
 const LoadingSpinner = () => (
   <div className="footer-loader">
     <div className="footer-loader-ring"></div>
@@ -70,7 +65,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-/* ─── Footer Text Link with Loader ─── */
 const FooterTextLink = ({ href, label }: LinkItem) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -133,7 +127,6 @@ const FooterBottomLink = ({ href, label }: LinkItem) => {
   );
 };
 
-/* ─── Logo ─── */
 const FooterLogo = () => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -176,7 +169,6 @@ const FooterLogo = () => {
   );
 };
 
-/* ─── Social Icon ─── */
 const SocialIcon = ({ Icon, href, label }: SocialLink) => {
   return (
     <a
@@ -191,11 +183,10 @@ const SocialIcon = ({ Icon, href, label }: SocialLink) => {
   );
 };
 
-/* ─── Newsletter Form ─── */
 const NewsletterForm = ({ className = "" }: { className?: string }) => {
-  const [email, setEmail]           = useState("");
+  const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage]       = useState("");
+  const [message, setMessage] = useState("");
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -272,21 +263,16 @@ const NewsletterForm = ({ className = "" }: { className?: string }) => {
   );
 };
 
-/* ═══════════════════════════════════════════════════
-   FOOTER MAIN COMPONENT
-═══════════════════════════════════════════════════ */
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
     <footer className="relative overflow-hidden bg-[#0D1520] text-white">
       <style jsx global>{`
-        /* ── Link Wrapper ── */
         .footer-link-wrapper {
           display: inline-block;
         }
 
-        /* ── Footer Text Link ── */
         .footer-link {
           position: relative;
           display: inline-flex;
@@ -330,7 +316,6 @@ export default function Footer() {
           opacity: 0.5;
         }
 
-        /* ── Footer Bottom Link ── */
         .footer-bottom-link {
           position: relative;
           display: inline-flex;
@@ -352,7 +337,6 @@ export default function Footer() {
           cursor: wait;
         }
 
-        /* ── Loader Styles ── */
         .footer-loader {
           display: inline-flex;
           gap: 3px;
@@ -370,15 +354,26 @@ export default function Footer() {
           animation: footerLoaderBounce 1.2s ease-in-out infinite;
         }
 
-        .footer-loader-ring:nth-child(2) { animation-delay: 0.2s; }
-        .footer-loader-ring:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes footerLoaderBounce {
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-          40%            { transform: scale(1.2); opacity: 1;   }
+        .footer-loader-ring:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+        .footer-loader-ring:nth-child(3) {
+          animation-delay: 0.4s;
         }
 
-        /* ── Footer Social ── */
+        @keyframes footerLoaderBounce {
+          0%,
+          80%,
+          100% {
+            transform: scale(0.6);
+            opacity: 0.4;
+          }
+          40% {
+            transform: scale(1.2);
+            opacity: 1;
+          }
+        }
+
         .footer-social {
           display: inline-flex;
           align-items: center;
@@ -393,12 +388,10 @@ export default function Footer() {
           filter: drop-shadow(0 8px 18px rgba(200, 170, 120, 0.28));
         }
 
-        /* ── Newsletter Form ── */
         .newsletter-form:focus-within {
           border-color: rgba(200, 170, 120, 0.55);
         }
 
-        /* ── Subscribe Button ── */
         .footer-subscribe-btn {
           position: relative;
           overflow: hidden;
@@ -406,8 +399,7 @@ export default function Footer() {
           border: 1px solid rgba(200, 170, 120, 0.58);
           background: transparent;
           transition: all 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow:
-            inset 0 0 0 1px rgba(255, 255, 255, 0.035),
+          box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035),
             0 4px 18px rgba(0, 0, 0, 0.14);
         }
 
@@ -437,15 +429,18 @@ export default function Footer() {
           transition: transform 0.7s ease;
         }
 
-        .footer-subscribe-btn:hover::before { transform: scaleX(1); }
-        .footer-subscribe-btn:hover::after  { transform: translateX(120%); }
+        .footer-subscribe-btn:hover::before {
+          transform: scaleX(1);
+        }
+        .footer-subscribe-btn:hover::after {
+          transform: translateX(120%);
+        }
 
         .footer-subscribe-btn:hover {
           color: #192334;
           border-color: #c8aa78;
           transform: translateY(-2px);
-          box-shadow:
-            0 12px 32px rgba(200, 170, 120, 0.2),
+          box-shadow: 0 12px 32px rgba(200, 170, 120, 0.2),
             0 4px 16px rgba(0, 0, 0, 0.18);
         }
 
@@ -492,14 +487,21 @@ export default function Footer() {
           animation: footerShimmer 1.2s linear infinite;
         }
 
-        @keyframes footerSpin    { to { transform: rotate(360deg); } }
+        @keyframes footerSpin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
         @keyframes footerShimmer {
-          0%   { transform: translateX(-120%); }
-          100% { transform: translateX(120%);  }
+          0% {
+            transform: translateX(-120%);
+          }
+          100% {
+            transform: translateX(120%);
+          }
         }
       `}</style>
 
-      {/* Premium background */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -left-24 top-0 h-80 w-80 rounded-full bg-[#C8AA78]/[0.07] blur-[100px]" />
         <div className="absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-[#5B7FBF]/[0.06] blur-[110px]" />
@@ -508,21 +510,15 @@ export default function Footer() {
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-16">
-
-        {/* ══════ MOBILE LAYOUT ══════ */}
         <div className="py-10 lg:hidden">
-
-          {/* Logo */}
           <div className="mb-10">
             <FooterLogo />
           </div>
 
-          {/* Newsletter */}
           <div className="mb-10">
             <NewsletterForm />
           </div>
 
-          {/* Links Grid */}
           <div className="mb-10 grid grid-cols-2 gap-8">
             <div>
               <h4 className="mb-4 text-[10px] font-medium uppercase tracking-[0.24em] text-[#C8AA78]">
@@ -551,7 +547,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Bottom Links */}
           <div className="mb-5 border-t border-white/10 pt-5">
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-[10px]">
               {BOTTOM_LINKS.map((link) => (
@@ -562,12 +557,10 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Privacy Policy */}
           <div className="mb-6 text-[10px]">
             <FooterBottomLink href="/privacy-policy" label="Privacy Policy" />
           </div>
 
-          {/* Social Icons */}
           <div className="flex items-center gap-4">
             {SOCIAL_LINKS.map((social) => (
               <SocialIcon key={social.label} {...social} />
@@ -575,11 +568,8 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* ══════ DESKTOP LAYOUT ══════ */}
         <div className="hidden lg:block">
           <div className="grid grid-cols-[1.4fr_1fr] gap-12 py-16">
-
-            {/* Left Column - Logo + Newsletter */}
             <div className="flex flex-col justify-between gap-16">
               <div>
                 <FooterLogo />
@@ -589,7 +579,6 @@ export default function Footer() {
               </div>
             </div>
 
-            {/* Right Column - Links */}
             <div className="ml-auto grid grid-cols-2 gap-16">
               <div>
                 <h4 className="mb-5 text-[10px] font-medium uppercase tracking-[0.24em] text-[#C8AA78]">
@@ -619,7 +608,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Bottom Bar */}
           <div className="flex items-center justify-between gap-5 border-t border-white/10 py-6">
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-[10px]">
               {BOTTOM_LINKS.map((link) => (
@@ -639,15 +627,13 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Copyright */}
           <div className="py-4 text-center text-[10px] text-white/30">
-            © {currentYear} Acasa. All rights reserved.
+            {currentYear} Acasa. All rights reserved.
           </div>
         </div>
 
-        {/* Mobile Copyright */}
         <div className="mt-6 pb-6 text-center text-[9px] text-white/30 lg:hidden">
-          © {currentYear} Acasa. All rights reserved.
+          {currentYear} Acasa. All rights reserved.
         </div>
       </div>
     </footer>

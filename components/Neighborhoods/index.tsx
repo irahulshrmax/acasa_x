@@ -19,6 +19,10 @@ interface Neighborhood {
   property_count: number;
   featured: boolean;
   city_name: string | null;
+  amenities?: string[];
+  avg_price?: string;
+  population?: string;
+  year_established?: string;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────
@@ -34,7 +38,7 @@ const THEME = {
   accent: "#C8AA78",
 };
 
-// ─── SmartImage (NO ZOOM) ──────────────────────────────────────────────
+// ─── SmartImage ──────────────────────────────────────────────────────────────
 
 function NeighborhoodImage({
   src,
@@ -53,7 +57,7 @@ function NeighborhoodImage({
 
   const getImageSrc = () => {
     if (!src || imgError) return fallbackImage;
-    if (src.startsWith("http")) return src;
+    if (src.startsWith("http://") || src.startsWith("https://")) return src;
     if (src.startsWith("/")) return src;
     return `https://acasa.ae/upload/locations/${src}`;
   };
@@ -88,56 +92,6 @@ function NeighborhoodImage({
   );
 }
 
-// ─── Card Loading Overlay ──────────────────────────────────────────────
-
-function CardLoadingOverlay() {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.25 }}
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center backdrop-blur-[3px]"
-      style={{ background: "rgba(25, 35, 52, 0.75)" }}
-    >
-      {/* Rotating dual rings */}
-      <div className="relative h-14 w-14">
-        <motion.div
-          className="absolute inset-0 rounded-full border-2 border-transparent"
-          style={{
-            borderTopColor: THEME.accent,
-            borderRightColor: THEME.accent,
-          }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        />
-        <motion.div
-          className="absolute inset-2 rounded-full border-2 border-transparent"
-          style={{
-            borderBottomColor: "rgba(255,255,255,0.7)",
-            borderLeftColor: "rgba(255,255,255,0.7)",
-          }}
-          animate={{ rotate: -360 }}
-          transition={{ duration: 1.3, repeat: Infinity, ease: "linear" }}
-        />
-      </div>
-
-      <motion.p
-        className="mt-4 text-[9px] uppercase text-white"
-        style={{
-          fontFamily: FONT_BODY,
-          letterSpacing: "0.3em",
-          fontWeight: 500,
-        }}
-        animate={{ opacity: [0.6, 1, 0.6] }}
-        transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-      >
-        Opening
-      </motion.p>
-    </motion.div>
-  );
-}
-
 // ─── Skeleton ──────────────────────────────────────────────────────────
 
 function NeighborhoodCardSkeleton() {
@@ -155,7 +109,7 @@ function NeighborhoodCardSkeleton() {
   );
 }
 
-// ─── Neighborhood Card ─────────────────────────────────────────────────
+// ─── Neighborhood Card with Flip ─────────────────────────────────────────────────
 
 function NeighborhoodCard({
   item,
@@ -164,16 +118,15 @@ function NeighborhoodCard({
   item: Neighborhood;
   index: number;
 }) {
-  const [isOpening, setIsOpening] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (isOpening) return;
-
-    setIsOpening(true);
-    setTimeout(() => {
-      window.location.href = `/communities/${item.slug}`;
-    }, 700);
+  // Enhanced data for back side
+  const neighborhoodDetails = {
+    description: item.description || `Discover the luxury lifestyle in ${item.name}, one of Dubai's most prestigious communities.`,
+    property_count: item.property_count || 0,
+    avg_price: item.avg_price || "AED 2.5M - 8.5M",
+    amenities: item.amenities || ["Parks", "Schools", "Shopping", "Healthcare", "Community Centers"],
+    year_established: item.year_established || "2010",
   };
 
   return (
@@ -182,51 +135,124 @@ function NeighborhoodCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.5, delay: Math.min(index * 0.1, 0.3) }}
-      className="group block cursor-pointer"
-      onClick={handleClick}
+      className="group block perspective-1000"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className="relative overflow-hidden bg-gray-100"
-        style={{ aspectRatio: "3/4" }}
+        className={`relative transition-all duration-700 preserve-3d ${
+          isHovered ? "rotate-y-180" : ""
+        }`}
+        style={{ transformStyle: "preserve-3d" }}
       >
-        <NeighborhoodImage src={item.image} alt={item.name} />
-
-        {/* Loader overlay on THIS card only */}
-        <AnimatePresence>{isOpening && <CardLoadingOverlay />}</AnimatePresence>
-
-        {/* Featured badge */}
-        {item.featured && (
-          <span
-            className="absolute left-3 top-3 z-10 bg-[#192334] px-3 py-1 text-[10px] font-medium tracking-widest text-white"
-            style={{ fontFamily: FONT_BODY }}
-          >
-            FEATURED
-          </span>
-        )}
-
-        {/* Hover gradient — subtle darkening, NO zoom */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-      </div>
-
-      <div className="mt-4 text-center">
-        <h3
-          className="text-[17px] uppercase leading-snug text-[#192334] transition-colors group-hover:text-[#5B7FBF]"
-          style={{
-            fontFamily: FONT_DISPLAY,
-            fontWeight: 500,
-          }}
+        {/* FRONT SIDE */}
+        <div
+          className="relative w-full backface-hidden"
+          style={{ backfaceVisibility: "hidden" }}
         >
-          {item.name}
-        </h3>
-        {item.city_name && (
-          <p
-            className="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500"
-            style={{ fontFamily: FONT_BODY }}
+          <div
+            className="relative overflow-hidden bg-gray-100"
+            style={{ aspectRatio: "3/4" }}
           >
-            <HiOutlineMapPin className="h-3 w-3" />
-            {item.city_name}
-          </p>
-        )}
+            <NeighborhoodImage src={item.image} alt={item.name} />
+
+            {/* Featured badge */}
+            {item.featured && (
+              <span
+                className="absolute left-3 top-3 z-10 bg-[#192334] px-3 py-1 text-[10px] font-medium tracking-widest text-white"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                FEATURED
+              </span>
+            )}
+
+            {/* Hover gradient — subtle darkening */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          </div>
+
+          <div className="mt-4 text-center">
+            <h3
+              className="text-[17px] uppercase leading-snug text-[#192334] transition-colors group-hover:text-[#5B7FBF]"
+              style={{
+                fontFamily: FONT_DISPLAY,
+                fontWeight: 500,
+              }}
+            >
+              {item.name}
+            </h3>
+            {item.city_name && (
+              <p
+                className="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                <HiOutlineMapPin className="h-3 w-3" />
+                {item.city_name}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* BACK SIDE */}
+        <div
+          className="absolute inset-0 w-full backface-hidden rotate-y-180"
+          style={{ backfaceVisibility: "hidden" }}
+        >
+          <div className="h-full w-full rounded-none bg-[#192334] p-6 shadow-xl flex flex-col justify-between" style={{ aspectRatio: "3/4" }}>
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-1">{item.name}</h3>
+              <p className="text-xs text-[#C8AA78] font-medium flex items-center gap-1">
+                <HiOutlineMapPin className="h-3 w-3" />
+                {item.city_name || "Dubai"}
+              </p>
+              
+              <p className="text-xs text-gray-300 mt-3 leading-relaxed">
+                {neighborhoodDetails.description}
+              </p>
+              
+              <div className="mt-4">
+                <p className="text-[9px] uppercase tracking-[0.15em] text-[#C8AA78] font-semibold mb-2">
+                  Community Highlights
+                </p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Properties</span>
+                    <span className="text-white font-medium">{neighborhoodDetails.property_count}+</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Price Range</span>
+                    <span className="text-white font-medium">{neighborhoodDetails.avg_price}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-400">Established</span>
+                    <span className="text-white font-medium">{neighborhoodDetails.year_established}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <p className="text-[8px] uppercase tracking-[0.15em] text-[#C8AA78] font-semibold mb-1.5">
+                  Amenities
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {neighborhoodDetails.amenities.slice(0, 5).map((amenity, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[8px] bg-white/10 text-gray-300 px-2 py-0.5 rounded-full"
+                    >
+                      {amenity}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <p className="text-[8px] text-gray-400 text-center tracking-widest">
+                HOVER TO EXPLORE • {neighborhoodDetails.property_count}+ PROPERTIES
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </motion.div>
   );
@@ -256,11 +282,14 @@ export default function NeighborhoodsSection() {
           id: item.id,
           name: item.name,
           slug: item.slug,
-          image: item.img || item.image_url || null,
+          image: item.img || item.image_url || item.image || null,
           description: item.description,
           property_count: item.property_count || 0,
           featured: item.featured === 1,
           city_name: item.city_name || "Dubai",
+          avg_price: item.avg_price || "AED 2.5M - 8.5M",
+          amenities: item.amenities || ["Parks", "Schools", "Shopping", "Healthcare", "Community Centers"],
+          year_established: item.year_established || "2010",
         }));
         setNeighborhoods(formattedData);
       } else {
@@ -268,47 +297,59 @@ export default function NeighborhoodsSection() {
       }
     } catch (err: any) {
       setError(err.message);
-      // Fallback data — same as original
+      // Fallback data with working image URLs
       setNeighborhoods([
         {
           id: 1,
           name: "Dubai Hills Estate",
           slug: "dubai-hills-estate",
-          image: "dubai-hills-emaar-7a70c9054240467af0d253fc0c6fc799.jpg",
-          description: "Luxury community in Dubai",
-          property_count: 0,
+          image: "https://images.unsplash.com/photo-1573048466001-693cf9d9204c?auto=format&fit=crop&w=800&q=80",
+          description: "Experience the pinnacle of luxury living in this master-planned community with world-class amenities and stunning golf course views.",
+          property_count: 450,
           featured: true,
           city_name: "Dubai",
+          avg_price: "AED 3.2M - 12.5M",
+          amenities: ["Golf Course", "Parks", "Schools", "Shopping Mall", "Healthcare"],
+          year_established: "2014",
         },
         {
           id: 2,
           name: "Downtown Dubai",
           slug: "downtown-dubai",
-          image: "downtown-dubai-b4152fb8ccab0ef9752d5523f4035303.jpg",
-          description: "Heart of Dubai",
-          property_count: 0,
+          image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80",
+          description: "Live at the heart of the city with iconic landmarks like Burj Khalifa and Dubai Mall right at your doorstep.",
+          property_count: 820,
           featured: true,
           city_name: "Dubai",
+          avg_price: "AED 1.8M - 15.2M",
+          amenities: ["Burj Khalifa", "Dubai Mall", "Fountains", "Metro", "Fine Dining"],
+          year_established: "2003",
         },
         {
           id: 3,
           name: "Dubai Creek Harbour",
           slug: "dubai-creek-harbour",
-          image: "dubai-creek-harbour-6410a3a97567bf78cc385f5648ee7418.jpg",
-          description: "Waterfront community",
-          property_count: 0,
+          image: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=800&q=80",
+          description: "A stunning waterfront destination offering a harmonious blend of urban living and natural beauty.",
+          property_count: 320,
           featured: true,
           city_name: "Dubai",
+          avg_price: "AED 2.5M - 9.8M",
+          amenities: ["Waterfront", "Parks", "Marina", "Retail", "Creek Tower"],
+          year_established: "2018",
         },
         {
           id: 4,
           name: "Arabian Ranches",
           slug: "arabian-ranches",
-          image: "arabian-ranches-a3c9b53144320cc9aafcca5b849dde59.jpg",
-          description: "Premium villa community",
-          property_count: 0,
+          image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80",
+          description: "A premier villa community offering a serene desert lifestyle with exceptional facilities and green spaces.",
+          property_count: 580,
           featured: true,
           city_name: "Dubai",
+          avg_price: "AED 2.2M - 7.5M",
+          amenities: ["Equestrian Club", "Parks", "Schools", "Community Centers", "Retail"],
+          year_established: "2004",
         },
       ]);
     } finally {
@@ -386,7 +427,7 @@ export default function NeighborhoodsSection() {
           </div>
         )}
 
-        {/* Grid */}
+        {/* Grid with Flip Cards */}
         {!loading && displayItems.length > 0 && (
           <div className="grid grid-cols-2 gap-x-5 gap-y-8 md:grid-cols-4 md:gap-x-6">
             {displayItems.map((item, index) => (
@@ -505,6 +546,22 @@ export default function NeighborhoodsSection() {
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        .perspective-1000 {
+          perspective: 1000px;
+        }
+        .preserve-3d {
+          transform-style: preserve-3d;
+        }
+        .backface-hidden {
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+          transform: rotateY(180deg);
+        }
+      `}</style>
     </section>
   );
 }
