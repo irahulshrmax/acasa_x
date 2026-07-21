@@ -8,24 +8,15 @@ import {
   SlidersHorizontal,
   Building2,
   ChevronDown,
-  MapPin,
   ArrowRight,
   X,
-  DollarSign,
-  Layers,
-  Sparkles,
-  Grid3x3,
-  List,
-  Calendar,
-  ArrowUpDown,
+  Plus,
   ChevronLeft,
   ChevronRight,
   Loader2,
   AlertCircle,
-  Heart,
-  Eye,
   ImageOff,
-  Shield,
+  Map,
 } from "lucide-react";
 
 const API_URL = "/api/v1/properties";
@@ -37,9 +28,6 @@ const THEME = {
   muted: "#8A94A3",
   border: "#E8E6E1",
   accent: "#C8AA78",
-  success: "#10B981",
-  error: "#EF4444",
-  warning: "#F59E0B",
 };
 
 interface Property {
@@ -66,11 +54,7 @@ interface Property {
   bedrooms: string;
   bathrooms: string;
   display_title: string;
-  area: {
-    value: number | null;
-    display: string;
-    size: string | null;
-  };
+  area: { value: number | null; display: string; size: string | null };
   location: {
     community: string | null;
     city: string | null;
@@ -80,17 +64,8 @@ interface Property {
     community_id: number | null;
     city_id: number | null;
   };
-  developer: {
-    id: number | null;
-    name: string | null;
-    logo_url: string;
-  };
-  agent: {
-    id: number | null;
-    name: string | null;
-    phone: string | null;
-    photo_url: string;
-  };
+  developer: { id: number | null; name: string | null; logo_url: string };
+  agent: { id: number | null; name: string | null; phone: string | null; photo_url: string };
   featured_image: string;
   images: Array<{ id: number; url: string; title: string; featured: number }>;
   gallery_urls: string[];
@@ -146,17 +121,29 @@ const LISTING_TYPE_OPTIONS: FilterOption[] = [
   { value: "Rental", label: "Rental" },
 ];
 
+const SIZE_OPTIONS: FilterOption[] = [
+  { value: "0-500", label: "Under 500 sq.ft" },
+  { value: "500-1000", label: "500 - 1000 sq.ft" },
+  { value: "1000-2000", label: "1000 - 2000 sq.ft" },
+  { value: "2000-999999", label: "2000+ sq.ft" },
+];
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────
+
 function formatPrice(amount: number | null, currency = "AED"): string {
   if (!amount) return "AED On Request";
-  return `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return `${currency} ${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
 }
 
 function getBedroomLabel(bedroom: string): string {
-  if (!bedroom || bedroom.toLowerCase() === "studio") return "Studio";
+  if (!bedroom || bedroom.toLowerCase() === "studio") return "Studio Apartment";
   const match = bedroom.match(/^(\d+)/);
   if (match) {
     const num = parseInt(match[1], 10);
-    return `${num} BHK`;
+    return `${num} Bed`;
   }
   return bedroom;
 }
@@ -169,15 +156,33 @@ function getImageUrl(property: Property): string | null {
   return null;
 }
 
+function getDisplayName(property: Property): string {
+  if (property.name && property.name !== "Null" && property.name !== "null") {
+    return property.name.toUpperCase();
+  }
+  if (property.slug) {
+    return (
+      property.slug
+        .replace(/-/g, " ")
+        .replace(/\bLn\d+\b/gi, "")
+        .trim()
+        .toUpperCase() || `PROPERTY ${property.id}`
+    );
+  }
+  return `PROPERTY ${property.id}`;
+}
+
+// ─── PROPERTY CARD (Figma Match) ─────────────────────────────────────────
+
 function PropertyCard({ property, index = 0 }: { property: Property; index?: number }) {
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
 
   const location = property.location?.community || property.location?.city || "Dubai";
   const isPriceOnRequest = property.price?.is_price_on_request || !property.price?.amount;
   const priceDisplay = property.price?.display || formatPrice(property.price?.amount);
+  const displayName = getDisplayName(property);
   const bedroomLabel = getBedroomLabel(property.bedrooms);
-  const isOffPlan = property.listing_type === "Off plan";
 
   const imageUrl = useMemo(() => {
     if (imageError) return null;
@@ -188,43 +193,25 @@ function PropertyCard({ property, index = 0 }: { property: Property; index?: num
     bedroomLabel,
     property.bathrooms && property.bathrooms !== "0 Bath" ? property.bathrooms : null,
     property.area?.display && property.area.display !== "Area on Request" ? property.area.display : null,
-  ].filter(Boolean).join("  |  ");
-
-  const hasImage = !!imageUrl;
-
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("property_wishlist") || "[]");
-      setIsWishlisted(saved.includes(property.id));
-    } catch {}
-  }, [property.id]);
-
-  const toggleWishlist = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsWishlisted(!isWishlisted);
-    try {
-      const saved = JSON.parse(localStorage.getItem("property_wishlist") || "[]");
-      const updated = isWishlisted 
-        ? saved.filter((id: number) => id !== property.id)
-        : [...saved, property.id];
-      localStorage.setItem("property_wishlist", JSON.stringify(updated));
-    } catch {}
-  };
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
-      className="group bg-white transition-all duration-300 hover:shadow-xl"
+      className="group"
+      style={{ fontFamily: FONT_BODY }}
     >
+      {/* IMAGE */}
       <div className="relative overflow-hidden bg-gray-100 aspect-[4/3]">
         <Link href={`/properties-for-sale-dubai/${property.slug}`} className="block h-full w-full">
-          {hasImage ? (
+          {imageUrl ? (
             <img
               src={imageUrl}
-              alt={property.name}
+              alt={displayName}
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
               onError={() => setImageError(true)}
@@ -232,170 +219,177 @@ function PropertyCard({ property, index = 0 }: { property: Property; index?: num
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center">
               <ImageOff className="h-12 w-12 text-gray-300" />
-              <p className="mt-2 text-xs text-gray-400">No Image</p>
             </div>
           )}
         </Link>
 
-        <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-          {property.featured && (
-            <span className="rounded-[3px] bg-[#192334] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              Featured
-            </span>
-          )}
-          {isOffPlan && (
-            <span className="flex items-center gap-1 rounded-[3px] bg-green-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              <Sparkles className="h-3 w-3" />
-              Off Plan
-            </span>
-          )}
-        </div>
-
-        {property.listing_type && !isOffPlan && (
-          <span className="absolute right-12 top-3 rounded-[3px] bg-white/90 px-2 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-[#192334]">
-            {property.listing_type}
+        {/* FEATURED BADGE (only) */}
+        {property.featured && (
+          <span
+            className="absolute left-3 top-3 bg-[#192334] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            FEATURED
           </span>
         )}
 
-        <button
-          onClick={toggleWishlist}
-          aria-label="Add to wishlist"
-          className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
-            isWishlisted
-              ? "border-red-500 bg-red-500 text-white shadow-lg"
-              : "border-white/50 bg-white/90 text-[#192334] hover:bg-white"
-          }`}
+        {/* ADD TO COMPARE (+) BUTTON */}
+        <div
+          className="absolute right-3 top-3"
+          onMouseEnter={() => setShowCompare(true)}
+          onMouseLeave={() => setShowCompare(false)}
         >
-          <Heart className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
-        </button>
+          <button
+            aria-label="Add to compare"
+            className="flex h-8 w-8 items-center justify-center bg-white text-[#192334] shadow-sm transition-all hover:bg-gray-50"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+          </button>
+          <AnimatePresence>
+            {showCompare && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="absolute right-0 top-10 whitespace-nowrap bg-white px-3 py-1.5 text-[11px] text-[#192334] shadow-md"
+              >
+                Add to compare
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
+      {/* DETAILS */}
       <div className="pt-4">
+        {/* Title + Price */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <Link href={`/properties-for-sale-dubai/${property.slug}`}>
               <h3
-                className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-opacity hover:opacity-70"
+                className="truncate text-[15px] font-normal leading-snug tracking-[0.04em] transition-opacity hover:opacity-70"
                 style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
               >
-                {property.name}
+                {displayName}
               </h3>
             </Link>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#8A94A3]">
-              <MapPin className="h-3 w-3" />
-              <span>{location}</span>
-            </div>
-            {property.developer?.name && (
-              <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-[#8A94A3]">
-                <Building2 className="h-3 w-3" />
-                <span>{property.developer.name}</span>
-              </div>
-            )}
+            <p
+              className="mt-1 text-[12px] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              {location}
+            </p>
           </div>
 
           <div className="shrink-0 text-right">
-            <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#8A94A3]">Price</p>
-            <p className="text-[14px] font-bold leading-tight text-[#192334]">
+            <p
+              className="text-[10px] font-normal uppercase tracking-[0.14em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              PRICE
+            </p>
+            <p
+              className="mt-0.5 text-[14px] font-semibold leading-tight text-[#192334]"
+              style={{ fontFamily: FONT_BODY }}
+            >
               {isPriceOnRequest ? "AED On Request" : priceDisplay}
             </p>
           </div>
         </div>
 
+        {/* Divider */}
         <div className="my-3 h-px w-full bg-[#E8E6E1]" />
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="truncate text-[11px] text-[#4A5462]">{specs || "\u00A0"}</p>
-          <div className="flex items-center gap-2">
-            {property.payment_plans && property.payment_plans.length > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-medium text-green-700">
-                <Calendar className="h-3 w-3" />
-                {property.payment_plans.length} Plans
-              </span>
-            )}
-            {property.exclusive_status && (
-              <span className="flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[9px] font-medium text-purple-700">
-                <Shield className="h-3 w-3" />
-                {property.exclusive_status}
-              </span>
-            )}
-          </div>
+        {/* Specs + Ref */}
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className="truncate text-[12px] text-[#4A5462]"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            {specs || "\u00A0"}
+          </p>
+          {property.ref_number && (
+            <p
+              className="text-[11px] text-[#8A94A3] whitespace-nowrap"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              Ref: {property.ref_number}
+            </p>
+          )}
         </div>
       </div>
     </motion.div>
   );
 }
 
+// ─── SKELETON ───────────────────────────────────────────────────────────
+
 function SkeletonCard() {
   return (
-    <div className="bg-white">
+    <div>
       <div className="animate-pulse bg-gray-200 aspect-[4/3]" />
       <div className="pt-4 space-y-3">
         <div className="flex justify-between">
-          <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
-          <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
+          <div className="h-4 w-40 animate-pulse bg-gray-200" />
+          <div className="h-4 w-24 animate-pulse bg-gray-200" />
         </div>
-        <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+        <div className="h-3 w-20 animate-pulse bg-gray-200" />
         <div className="h-px w-full bg-gray-100" />
         <div className="flex justify-between">
-          <div className="h-3 w-48 animate-pulse rounded bg-gray-200" />
-          <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+          <div className="h-3 w-48 animate-pulse bg-gray-200" />
+          <div className="h-3 w-20 animate-pulse bg-gray-200" />
         </div>
       </div>
     </div>
   );
 }
 
-function FilterDropdown({
+// ─── TOP FILTER DROPDOWN (Figma-style: text only) ────────────────────────
+
+function TopFilterDropdown({
   label,
   value,
   onChange,
   options,
-  icon: Icon,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: FilterOption[];
-  icon?: React.ElementType;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const hasValue = value && value !== "";
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const selectedLabel = options.find((o) => o.value === value)?.label || label;
-  const IconComponent = Icon;
-
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative" ref={ref}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[11px] font-medium transition-all duration-200 ${
-          hasValue ? "bg-[#192334] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-        }`}
+        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[#192334] transition-opacity hover:opacity-60"
+        style={{ fontFamily: FONT_BODY }}
       >
-        {IconComponent && <IconComponent className="h-3.5 w-3.5" />}
-        <span>{hasValue ? selectedLabel : label}</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <span>{label}</span>
+        <ChevronDown
+          className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          strokeWidth={2}
+        />
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -5, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -5, scale: 0.95 }}
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full z-50 mt-1 min-w-[200px] border border-gray-200 bg-white py-1 shadow-xl"
+            className="absolute left-0 top-full z-50 mt-3 min-w-[200px] border border-gray-100 bg-white py-1 shadow-lg"
           >
             <button
               onClick={() => {
@@ -403,6 +397,7 @@ function FilterDropdown({
                 setIsOpen(false);
               }}
               className="block w-full px-4 py-2.5 text-left text-[11px] text-gray-400 hover:bg-gray-50"
+              style={{ fontFamily: FONT_BODY }}
             >
               All {label}
             </button>
@@ -418,6 +413,7 @@ function FilterDropdown({
                     ? "bg-[#192334]/5 font-medium text-[#192334]"
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
+                style={{ fontFamily: FONT_BODY }}
               >
                 {opt.label}
               </button>
@@ -428,6 +424,8 @@ function FilterDropdown({
     </div>
   );
 }
+
+// ─── PAGINATION ─────────────────────────────────────────────────────────
 
 function Pagination({
   currentPage,
@@ -442,31 +440,34 @@ function Pagination({
 
   const getPageNumbers = (): (number | string)[] => {
     const pages: (number | string)[] = [];
-    for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 1) {
-        pages.push(i);
-      } else if (Math.abs(i - currentPage) === 2) {
-        pages.push("...");
-      }
+    pages.push(1);
+    if (currentPage > 3) pages.push("...");
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      pages.push(i);
     }
+    if (currentPage < totalPages - 2) pages.push("...");
+    if (totalPages > 1) pages.push(totalPages);
     return pages;
   };
 
   return (
-    <div className="mt-12 flex flex-wrap items-center justify-center gap-1">
+    <div
+      className="mt-14 flex flex-wrap items-center justify-center gap-2"
+      style={{ fontFamily: FONT_BODY }}
+    >
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#192334] disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex items-center gap-1 px-3 py-2 text-[12px] text-gray-400 transition-colors hover:text-[#192334] disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft className="h-3.5 w-3.5" />
         Previous
       </button>
 
       {getPageNumbers().map((page, idx) => {
         if (page === "...") {
           return (
-            <span key={`dots-${idx}`} className="px-2 py-2 text-[12px] text-gray-400">
+            <span key={`dots-${idx}`} className="px-2 text-[12px] text-gray-400">
               ...
             </span>
           );
@@ -477,8 +478,8 @@ function Pagination({
           <button
             key={pageNum}
             onClick={() => onPageChange(pageNum)}
-            className={`flex h-9 w-9 items-center justify-center rounded-[4px] text-[12px] font-medium transition-all ${
-              isActive ? "bg-[#192334] text-white shadow-md" : "text-gray-700 hover:bg-gray-100"
+            className={`flex h-8 w-8 items-center justify-center text-[12px] transition-all ${
+              isActive ? "bg-[#192334] text-white" : "text-gray-600 hover:text-[#192334]"
             }`}
           >
             {pageNum}
@@ -489,14 +490,16 @@ function Pagination({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#192334] disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex items-center gap-1 px-3 py-2 text-[12px] text-[#192334] transition-colors hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-40"
       >
         Next
-        <ChevronRight className="h-4 w-4" />
+        <ChevronRight className="h-3.5 w-3.5" />
       </button>
     </div>
   );
 }
+
+// ─── MAIN PAGE ──────────────────────────────────────────────────────────
 
 export default function PropertiesForSaleDubaiPage() {
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -510,7 +513,7 @@ export default function PropertiesForSaleDubaiPage() {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [isCached, setIsCached] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -518,12 +521,22 @@ export default function PropertiesForSaleDubaiPage() {
     bedrooms: "",
     min_price: "",
     max_price: "",
+    min_size: "",
+    max_size: "",
     sort_by: "quality",
     listing_type: "Off plan",
   });
 
-  const currentPriceValue = filters.min_price && filters.max_price ? `${filters.min_price}-${filters.max_price}` : "";
-  const hasActiveFilters = filters.bedrooms !== "" || filters.min_price !== "" || filters.max_price !== "";
+  const currentPriceValue =
+    filters.min_price && filters.max_price ? `${filters.min_price}-${filters.max_price}` : "";
+  const currentSizeValue =
+    filters.min_size && filters.max_size ? `${filters.min_size}-${filters.max_size}` : "";
+  const hasActiveFilters =
+    filters.bedrooms !== "" ||
+    filters.min_price !== "" ||
+    filters.max_price !== "" ||
+    filters.min_size !== "" ||
+    filters.max_size !== "";
   const hasMore = pagination ? filters.page < pagination.totalPages : false;
 
   const fetchProperties = useCallback(
@@ -543,11 +556,9 @@ export default function PropertiesForSaleDubaiPage() {
         params.append("limit", String(filters.limit));
         params.append("sort_by", filters.sort_by);
         params.append("status", "5");
-        
-        if (filters.listing_type) {
-          params.append("listing_type", filters.listing_type);
-        }
-        
+
+        if (filters.listing_type) params.append("listing_type", filters.listing_type);
+
         if (filters.bedrooms) {
           if (filters.bedrooms.toLowerCase() === "studio") {
             params.append("min_bedrooms", "0");
@@ -560,9 +571,11 @@ export default function PropertiesForSaleDubaiPage() {
             }
           }
         }
-        
+
         if (filters.min_price) params.append("min_price", filters.min_price);
         if (filters.max_price) params.append("max_price", filters.max_price);
+        if (filters.min_size) params.append("min_size", filters.min_size);
+        if (filters.max_size) params.append("max_size", filters.max_size);
 
         const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
@@ -570,15 +583,12 @@ export default function PropertiesForSaleDubaiPage() {
         if (!data.success) throw new Error(data.error || "Failed to fetch properties");
 
         let newProperties: Property[] = data.data || [];
-
         const seen = new Set<number>();
         newProperties = newProperties.filter((p) => {
           if (seen.has(p.id)) return false;
           seen.add(p.id);
           return true;
         });
-
-        if (data.cached) setIsCached(true);
 
         if (isReset) {
           setProperties(newProperties);
@@ -648,6 +658,16 @@ export default function PropertiesForSaleDubaiPage() {
     setFilters((prev) => ({ ...prev, min_price: min || "", max_price: max || "", page: 1 }));
   }, []);
 
+  const handleSizeChange = useCallback((value: string) => {
+    setProperties([]);
+    if (!value) {
+      setFilters((prev) => ({ ...prev, min_size: "", max_size: "", page: 1 }));
+      return;
+    }
+    const [min, max] = value.split("-");
+    setFilters((prev) => ({ ...prev, min_size: min || "", max_size: max || "", page: 1 }));
+  }, []);
+
   const handleClearFilters = useCallback(() => {
     setProperties([]);
     setFilters({
@@ -656,6 +676,8 @@ export default function PropertiesForSaleDubaiPage() {
       bedrooms: "",
       min_price: "",
       max_price: "",
+      min_size: "",
+      max_size: "",
       sort_by: "quality",
       listing_type: "Off plan",
     });
@@ -669,90 +691,96 @@ export default function PropertiesForSaleDubaiPage() {
 
   return (
     <section className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
-      <div className="mx-auto max-w-[1200px] px-4 pt-10 md:px-6">
-        <div className="mb-6">
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-[32px] font-normal leading-tight md:text-[40px]"
-            style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
-          >
-            {filters.listing_type === "Resale" ? "Resale" : "Off Plan"} Properties for Sale in Dubai
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="mt-1.5 text-[10px] uppercase tracking-[0.16em] text-[#8A94A3]"
-          >
-            {loading ? "Loading..." : pagination ? `${pagination.total.toLocaleString()} properties available` : `${properties.length} listings`}
-          </motion.p>
-        </div>
-      </div>
-
-      <div className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur-sm" style={{ borderColor: THEME.border }}>
+      {/* TOP NAV BAR (Figma style) */}
+      <div className="border-b border-gray-100">
         <div className="mx-auto max-w-[1200px] px-4 md:px-6">
-          <div className="flex h-14 items-center gap-2 md:gap-4">
-            <div className="hidden flex-1 items-center justify-end gap-1 lg:flex">
-              <FilterDropdown
-                label="Listing Type"
-                value={filters.listing_type}
-                onChange={(v) => updateFilter("listing_type", v)}
-                options={LISTING_TYPE_OPTIONS}
-                icon={Building2}
+          <div className="flex h-14 items-center justify-between gap-4">
+            {/* SEARCH */}
+            <div className="flex items-center gap-2 flex-1 max-w-xs">
+              <Search className="h-3.5 w-3.5 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="SEARCH PROPERTIES"
+                className="w-full bg-transparent text-[11px] uppercase tracking-[0.14em] text-gray-500 placeholder-gray-400 outline-none"
+                style={{ fontFamily: FONT_BODY }}
               />
-              <FilterDropdown
-                label="Price"
+            </div>
+
+            {/* FILTERS - DESKTOP */}
+            <div className="hidden lg:flex items-center gap-8">
+              <TopFilterDropdown
+                label="PRICE"
                 value={currentPriceValue}
                 onChange={handlePriceChange}
                 options={PRICE_OPTIONS}
-                icon={DollarSign}
               />
-              <FilterDropdown
-                label="Bedrooms"
+              <TopFilterDropdown
+                label="TYPE"
+                value={filters.listing_type}
+                onChange={(v) => updateFilter("listing_type", v)}
+                options={LISTING_TYPE_OPTIONS}
+              />
+              <TopFilterDropdown
+                label="SIZE"
+                value={currentSizeValue}
+                onChange={handleSizeChange}
+                options={SIZE_OPTIONS}
+              />
+              <TopFilterDropdown
+                label="BEDROOMS"
                 value={filters.bedrooms}
                 onChange={(v) => updateFilter("bedrooms", v)}
                 options={BEDROOM_OPTIONS}
-                icon={Layers}
               />
-              <FilterDropdown
-                label="Sort"
+              <TopFilterDropdown
+                label="SORT"
                 value={filters.sort_by}
                 onChange={(v) => updateFilter("sort_by", v)}
                 options={SORT_OPTIONS}
-                icon={ArrowUpDown}
               />
 
               {hasActiveFilters && (
                 <button
                   onClick={handleClearFilters}
-                  className="ml-2 flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-600 transition-colors hover:bg-gray-100 hover:text-[#192334]"
+                  className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500 hover:text-[#192334]"
+                  style={{ fontFamily: FONT_BODY }}
                 >
-                  <X className="h-3.5 w-3.5" />
-                  Clear
+                  <X className="h-3 w-3" />
+                  CLEAR
                 </button>
               )}
+
+              <button
+                className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[#192334] hover:opacity-60"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                FILTER
+              </button>
             </div>
 
+            {/* MOBILE FILTER BTN */}
             <button
               onClick={() => setShowMobileFilters(!showMobileFilters)}
-              className="ml-auto flex items-center gap-1.5 rounded-[3px] border border-gray-200 px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-gray-700 lg:hidden"
+              className="lg:hidden flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[#192334]"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              Filter
+              FILTER
             </button>
           </div>
         </div>
       </div>
 
+      {/* MOBILE FILTERS */}
       <AnimatePresence>
         {showMobileFilters && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="border-b bg-white lg:hidden"
-            style={{ borderColor: THEME.border }}
+            className="border-b border-gray-100 lg:hidden"
           >
             <div className="p-4">
               <div className="grid grid-cols-2 gap-2">
@@ -814,7 +842,48 @@ export default function PropertiesForSaleDubaiPage() {
         )}
       </AnimatePresence>
 
-      <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-6 md:px-6">
+      {/* CONTENT */}
+      <div className="mx-auto max-w-[1200px] px-4 md:px-6 pt-10 pb-16">
+        {/* TITLE + SHOW MAP */}
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <motion.h1
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[38px] font-normal leading-tight md:text-[44px]"
+              style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
+            >
+              {filters.listing_type === "Resale"
+                ? "Resale Properties for Sale"
+                : filters.listing_type === "Rental"
+                ? "Properties for Rent"
+                : "Off Plan Properties for Sale"}
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="mt-2 text-[11px] uppercase tracking-[0.16em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              {loading
+                ? "Loading..."
+                : pagination
+                ? `${pagination.total.toLocaleString()}+ LISTINGS`
+                : `${properties.length} LISTINGS`}
+            </motion.p>
+          </div>
+
+          <button
+            className="flex items-center gap-2 border border-gray-200 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] text-[#192334] transition-colors hover:bg-gray-50"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            <Map className="h-3.5 w-3.5" />
+            SHOW MAP
+          </button>
+        </div>
+
+        {/* ERROR */}
         {error && !loading && (
           <div className="mb-6 flex items-center gap-3 border border-red-200 bg-red-50 p-4 text-[13px] text-red-600">
             <AlertCircle className="h-5 w-5 shrink-0" />
@@ -828,23 +897,32 @@ export default function PropertiesForSaleDubaiPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        {/* GRID */}
+        <div className="grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
           {loading && properties.length === 0
             ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`skeleton-${i}`} />)
             : properties.map((property, index) => (
-                <PropertyCard key={`${property.id}-${property.slug}`} property={property} index={index} />
+                <PropertyCard
+                  key={`${property.id}-${property.slug}`}
+                  property={property}
+                  index={index}
+                />
               ))}
         </div>
 
+        {/* INFINITE LOAD SENTINEL */}
         <div ref={loaderRef} className="py-4">
           {loadingMore && (
             <div className="flex items-center justify-center py-6">
               <Loader2 className="h-5 w-5 animate-spin text-[#192334]" />
-              <p className="ml-3 text-[10px] uppercase tracking-widest text-[#8A94A3]">Loading more...</p>
+              <p className="ml-3 text-[10px] uppercase tracking-widest text-[#8A94A3]">
+                Loading more...
+              </p>
             </div>
           )}
         </div>
 
+        {/* PAGINATION */}
         {!loading && pagination && pagination.totalPages > 1 && (
           <Pagination
             currentPage={pagination.page}
@@ -859,6 +937,7 @@ export default function PropertiesForSaleDubaiPage() {
           </p>
         )}
 
+        {/* EMPTY STATE */}
         {!loading && properties.length === 0 && !error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -883,6 +962,7 @@ export default function PropertiesForSaleDubaiPage() {
         )}
       </div>
 
+      {/* SCROLL TO TOP */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.button

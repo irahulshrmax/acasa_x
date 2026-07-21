@@ -1,7 +1,7 @@
+// app/api/v1/blogs/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import {
     getBlogs,
-    getLatestBlogs,
     getFeaturedBlogs,
     getBlogCategories,
     getBlogStatistics,
@@ -13,219 +13,323 @@ import {
 // ─── CONSTANTS ──────────────────────────────────────────────────────────
 
 const DEFAULT_LIMIT = 12;
-const MAX_LIMIT = 100;
-const CACHE_TTL = 300;
+const MAX_LIMIT = 50;
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.acasa.ae';
 
-// ─── CACHE ──────────────────────────────────────────────────────────────
+type SortBy = 
+    | 'newest' 
+    | 'oldest' 
+    | 'popular' 
+    | 'views' 
+    | 'likes' 
+    | 'comments' 
+    | 'title_asc' 
+    | 'title_desc';
 
-const cache = new Map<string, { data: any; timestamp: number }>();
+const VALID_SORT: SortBy[] = [
+    'newest', 
+    'oldest', 
+    'popular', 
+    'views', 
+    'likes', 
+    'comments', 
+    'title_asc', 
+    'title_desc'
+];
 
-function getCached(key: string): any | null {
-    const cached = cache.get(key);
-    if (!cached) return null;
-    if (Date.now() - cached.timestamp > CACHE_TTL * 1000) {
-        cache.delete(key);
-        return null;
+function safeParseInt(value: string | null, fallback: number): number {
+    if (!value) return fallback;
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? fallback : parsed;
+}
+
+function parseSortBy(value: string | null): SortBy {
+    if (value && VALID_SORT.includes(value as SortBy)) {
+        return value as SortBy;
     }
-    return cached.data;
+    return 'newest';
 }
 
-function setCached(key: string, data: any): void {
-    cache.set(key, { data, timestamp: Date.now() });
+function getCorsHeaders() {
+    return {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+        'Access-Control-Max-Age': '86400',
+    };
 }
 
-function getCacheKey(req: NextRequest): string {
-    const url = new URL(req.url);
-    return url.pathname + url.search;
+export async function OPTIONS() {
+    return new NextResponse(null, {
+        status: 204,
+        headers: getCorsHeaders(),
+    });
 }
 
-// ─── GET ──────────────────────────────────────────────────────────────
+// ─── GET ──────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
 
-        // ─── PARAMS ──────────────────────────────────────────────────────
         const featured = searchParams.get('featured') === 'true';
         const stats = searchParams.get('stats') === 'true';
         const categories = searchParams.get('categories') === 'true';
         const slug = searchParams.get('slug');
+
         const limit = Math.min(
-            parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT)),
+            safeParseInt(searchParams.get('limit'), DEFAULT_LIMIT),
             MAX_LIMIT
         );
-        const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+        const page = Math.max(1, safeParseInt(searchParams.get('page'), 1));
 
-        const cacheKey = getCacheKey(request);
-        const cached = getCached(cacheKey);
-        if (cached) {
-            return NextResponse.json({
-                ...cached,
-                cached: true,
-            });
-        }
+        const headers = {
+            ...getCorsHeaders(),
+            'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+            'Content-Type': 'application/json',
+        };
 
-        // ─── STATISTICS ──────────────────────────────────────────────────
         if (stats) {
-            const result = await getBlogStatistics();
-            const response = { success: true, data: result };
-            setCached(cacheKey, response);
-            return NextResponse.json(response);
-        }
-
-        // ─── CATEGORIES ──────────────────────────────────────────────────
-        if (categories) {
-            const result = await getBlogCategories();
-            const response = { success: true, data: result };
-            setCached(cacheKey, response);
-            return NextResponse.json(response);
-        }
-
-        // ─── SINGLE BLOG BY SLUG ────────────────────────────────────────
-        if (slug) {
-            const blog = await getBlogBySlug(slug);
-            if (!blog) {
+            try {
+                const result = await getBlogStatistics();
                 return NextResponse.json(
-                    { success: false, message: 'Blog not found' },
-                    { status: 404 }
+                    { success: true, data: result },
+                    { headers }
+                );
+            } catch (statsError: any) {
+                return NextResponse.json(
+                    { success: false, message: 'Failed to fetch statistics' },
+                    { status: 500, headers }
+                );
+            }
+        }
+
+        if (categories) {
+            try {
+                const result = await getBlogCategories();
+                return NextResponse.json(
+                    { success: true, data: Array.isArray(result) ? result : [] },
+                    { headers }
+                );
+            } catch (categoriesError: any) {
+                return NextResponse.json(
+                    { success: false, message: 'Failed to fetch categories' },
+                    { status: 500, headers }
+                );
+            }
+        }
+
+        if (slug) {
+            const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+            if (!cleanSlug) {
+                return NextResponse.json(
+                    { success: false, message: 'Invalid slug provided' },
+                    { status: 400, headers }
                 );
             }
 
-            const related = await getRelatedBlogs(slug, 3);
-            const response = {
-                success: true,
-                data: {
-                    ...blog,
-                    related,
-                },
-            };
-            setCached(cacheKey, response);
-            return NextResponse.json(response);
+            try {
+                const blog = await getBlogBySlug(cleanSlug);
+                if (!blog) {
+                    return NextResponse.json(
+                        { success: false, message: 'Blog not found' },
+                        { status: 404, headers }
+                    );
+                }
+
+                let related: any[] = [];
+                try {
+                    related = await getRelatedBlogs(cleanSlug, 3);
+                } catch (relatedError) {
+                    console.warn('⚠️ Related blogs fetch failed:', relatedError);
+                }
+
+                return NextResponse.json(
+                    {
+                        success: true,
+                        data: { ...blog, related: related || [] },
+                    },
+                    { headers }
+                );
+            } catch (blogError: any) {
+                return NextResponse.json(
+                    { success: false, message: 'Failed to fetch blog' },
+                    { status: 500, headers }
+                );
+            }
         }
 
-        // ─── FEATURED BLOGS ──────────────────────────────────────────────
         if (featured) {
-            const result = await getFeaturedBlogs(limit);
-            const response = {
-                success: true,
-                data: result,
-                meta: {
-                    total: result.length,
-                    limit,
-                    featured: true,
-                },
-            };
-            setCached(cacheKey, response);
-            return NextResponse.json(response);
+            try {
+                const result = await getFeaturedBlogs(limit);
+                const blogs = Array.isArray(result) ? result : [];
+                return NextResponse.json(
+                    {
+                        success: true,
+                        data: blogs,
+                        meta: {
+                            total: blogs.length,
+                            limit,
+                            featured: true,
+                            timestamp: new Date().toISOString(),
+                        },
+                    },
+                    { headers }
+                );
+            } catch (featuredError: any) {
+                return NextResponse.json(
+                    { 
+                        success: true, 
+                        data: [],
+                        meta: { total: 0, limit, featured: true, timestamp: new Date().toISOString() }
+                    },
+                    { status: 200, headers }
+                );
+            }
         }
 
-        // ─── LIST BLOGS ──────────────────────────────────────────────────
+        const rawStatus = searchParams.get('status');
+        const status = safeParseInt(rawStatus, 1);
+        const validStatus = [0, 1, 2].includes(status) ? status : 1;
+
         const filters = {
             category: searchParams.get('category') || undefined,
-            status: searchParams.get('status') ? parseInt(searchParams.get('status')!) : 1,
+            status: validStatus,
             keyword: searchParams.get('keyword') || undefined,
-            sort_by: (searchParams.get('sort_by') as any) || 'newest',
+            sort_by: parseSortBy(searchParams.get('sort_by')),
             page,
             limit,
-            featured: searchParams.get('featured') === 'true' ? true : undefined,
+            featured: featured || undefined,
             author: searchParams.get('author') || undefined,
             from_date: searchParams.get('from_date') || undefined,
             to_date: searchParams.get('to_date') || undefined,
         };
 
-        const result = await getBlogs(filters);
-        const response = {
-            success: true,
-            data: result.data,
-            meta: {
-                ...result.meta,
-                filters: {
-                    category: filters.category || null,
-                    status: filters.status,
-                    keyword: filters.keyword || null,
-                    sort_by: filters.sort_by,
-                    featured: filters.featured || null,
-                },
-                timestamp: new Date().toISOString(),
-            },
-        };
+        try {
+            const result = await getBlogs(filters);
+            
+            if (!result || !result.data || !Array.isArray(result.data)) {
+                return NextResponse.json(
+                    { 
+                        success: true, 
+                        data: [],
+                        meta: { total: 0, page: 1, limit, totalPages: 0 }
+                    },
+                    { status: 200, headers }
+                );
+            }
 
-        setCached(cacheKey, response);
-        return NextResponse.json(response);
+            return NextResponse.json(
+                {
+                    success: true,
+                    data: result.data,
+                    meta: {
+                        ...result.meta,
+                        filters: {
+                            category: filters.category || null,
+                            status: filters.status,
+                            keyword: filters.keyword || null,
+                            sort_by: filters.sort_by,
+                            featured: filters.featured || null,
+                        },
+                        timestamp: new Date().toISOString(),
+                    },
+                },
+                { status: 200, headers }
+            );
+
+        } catch (getBlogsError: any) {
+            return NextResponse.json(
+                { 
+                    success: true, 
+                    data: [],
+                    meta: { total: 0, page: 1, limit, totalPages: 0 }
+                },
+                { status: 200, headers }
+            );
+        }
 
     } catch (error: any) {
-        console.error('❌ Error fetching blogs:', error);
         return NextResponse.json(
             {
                 success: false,
                 message: 'Failed to fetch blogs',
-                error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+                data: [],
+                meta: { total: 0, page: 1, limit: 12, totalPages: 0 },
             },
-            { status: 500 }
+            { 
+                status: 200,
+                headers: {
+                    ...getCorsHeaders(),
+                    'Cache-Control': 'no-cache',
+                }
+            }
         );
     }
 }
-
-// ─── POST ──────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
 
-        // ─── VALIDATION ──────────────────────────────────────────────────
         const errors: Record<string, string> = {};
 
-        if (!body.title || body.title.trim().length < 3) {
-            errors.title = 'Blog title is required and must be at least 3 characters';
+        if (!body.title || typeof body.title !== 'string' || body.title.trim().length < 3) {
+            errors.title = 'Blog title is required (min 3 characters)';
         }
 
-        if (!body.category || body.category.trim().length < 2) {
+        if (!body.category || typeof body.category !== 'string' || body.category.trim().length < 2) {
             errors.category = 'Blog category is required';
         }
 
-        if (!body.descriptions || body.descriptions.trim().length < 20) {
-            errors.descriptions = 'Blog description is required and must be at least 20 characters';
+        if (!body.descriptions || typeof body.descriptions !== 'string' || body.descriptions.trim().length < 20) {
+            errors.descriptions = 'Blog description is required (min 20 characters)';
         }
 
         if (Object.keys(errors).length > 0) {
             return NextResponse.json(
                 { success: false, errors },
-                { status: 400 }
+                { status: 400, headers: getCorsHeaders() }
             );
         }
 
-        // ─── AUTO-GENERATE SLUG ──────────────────────────────────────────
         if (!body.slug && body.title) {
             body.slug = body.title
                 .toLowerCase()
+                .trim()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
         }
 
-        // ─── CREATE BLOG ──────────────────────────────────────────────────
         const blog = await createBlog(body);
 
-        // ─── CLEAR CACHE ──────────────────────────────────────────────────
-        cache.clear();
+        if (!blog) {
+            throw new Error('Blog creation returned null');
+        }
 
-        return NextResponse.json({
-            success: true,
-            data: blog,
-            message: 'Blog created successfully',
-            meta: {
-                timestamp: new Date().toISOString(),
+        return NextResponse.json(
+            {
+                success: true,
+                data: blog,
+                message: 'Blog created successfully',
+                meta: { timestamp: new Date().toISOString() },
             },
-        }, { status: 201 });
+            { 
+                status: 201, 
+                headers: getCorsHeaders() 
+            }
+        );
 
     } catch (error: any) {
-        console.error('❌ Error creating blog:', error);
         return NextResponse.json(
             {
                 success: false,
                 message: 'Failed to create blog',
-                error: process.env.NODE_ENV === 'development' ? error.message : undefined,
             },
-            { status: 500 }
+            { 
+                status: 500, 
+                headers: getCorsHeaders() 
+            }
         );
     }
 }

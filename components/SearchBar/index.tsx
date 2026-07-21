@@ -36,13 +36,22 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
   const [showPopup, setShowPopup] = useState(false);
   const [locationSearch, setLocationSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isVibrating, setIsVibrating] = useState(false); // ✅ Vibration state
+  const [isVibrating, setIsVibrating] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // ─── Refs ────────────────────────────────────────────────────────────────
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
   const isMounted = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const vibrationTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  // ─── Detect Mobile ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 640);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // ─── Fetch Locations ────────────────────────────────────────────────────
   const fetchLocations = useCallback(async (params: {
@@ -212,15 +221,12 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
   // ✅ Vibration effect on typing
   useEffect(() => {
     if (query.length > 0) {
-      // Trigger vibration
       setIsVibrating(true);
       
-      // Clear previous timeout
       if (vibrationTimeout.current) {
         clearTimeout(vibrationTimeout.current);
       }
       
-      // Remove vibration after animation
       vibrationTimeout.current = setTimeout(() => {
         setIsVibrating(false);
       }, 300);
@@ -449,7 +455,7 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
 
     return (
       <div
-        className="absolute top-full left-0 right-12 mt-1 bg-white border border-gray-200 rounded-lg z-50 overflow-hidden"
+        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg z-50 overflow-hidden"
         style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.12)" }}
       >
         <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
@@ -499,32 +505,38 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
           boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.03)",
         }}
       >
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-3 sm:p-4 lg:p-5 lg:gap-6">
+        <div className={`flex flex-col ${isMobile ? "p-2" : "p-3 sm:p-4 lg:p-5"} lg:flex-row items-start lg:items-center justify-between lg:gap-6`}>
           {/* Left Section - Quick Locations */}
-          <div className="flex flex-col flex-1 w-full lg:w-auto">
-            <div className="flex items-center gap-2 mb-2 lg:mb-3">
-              <h2 className="flex-1 text-[13px] sm:text-[14px] lg:text-[16px] text-[#1a1a1a] font-normal tracking-tight">
-                Search our exclusive listings
+          <div className={`flex flex-col flex-1 w-full ${isMobile ? "mb-2" : "mb-2 lg:mb-0"}`}>
+            <div className={`flex items-center gap-2 ${isMobile ? "mb-1.5" : "mb-2 lg:mb-3"}`}>
+              <h2 className={`flex-1 text-[#1a1a1a] font-normal tracking-tight ${
+                isMobile ? "text-[11px]" : "text-[13px] sm:text-[14px] lg:text-[16px]"
+              }`}>
+                {isMobile ? "Search listings" : "Search our exclusive listings"}
               </h2>
               <button
                 onClick={() => setShowPopup(true)}
-                className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+                className={`relative flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors ${
+                  isMobile ? "w-6 h-6" : "w-8 h-8"
+                }`}
               >
-                <MapPin size={15} className="text-[#1a1a1a]" />
+                <MapPin size={isMobile ? 13 : 15} className="text-[#1a1a1a]" />
                 {activeLocations.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#1a1a1a] text-white rounded-full flex items-center justify-center text-[8px] font-bold">
+                  <span className={`absolute -top-0.5 -right-0.5 bg-[#1a1a1a] text-white rounded-full flex items-center justify-center text-[8px] font-bold ${
+                    isMobile ? "w-3.5 h-3.5" : "w-4 h-4"
+                  }`}>
                     {activeLocations.length}
                   </span>
                 )}
               </button>
             </div>
 
-            {/* Quick Location Buttons */}
-            <div className="flex flex-wrap items-center gap-1.5">
+            {/* Quick Location Buttons - Responsive */}
+            <div className="flex flex-wrap items-center gap-1">
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <Loader2 size={12} className="animate-spin text-gray-400" />
-                  <span className="text-[10px] text-gray-400 tracking-wider uppercase">Loading...</span>
+                  <span className="text-[9px] text-gray-400 tracking-wider uppercase">Loading...</span>
                 </div>
               ) : (
                 quickLocations.map((loc: Location) => {
@@ -533,13 +545,15 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
                     <button
                       key={loc.id}
                       onClick={() => toggleLocation(loc)}
-                      className={`h-6 sm:h-7 px-2.5 sm:px-3 text-[9px] sm:text-[10px] font-medium tracking-wider uppercase rounded-full border transition-colors ${
+                      className={`${
+                        isMobile ? "h-5 px-2 text-[8px]" : "h-6 sm:h-7 px-2.5 sm:px-3 text-[9px] sm:text-[10px]"
+                      } font-medium tracking-wider uppercase rounded-full border transition-colors ${
                         active
                           ? "bg-[#1a1a1a] text-white border-[#1a1a1a]"
                           : "bg-gray-50 text-[#1a1a1a] border-gray-200 hover:border-gray-400"
                       }`}
                     >
-                      {loc.name}
+                      {isMobile ? loc.name.split(' ')[0] : loc.name}
                     </button>
                   );
                 })
@@ -548,7 +562,7 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
           </div>
 
           {/* Right Section - Search Input */}
-          <div className="w-full lg:w-[360px] mt-3 lg:mt-0">
+          <div className="w-full lg:w-[360px]">
             {/* Tabs */}
             <div className="flex">
               {TABS.map((tab) => {
@@ -557,13 +571,15 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`h-7 sm:h-8 px-3 sm:px-4 text-[10px] sm:text-[11px] font-medium rounded-t-lg border border-b-0 -mb-px transition-colors ${
+                    className={`${
+                      isMobile ? "h-6 px-2.5 text-[8px]" : "h-7 sm:h-8 px-3 sm:px-4 text-[10px] sm:text-[11px]"
+                    } font-medium rounded-t-lg border border-b-0 -mb-px transition-colors ${
                       isActive
                         ? "bg-gray-50 text-[#1a1a1a] font-bold border-gray-200 z-10"
                         : "bg-transparent text-gray-400 border-transparent hover:text-[#1a1a1a]"
                     }`}
                   >
-                    {tab}
+                    {isMobile ? tab.slice(0, 3) : tab}
                   </button>
                 );
               })}
@@ -573,24 +589,27 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
             <div className="relative">
               <div className="flex items-center gap-2">
                 <div
-                  className={`flex-1 flex items-center h-10 sm:h-11 lg:h-12 px-3 bg-white border rounded-lg transition-all duration-200 ${
+                  className={`flex-1 flex items-center bg-white border rounded-lg transition-all duration-200 ${
+                    isMobile ? "h-8 px-2" : "h-10 sm:h-11 lg:h-12 px-3"
+                  } ${
                     isFocused ? "border-[#1a1a1a] shadow-[0_0_0_2px_rgba(26,26,26,0.06)]" : "border-gray-200"
                   } ${
-                    // ✅ Vibration Animation
                     isVibrating ? "animate-[vibrate_0.2s_ease-in-out]" : ""
                   }`}
                 >
-                  <Search size={14} className="text-gray-400 mr-2 shrink-0" />
+                  <Search size={isMobile ? 12 : 14} className="text-gray-400 mr-1.5 shrink-0" />
                   <input
                     ref={inputRef}
                     type="text"
-                    placeholder="SEARCH PROPERTIES"
+                    placeholder={isMobile ? "Search..." : "SEARCH PROPERTIES"}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onFocus={handleFocus}
                     onBlur={handleBlur}
                     onKeyDown={handleKeyDown}
-                    className="flex-1 bg-transparent outline-none text-[11px] text-[#1a1a1a] placeholder:text-gray-300 tracking-[0.15em]"
+                    className={`flex-1 bg-transparent outline-none text-[#1a1a1a] placeholder:text-gray-300 ${
+                      isMobile ? "text-[9px] tracking-[0.1em]" : "text-[11px] tracking-[0.15em]"
+                    }`}
                     aria-label="Search properties"
                   />
                   {query && (
@@ -599,7 +618,7 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
                       className="hover:opacity-70 transition-opacity"
                       aria-label="Clear search"
                     >
-                      <X size={12} className="text-gray-400" />
+                      <X size={isMobile ? 10 : 12} className="text-gray-400" />
                     </button>
                   )}
                 </div>
@@ -607,13 +626,15 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
                 <button
                   onClick={handleSearch}
                   disabled={isSearching}
-                  className="w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-200 hover:bg-[#1a1a1a] hover:border-[#1a1a1a] group disabled:opacity-60 shrink-0 transition-colors"
+                  className={`flex items-center justify-center rounded-lg bg-gray-50 border border-gray-200 hover:bg-[#1a1a1a] hover:border-[#1a1a1a] group disabled:opacity-60 shrink-0 transition-colors ${
+                    isMobile ? "w-8 h-8" : "w-10 h-10 sm:w-11 sm:h-11 lg:w-12 lg:h-12"
+                  }`}
                   aria-label="Search"
                 >
                   {isSearching ? (
-                    <Loader2 size={16} className="animate-spin text-gray-500 group-hover:text-white" />
+                    <Loader2 size={isMobile ? 12 : 16} className="animate-spin text-gray-500 group-hover:text-white" />
                   ) : (
-                    <ArrowRight size={16} className="text-[#1a1a1a] group-hover:text-white transition-colors" />
+                    <ArrowRight size={isMobile ? 12 : 16} className="text-[#1a1a1a] group-hover:text-white transition-colors" />
                   )}
                 </button>
               </div>
@@ -625,14 +646,53 @@ export default function SearchBar({ className = "", cityId = 71 }: SearchBarProp
                 </div>
               )}
 
-              {/* Suggestions */}
-              <SuggestionsDropdown />
+              {/* Suggestions - Responsive width */}
+              <div className="relative">
+                {isFocused && suggestions.length > 0 && (
+                  <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg z-50 overflow-hidden"
+                    style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.12)" }}
+                  >
+                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+                      <span className={`${isMobile ? "text-[8px]" : "text-[9px]"} font-bold text-gray-400 tracking-[0.2em] uppercase`}>
+                        Popular Locations
+                      </span>
+                    </div>
+                    {suggestions.map((s: Location) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          setQuery(s.name);
+                          setSuggestions([]);
+                          setIsFocused(false);
+                          if (inputRef.current) {
+                            inputRef.current.focus();
+                          }
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 border-b border-gray-50 last:border-0 transition-colors"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <div className={`${isMobile ? "w-6 h-6" : "w-7 h-7"} rounded-full bg-gray-100 flex items-center justify-center`}>
+                            <MapPin size={isMobile ? 9 : 11} className="text-gray-400" />
+                          </div>
+                          <div className="text-left">
+                            <span className={`${isMobile ? "text-[10px]" : "text-[11px]"} font-medium text-[#1a1a1a] block tracking-wider`}>
+                              {s.name}
+                            </span>
+                          </div>
+                        </span>
+                        <ArrowRight size={isMobile ? 10 : 12} className="text-gray-300" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ✅ Add vibration keyframes to global styles */}
+      {/* Vibration animation */}
       <style jsx global>{`
         @keyframes vibrate {
           0% { transform: translateX(0); }

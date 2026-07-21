@@ -10,28 +10,15 @@ import {
   SlidersHorizontal,
   Building2,
   ChevronDown,
-  MapPin,
   ArrowRight,
   X,
-  DollarSign,
-  Layers,
-  Sparkles,
-  Grid3x3,
-  List,
-  Calendar,
-  ArrowUpDown,
+  Plus,
   ChevronLeft,
   ChevronRight,
   Loader2,
   AlertCircle,
-  Heart,
-  Eye,
   ImageOff,
-  TrendingUp,
-  Clock,
-  Shield,
-  Home,
-  Filter,
+  Map,
   Key,
 } from "lucide-react";
 
@@ -42,16 +29,10 @@ const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
 
 const THEME = {
-  primary: "#0F1C2E",
-  secondary: "#1A2F4A",
-  accent: "#C9A96E",
-  accentLight: "#F5ECD7",
-  muted: "#6B7A8D",
-  border: "#E2E8F0",
-  surface: "#F8FAFC",
-  success: "#10B981",
-  error: "#EF4444",
-  warning: "#F59E0B",
+  primary: "#192334",
+  muted: "#8A94A3",
+  border: "#E8E6E1",
+  accent: "#C8AA78",
 };
 
 interface Property {
@@ -133,9 +114,6 @@ interface PaginationData {
   limit: number;
   totalPages: number;
   cached?: boolean;
-  action?: string;
-  sort_by?: string;
-  timestamp?: string;
 }
 
 interface FilterOption {
@@ -182,63 +160,83 @@ const FURNISHING_OPTIONS: FilterOption[] = [
   { value: "Unfurnished", label: "Unfurnished" },
 ];
 
-function getPropertyImage(property: Property): string | null {
-  if (property.featured_image) return property.featured_image;
-  if (property.gallery_urls?.length) return property.gallery_urls[0];
-  if (property.images?.length) return property.images[0].url;
-  if (property.gallery_preview?.length) return property.gallery_preview[0];
-  return null;
-}
+const SIZE_OPTIONS: FilterOption[] = [
+  { value: "0-500", label: "Under 500 sq.ft" },
+  { value: "500-1000", label: "500 - 1000 sq.ft" },
+  { value: "1000-2000", label: "1000 - 2000 sq.ft" },
+  { value: "2000-999999", label: "2000+ sq.ft" },
+];
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────
 
 function getAllImages(property: Property): string[] {
   const imgs: string[] = [];
   if (property.featured_image) imgs.push(property.featured_image);
-  if (property.gallery_urls) property.gallery_urls.forEach(img => { if (!imgs.includes(img)) imgs.push(img); });
-  if (property.images) property.images.forEach(img => { if (img.url && !imgs.includes(img.url)) imgs.push(img.url); });
-  if (property.gallery_preview) property.gallery_preview.forEach(img => { if (!imgs.includes(img)) imgs.push(img); });
+  if (property.gallery_urls)
+    property.gallery_urls.forEach((img) => {
+      if (!imgs.includes(img)) imgs.push(img);
+    });
+  if (property.images)
+    property.images.forEach((img) => {
+      if (img.url && !imgs.includes(img.url)) imgs.push(img.url);
+    });
+  if (property.gallery_preview)
+    property.gallery_preview.forEach((img) => {
+      if (!imgs.includes(img)) imgs.push(img);
+    });
   return imgs;
 }
 
 function formatPrice(amount: number | null, currency = "AED"): string {
   if (!amount) return "Price on Request";
-  return `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return `${currency} ${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
 }
 
 function getBedroomLabel(bedroom: string): string {
-  if (!bedroom || bedroom.toLowerCase() === "studio") return "Studio";
+  if (!bedroom || bedroom.toLowerCase() === "studio") return "Studio Apartment";
   const match = bedroom.match(/^(\d+)/);
   if (match) {
     const num = parseInt(match[1], 10);
-    return `${num} BHK`;
+    return `${num} Bed`;
   }
   return bedroom;
 }
 
-function getDaysAgo(date: string): string {
-  const diff = Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Yesterday";
-  if (diff < 7) return `${diff} days ago`;
-  if (diff < 30) return `${Math.floor(diff / 7)} weeks ago`;
-  if (diff < 365) return `${Math.floor(diff / 30)} months ago`;
-  return `${Math.floor(diff / 365)} years ago`;
+function getDisplayName(property: Property): string {
+  if (property.name && property.name !== "Null" && property.name !== "null") {
+    return property.name.toUpperCase();
+  }
+  if (property.slug) {
+    return (
+      property.slug
+        .replace(/-/g, " ")
+        .replace(/\bLn\d+\b/gi, "")
+        .trim()
+        .toUpperCase() || `PROPERTY ${property.id}`
+    );
+  }
+  return `PROPERTY ${property.id}`;
 }
 
-function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Property; viewMode?: string; index?: number }) {
-  const [isWishlisted, setIsWishlisted] = useState(false);
+// ─── PROPERTY CARD (Figma-style clean) ───────────────────────────────────
+
+function PropertyCard({ property, index = 0 }: { property: Property; index?: number }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
 
   const location = property.location?.community || property.location?.city || "Dubai";
   const isPriceOnRequest = property.price?.is_price_on_request || !property.price?.amount;
   const priceDisplay = property.price?.display || "Price on Request";
-  const rentalPrice = property.price?.rental_price;
+  const displayName = getDisplayName(property);
   const bedroomLabel = getBedroomLabel(property.bedrooms);
-  const daysAgo = getDaysAgo(property.created_at);
 
   const allImages = useMemo(() => getAllImages(property), [property]);
   const hasImages = allImages.length > 0;
-  
+
   const currentImage = useMemo(() => {
     if (imageError || !hasImages) return null;
     return allImages[currentImageIndex % allImages.length];
@@ -248,9 +246,9 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
     bedroomLabel,
     property.bathrooms && property.bathrooms !== "0 Bath" ? property.bathrooms : null,
     property.area?.display && property.area.display !== "Area on Request" ? property.area.display : null,
-  ].filter(Boolean).join("  |  ");
-
-  const isListMode = viewMode === "list";
+  ]
+    .filter(Boolean)
+    .join(" | ");
 
   useEffect(() => {
     if (allImages.length <= 1) return;
@@ -260,269 +258,217 @@ function PropertyCard({ property, viewMode = "grid", index = 0 }: { property: Pr
     return () => clearInterval(interval);
   }, [allImages.length]);
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("property_wishlist") || "[]");
-      setIsWishlisted(saved.includes(property.id));
-    } catch {}
-  }, [property.id]);
-
-  const toggleWishlist = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsWishlisted(!isWishlisted);
-    try {
-      const saved = JSON.parse(localStorage.getItem("property_wishlist") || "[]");
-      const updated = isWishlisted 
-        ? saved.filter((id: number) => id !== property.id)
-        : [...saved, property.id];
-      localStorage.setItem("property_wishlist", JSON.stringify(updated));
-    } catch {}
-  };
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: Math.min(index * 0.05, 0.5) }}
-      className={`group bg-white transition-all duration-300 hover:shadow-xl ${
-        isListMode ? "flex flex-col sm:flex-row gap-4" : ""
-      }`}
+      className="group"
       style={{ fontFamily: FONT_BODY }}
     >
-      <div className={`relative overflow-hidden bg-gray-100 ${isListMode ? "sm:w-[320px] sm:flex-shrink-0" : "aspect-[4/3]"}`}>
+      {/* IMAGE */}
+      <div className="relative overflow-hidden bg-gray-100 aspect-[4/3]">
         <Link href={`/properties-for-rent-dubai/${property.slug}`} className="block h-full w-full">
           {currentImage ? (
             <>
               <img
                 src={currentImage}
-                alt={property.name}
+                alt={displayName}
                 loading="lazy"
                 className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 onError={() => setImageError(true)}
               />
-              
+
+              {/* Image indicator dots (subtle) */}
               {allImages.length > 1 && (
                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                   {allImages.slice(0, 5).map((_, i) => (
                     <span
                       key={i}
-                      className={`h-1.5 rounded-full transition-all ${
+                      className={`h-1 rounded-full transition-all ${
                         i === currentImageIndex % allImages.length
                           ? "w-4 bg-white"
-                          : "w-1.5 bg-white/50"
+                          : "w-1 bg-white/50"
                       }`}
                     />
                   ))}
-                  {allImages.length > 5 && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-white/50" />
-                  )}
                 </div>
               )}
             </>
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center">
               <ImageOff className="h-12 w-12 text-gray-300" />
-              <p className="mt-2 text-xs text-gray-400">No Image</p>
             </div>
           )}
         </Link>
 
-        <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-          {property.featured && (
-            <span className="rounded-[3px] bg-[#0F1C2E] px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              Featured
-            </span>
-          )}
-          {property.listing_type && (
-            <span className="flex items-center gap-1 rounded-[3px] bg-emerald-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              <Key className="h-3 w-3" />
-              For Rent
-            </span>
-          )}
-          {property.completion_date && (
-            <span className="rounded-[3px] bg-blue-500 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.12em] text-white">
-              {property.completion_date}
-            </span>
-          )}
-        </div>
-
-        {property.exclusive_status && (
-          <span className="absolute right-12 top-3 rounded-[3px] bg-white/90 px-2 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-[#0F1C2E]">
-            {property.exclusive_status}
+        {/* FEATURED BADGE (only) */}
+        {property.featured && (
+          <span
+            className="absolute left-3 top-3 bg-[#192334] px-3 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            FEATURED
           </span>
         )}
 
-        {property.occupancy && (
-          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
-            <Clock className="h-3 w-3" />
-            {property.occupancy}
-          </div>
-        )}
-
-        {property.furnishing && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.12em] text-white backdrop-blur-sm">
-            {property.furnishing}
-          </div>
-        )}
-
-        <button
-          onClick={toggleWishlist}
-          aria-label="Add to wishlist"
-          className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
-            isWishlisted
-              ? "border-red-500 bg-red-500 text-white shadow-lg"
-              : "border-white/50 bg-white/90 text-[#0F1C2E] hover:bg-white"
-          }`}
+        {/* ADD TO COMPARE (+) BUTTON */}
+        <div
+          className="absolute right-3 top-3"
+          onMouseEnter={() => setShowCompare(true)}
+          onMouseLeave={() => setShowCompare(false)}
         >
-          <Heart className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
-        </button>
-
-        {hasImages && allImages.length > 1 && (
-          <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded bg-black/60 px-2 py-1 text-[9px] text-white backdrop-blur-sm">
-            <Eye className="h-3 w-3" />
-            {allImages.length}
-          </div>
-        )}
+          <button
+            aria-label="Add to compare"
+            className="flex h-8 w-8 items-center justify-center bg-white text-[#192334] shadow-sm transition-all hover:bg-gray-50"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+          </button>
+          <AnimatePresence>
+            {showCompare && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="absolute right-0 top-10 whitespace-nowrap bg-white px-3 py-1.5 text-[11px] text-[#192334] shadow-md"
+              >
+                Add to compare
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      <div className={`flex flex-1 flex-col ${isListMode ? "py-2 pr-2" : "pt-4"}`}>
+      {/* DETAILS */}
+      <div className="pt-4">
+        {/* Title + Price */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <Link href={`/properties-for-rent-dubai/${property.slug}`}>
               <h3
-                className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-opacity hover:opacity-70"
+                className="truncate text-[15px] font-normal leading-snug tracking-[0.04em] transition-opacity hover:opacity-70"
                 style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
               >
-                {property.name}
+                {displayName}
               </h3>
             </Link>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#6B7A8D]">
-              <MapPin className="h-3 w-3" />
-              <span>{location}</span>
-            </div>
-            {property.developer?.name && (
-              <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-[#6B7A8D]">
-                <Building2 className="h-3 w-3" />
-                <span>{property.developer.name}</span>
-              </div>
-            )}
+            <p
+              className="mt-1 text-[12px] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              {location}
+            </p>
           </div>
 
           <div className="shrink-0 text-right">
-            <p className="text-[9px] font-medium uppercase tracking-[0.14em] text-[#6B7A8D]">Rent / Year</p>
-            <p className="text-[14px] font-bold leading-tight text-[#0F1C2E]">
+            <p
+              className="text-[10px] font-normal uppercase tracking-[0.14em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              RENT / YEAR
+            </p>
+            <p
+              className="mt-0.5 text-[14px] font-semibold leading-tight text-[#192334]"
+              style={{ fontFamily: FONT_BODY }}
+            >
               {isPriceOnRequest ? "On Request" : priceDisplay}
             </p>
-            {rentalPrice && property.price?.sale_price && (
-              <p className="text-[10px] text-[#6B7A8D]">
-                Sale: {formatPrice(property.price.sale_price)}
-              </p>
-            )}
           </div>
         </div>
 
-        <div className="my-3 h-px w-full bg-[#E2E8F0]" />
+        {/* Divider */}
+        <div className="my-3 h-px w-full bg-[#E8E6E1]" />
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="truncate text-[11px] text-[#4A5462]">{specs || "\u00A0"}</p>
-          <div className="flex items-center gap-2">
-            {property.payment_plans && property.payment_plans.length > 0 && (
-              <span className="flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[9px] font-medium text-green-700">
-                <Calendar className="h-3 w-3" />
-                {property.payment_plans.length} Plans
-              </span>
-            )}
-            <span className="text-[10px] text-[#6B7A8D]">{daysAgo}</span>
-          </div>
+        {/* Specs + Ref */}
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className="truncate text-[12px] text-[#4A5462]"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            {specs || "\u00A0"}
+          </p>
+          {property.ref_number && (
+            <p
+              className="text-[11px] text-[#8A94A3] whitespace-nowrap"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              Ref: {property.ref_number}
+            </p>
+          )}
         </div>
-
-        {isListMode && property.developer?.logo_url && (
-          <div className="mt-2 flex items-center gap-2">
-            <img
-              src={property.developer.logo_url}
-              alt={property.developer.name || "Developer"}
-              className="h-6 w-auto max-w-[80px] object-contain opacity-60 grayscale transition-opacity group-hover:opacity-100"
-            />
-          </div>
-        )}
       </div>
     </motion.div>
   );
 }
 
-function SkeletonCard({ viewMode = "grid" }: { viewMode?: string }) {
-  const isListMode = viewMode === "list";
+// ─── SKELETON ───────────────────────────────────────────────────────────
+
+function SkeletonCard() {
   return (
-    <div className={`bg-white ${isListMode ? "flex flex-col sm:flex-row gap-4" : ""}`}>
-      <div className={`animate-pulse bg-gray-200 ${isListMode ? "sm:w-[320px] sm:aspect-[4/3]" : "aspect-[4/3]"}`} />
-      <div className={`flex-1 space-y-3 ${isListMode ? "py-2" : "py-4"}`}>
+    <div>
+      <div className="animate-pulse bg-gray-200 aspect-[4/3]" />
+      <div className="pt-4 space-y-3">
         <div className="flex justify-between">
-          <div className="h-4 w-40 animate-pulse rounded bg-gray-200" />
-          <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
+          <div className="h-4 w-40 animate-pulse bg-gray-200" />
+          <div className="h-4 w-24 animate-pulse bg-gray-200" />
         </div>
-        <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+        <div className="h-3 w-20 animate-pulse bg-gray-200" />
         <div className="h-px w-full bg-gray-100" />
         <div className="flex justify-between">
-          <div className="h-3 w-48 animate-pulse rounded bg-gray-200" />
-          <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+          <div className="h-3 w-48 animate-pulse bg-gray-200" />
+          <div className="h-3 w-20 animate-pulse bg-gray-200" />
         </div>
       </div>
     </div>
   );
 }
 
-function FilterDropdown({
+// ─── TOP FILTER DROPDOWN (Figma-style: text only) ────────────────────────
+
+function TopFilterDropdown({
   label,
   value,
   onChange,
   options,
-  icon: Icon,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: FilterOption[];
-  icon?: React.ElementType;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const hasValue = value && value !== "";
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const selectedLabel = options.find((o) => o.value === value)?.label || label;
-  const IconComponent = Icon;
-
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative" ref={ref}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[11px] font-medium transition-all duration-200 ${
-          hasValue ? "bg-[#0F1C2E] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-        }`}
+        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[#192334] transition-opacity hover:opacity-60"
+        style={{ fontFamily: FONT_BODY }}
       >
-        {IconComponent && <IconComponent className="h-3.5 w-3.5" />}
-        <span>{hasValue ? selectedLabel : label}</span>
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+        <span>{label}</span>
+        <ChevronDown
+          className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          strokeWidth={2}
+        />
       </button>
 
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: -5, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -5, scale: 0.95 }}
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full z-50 mt-1 min-w-[200px] border border-gray-200 bg-white py-1 shadow-xl"
+            className="absolute left-0 top-full z-50 mt-3 min-w-[200px] border border-gray-100 bg-white py-1 shadow-lg"
           >
             <button
               onClick={() => {
@@ -530,6 +476,7 @@ function FilterDropdown({
                 setIsOpen(false);
               }}
               className="block w-full px-4 py-2.5 text-left text-[11px] text-gray-400 hover:bg-gray-50"
+              style={{ fontFamily: FONT_BODY }}
             >
               All {label}
             </button>
@@ -542,9 +489,10 @@ function FilterDropdown({
                 }}
                 className={`block w-full px-4 py-2.5 text-left text-[11px] transition-colors ${
                   value === opt.value
-                    ? "bg-[#0F1C2E]/5 font-medium text-[#0F1C2E]"
+                    ? "bg-[#192334]/5 font-medium text-[#192334]"
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
+                style={{ fontFamily: FONT_BODY }}
               >
                 {opt.label}
               </button>
@@ -555,6 +503,8 @@ function FilterDropdown({
     </div>
   );
 }
+
+// ─── PAGINATION ─────────────────────────────────────────────────────────
 
 function Pagination({
   currentPage,
@@ -569,31 +519,34 @@ function Pagination({
 
   const getPageNumbers = (): (number | string)[] => {
     const pages: (number | string)[] = [];
-    for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 1) {
-        pages.push(i);
-      } else if (Math.abs(i - currentPage) === 2) {
-        pages.push("...");
-      }
+    pages.push(1);
+    if (currentPage > 3) pages.push("...");
+    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+      pages.push(i);
     }
+    if (currentPage < totalPages - 2) pages.push("...");
+    if (totalPages > 1) pages.push(totalPages);
     return pages;
   };
 
   return (
-    <div className="mt-12 flex flex-wrap items-center justify-center gap-1">
+    <div
+      className="mt-14 flex flex-wrap items-center justify-center gap-2"
+      style={{ fontFamily: FONT_BODY }}
+    >
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#0F1C2E] disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex items-center gap-1 px-3 py-2 text-[12px] text-gray-400 transition-colors hover:text-[#192334] disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <ChevronLeft className="h-4 w-4" />
+        <ChevronLeft className="h-3.5 w-3.5" />
         Previous
       </button>
 
       {getPageNumbers().map((page, idx) => {
         if (page === "...") {
           return (
-            <span key={`dots-${idx}`} className="px-2 py-2 text-[12px] text-gray-400">
+            <span key={`dots-${idx}`} className="px-2 text-[12px] text-gray-400">
               ...
             </span>
           );
@@ -604,8 +557,8 @@ function Pagination({
           <button
             key={pageNum}
             onClick={() => onPageChange(pageNum)}
-            className={`flex h-9 w-9 items-center justify-center rounded-[4px] text-[12px] font-medium transition-all ${
-              isActive ? "bg-[#0F1C2E] text-white shadow-md" : "text-gray-700 hover:bg-gray-100"
+            className={`flex h-8 w-8 items-center justify-center text-[12px] transition-all ${
+              isActive ? "bg-[#192334] text-white" : "text-gray-600 hover:text-[#192334]"
             }`}
           >
             {pageNum}
@@ -616,14 +569,16 @@ function Pagination({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="flex items-center gap-1 rounded-[4px] px-3 py-2 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-[#0F1C2E] disabled:cursor-not-allowed disabled:opacity-30"
+        className="flex items-center gap-1 px-3 py-2 text-[12px] text-[#192334] transition-colors hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-40"
       >
         Next
-        <ChevronRight className="h-4 w-4" />
+        <ChevronRight className="h-3.5 w-3.5" />
       </button>
     </div>
   );
 }
+
+// ─── MAIN PAGE ──────────────────────────────────────────────────────────
 
 export default function RentPropertiesPage() {
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -637,8 +592,7 @@ export default function RentPropertiesPage() {
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [isCached, setIsCached] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [filters, setFilters] = useState({
     page: 1,
@@ -646,13 +600,29 @@ export default function RentPropertiesPage() {
     bedroom: "",
     min_price: "",
     max_price: "",
+    min_size: "",
+    max_size: "",
     sort_by: "newest",
     occupancy: "",
+    furnishing: "",
     keyword: "",
   });
 
-  const currentPriceValue = filters.min_price && filters.max_price ? `${filters.min_price}-${filters.max_price}` : "";
-  const hasActiveFilters = filters.bedroom !== "" || filters.min_price !== "" || filters.max_price !== "" || filters.occupancy !== "" || filters.keyword !== "";
+  const currentPriceValue =
+    filters.min_price && filters.max_price ? `${filters.min_price}-${filters.max_price}` : "";
+  const currentSizeValue =
+    filters.min_size && filters.max_size ? `${filters.min_size}-${filters.max_size}` : "";
+
+  const hasActiveFilters =
+    filters.bedroom !== "" ||
+    filters.min_price !== "" ||
+    filters.max_price !== "" ||
+    filters.min_size !== "" ||
+    filters.max_size !== "" ||
+    filters.occupancy !== "" ||
+    filters.furnishing !== "" ||
+    filters.keyword !== "";
+
   const hasMore = pagination ? filters.page < pagination.totalPages : false;
 
   const fetchProperties = useCallback(
@@ -672,7 +642,7 @@ export default function RentPropertiesPage() {
         params.append("limit", String(filters.limit));
         params.append("sort_by", filters.sort_by);
         params.append("status", "5");
-        
+
         if (filters.bedroom) {
           if (filters.bedroom.toLowerCase() === "studio") {
             params.append("min_bedrooms", "0");
@@ -685,10 +655,13 @@ export default function RentPropertiesPage() {
             }
           }
         }
-        
+
         if (filters.min_price) params.append("min_price", filters.min_price);
         if (filters.max_price) params.append("max_price", filters.max_price);
+        if (filters.min_size) params.append("min_size", filters.min_size);
+        if (filters.max_size) params.append("max_size", filters.max_size);
         if (filters.occupancy) params.append("occupancy", filters.occupancy);
+        if (filters.furnishing) params.append("furnishing", filters.furnishing);
         if (filters.keyword) params.append("keyword", filters.keyword);
 
         const response = await fetch(`${API_URL}?${params.toString()}`);
@@ -697,15 +670,12 @@ export default function RentPropertiesPage() {
         if (!data.success) throw new Error(data.error || "Failed to fetch properties");
 
         let newProperties: Property[] = data.data || [];
-
         const seen = new Set<number>();
         newProperties = newProperties.filter((p) => {
           if (seen.has(p.id)) return false;
           seen.add(p.id);
           return true;
         });
-
-        if (data.cached) setIsCached(true);
 
         if (isReset) {
           setProperties(newProperties);
@@ -775,6 +745,16 @@ export default function RentPropertiesPage() {
     setFilters((prev) => ({ ...prev, min_price: min || "", max_price: max || "", page: 1 }));
   }, []);
 
+  const handleSizeChange = useCallback((value: string) => {
+    setProperties([]);
+    if (!value) {
+      setFilters((prev) => ({ ...prev, min_size: "", max_size: "", page: 1 }));
+      return;
+    }
+    const [min, max] = value.split("-");
+    setFilters((prev) => ({ ...prev, min_size: min || "", max_size: max || "", page: 1 }));
+  }, []);
+
   const handleClearFilters = useCallback(() => {
     setProperties([]);
     setFilters({
@@ -783,8 +763,11 @@ export default function RentPropertiesPage() {
       bedroom: "",
       min_price: "",
       max_price: "",
+      min_size: "",
+      max_size: "",
       sort_by: "newest",
       occupancy: "",
+      furnishing: "",
       keyword: "",
     });
   }, []);
@@ -797,186 +780,215 @@ export default function RentPropertiesPage() {
 
   return (
     <section className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
-      <div className="mx-auto max-w-[1200px] px-4 pt-10 md:px-6">
-        <div className="mb-6">
-          <motion.h1
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-[32px] font-normal leading-tight md:text-[40px]"
-            style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
-          >
-            Properties for Rent in Dubai
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="mt-1.5 flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-[#6B7A8D]"
-          >
-            {loading ? (
-              "Loading..."
-            ) : pagination ? (
-              <>
-                <span>{pagination.total.toLocaleString()} rental properties available</span>
-                {isCached && (
-                  <span className="flex items-center gap-1 text-green-500">
-                    <TrendingUp className="h-3 w-3" />
-                    cached
-                  </span>
-                )}
-              </>
-            ) : (
-              `${properties.length} listings`
-            )}
-          </motion.p>
-        </div>
-      </div>
-
-      <div className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur-sm" style={{ borderColor: THEME.border }}>
+      {/* TOP NAV BAR (Figma style) */}
+      <div className="border-b border-gray-100">
         <div className="mx-auto max-w-[1200px] px-4 md:px-6">
-          <div className="flex h-14 items-center gap-2 md:gap-4">
-            <div className="hidden flex-1 items-center justify-end gap-1 lg:flex">
-              <FilterDropdown
-                label="Rent Price"
+          <div className="flex h-14 items-center justify-between gap-4">
+            {/* SEARCH */}
+            <div className="flex items-center gap-2 flex-1 max-w-xs">
+              <Search className="h-3.5 w-3.5 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") updateFilter("keyword", searchQuery);
+                }}
+                placeholder="SEARCH PROPERTIES"
+                className="w-full bg-transparent text-[11px] uppercase tracking-[0.14em] text-gray-500 placeholder-gray-400 outline-none"
+                style={{ fontFamily: FONT_BODY }}
+              />
+            </div>
+
+            {/* FILTERS - DESKTOP */}
+            <div className="hidden lg:flex items-center gap-8">
+              <TopFilterDropdown
+                label="PRICE"
                 value={currentPriceValue}
                 onChange={handlePriceChange}
                 options={PRICE_OPTIONS}
-                icon={DollarSign}
               />
-              <FilterDropdown
-                label="Bedrooms"
+              <TopFilterDropdown
+                label="SIZE"
+                value={currentSizeValue}
+                onChange={handleSizeChange}
+                options={SIZE_OPTIONS}
+              />
+              <TopFilterDropdown
+                label="BEDROOMS"
                 value={filters.bedroom}
                 onChange={(v) => updateFilter("bedroom", v)}
                 options={BEDROOM_OPTIONS}
-                icon={Layers}
               />
-              <FilterDropdown
-                label="Occupancy"
+              <TopFilterDropdown
+                label="FURNISHING"
+                value={filters.furnishing}
+                onChange={(v) => updateFilter("furnishing", v)}
+                options={FURNISHING_OPTIONS}
+              />
+              <TopFilterDropdown
+                label="OCCUPANCY"
                 value={filters.occupancy}
                 onChange={(v) => updateFilter("occupancy", v)}
                 options={OCCUPANCY_OPTIONS}
-                icon={Calendar}
               />
-              <FilterDropdown
-                label="Sort"
+              <TopFilterDropdown
+                label="SORT"
                 value={filters.sort_by}
                 onChange={(v) => updateFilter("sort_by", v)}
                 options={SORT_OPTIONS}
-                icon={ArrowUpDown}
               />
-
-              <div className="ml-2 flex rounded-[4px] border border-gray-200 overflow-hidden">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "grid" ? "bg-[#0F1C2E] text-white" : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  <Grid3x3 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-1.5 transition-colors ${
-                    viewMode === "list" ? "bg-[#0F1C2E] text-white" : "bg-white text-gray-500 hover:bg-gray-50"
-                  }`}
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
 
               {hasActiveFilters && (
                 <button
                   onClick={handleClearFilters}
-                  className="ml-2 flex items-center gap-1.5 rounded-[4px] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-600 transition-colors hover:bg-gray-100 hover:text-[#0F1C2E]"
+                  className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.14em] text-gray-500 hover:text-[#192334]"
+                  style={{ fontFamily: FONT_BODY }}
                 >
-                  <X className="h-3.5 w-3.5" />
-                  Clear
+                  <X className="h-3 w-3" />
+                  CLEAR
                 </button>
               )}
+
+              <button
+                className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[#192334] hover:opacity-60"
+                style={{ fontFamily: FONT_BODY }}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                FILTER
+              </button>
             </div>
 
+            {/* MOBILE FILTER BTN */}
             <button
               onClick={() => setShowMobileFilters(!showMobileFilters)}
-              className="ml-auto flex items-center gap-1.5 rounded-[3px] border border-gray-200 px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-gray-700 lg:hidden"
+              className="lg:hidden flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-[#192334]"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              Filter
+              FILTER
             </button>
           </div>
         </div>
       </div>
 
+      {/* MOBILE FILTERS */}
       <AnimatePresence>
         {showMobileFilters && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="border-b bg-white lg:hidden"
-            style={{ borderColor: THEME.border }}
+            className="border-b border-gray-100 lg:hidden"
           >
-            <div className="p-4">
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={currentPriceValue}
-                  onChange={(e) => handlePriceChange(e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
-                >
-                  <option value="">All Prices</option>
-                  {PRICE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.bedroom}
-                  onChange={(e) => updateFilter("bedroom", e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
-                >
-                  <option value="">All Beds</option>
-                  {BEDROOM_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.occupancy}
-                  onChange={(e) => updateFilter("occupancy", e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
-                >
-                  <option value="">All Occupancy</option>
-                  {OCCUPANCY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.sort_by}
-                  onChange={(e) => updateFilter("sort_by", e.target.value)}
-                  className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
-                >
-                  {SORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={handleClearFilters}
-                  className="col-span-2 h-9 border border-gray-300 text-[10px] uppercase tracking-[0.12em] text-gray-700"
-                >
-                  Clear All
-                </button>
-              </div>
+            <div className="p-4 grid grid-cols-2 gap-2">
+              <select
+                value={currentPriceValue}
+                onChange={(e) => handlePriceChange(e.target.value)}
+                className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+              >
+                <option value="">All Prices</option>
+                {PRICE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filters.bedroom}
+                onChange={(e) => updateFilter("bedroom", e.target.value)}
+                className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+              >
+                <option value="">All Beds</option>
+                {BEDROOM_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filters.furnishing}
+                onChange={(e) => updateFilter("furnishing", e.target.value)}
+                className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+              >
+                <option value="">All Furnishing</option>
+                {FURNISHING_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filters.occupancy}
+                onChange={(e) => updateFilter("occupancy", e.target.value)}
+                className="h-9 border border-gray-200 bg-white px-3 text-[11px]"
+              >
+                <option value="">All Occupancy</option>
+                {OCCUPANCY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filters.sort_by}
+                onChange={(e) => updateFilter("sort_by", e.target.value)}
+                className="h-9 border border-gray-200 bg-white px-3 text-[11px] col-span-2"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleClearFilters}
+                className="col-span-2 h-9 border border-gray-300 text-[10px] uppercase tracking-[0.12em] text-gray-700"
+              >
+                Clear All
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-6 md:px-6">
+      {/* CONTENT */}
+      <div className="mx-auto max-w-[1200px] px-4 md:px-6 pt-10 pb-16">
+        {/* TITLE + SHOW MAP */}
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <motion.h1
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-[38px] font-normal leading-tight md:text-[44px]"
+              style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
+            >
+              Properties for Rent
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="mt-2 text-[11px] uppercase tracking-[0.16em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
+              {loading
+                ? "Loading..."
+                : pagination
+                ? `${pagination.total.toLocaleString()}+ LISTINGS`
+                : `${properties.length} LISTINGS`}
+            </motion.p>
+          </div>
+
+          <button
+            className="flex items-center gap-2 border border-gray-200 px-4 py-2.5 text-[11px] uppercase tracking-[0.14em] text-[#192334] transition-colors hover:bg-gray-50"
+            style={{ fontFamily: FONT_BODY }}
+          >
+            <Map className="h-3.5 w-3.5" />
+            SHOW MAP
+          </button>
+        </div>
+
+        {/* ERROR */}
         {error && !loading && (
           <div className="mb-6 flex items-center gap-3 border border-red-200 bg-red-50 p-4 text-[13px] text-red-600">
             <AlertCircle className="h-5 w-5 shrink-0" />
@@ -990,27 +1002,32 @@ export default function RentPropertiesPage() {
           </div>
         )}
 
-        <div
-          className={`grid gap-x-6 gap-y-10 ${
-            viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
-          }`}
-        >
+        {/* GRID */}
+        <div className="grid grid-cols-1 gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
           {loading && properties.length === 0
-            ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`skeleton-${i}`} viewMode={viewMode} />)
+            ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={`skeleton-${i}`} />)
             : properties.map((property, index) => (
-                <PropertyCard key={`${property.id}-${property.slug}`} property={property} viewMode={viewMode} index={index} />
+                <PropertyCard
+                  key={`${property.id}-${property.slug}`}
+                  property={property}
+                  index={index}
+                />
               ))}
         </div>
 
+        {/* INFINITE SENTINEL */}
         <div ref={loaderRef} className="py-4">
           {loadingMore && (
             <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-[#0F1C2E]" />
-              <p className="ml-3 text-[10px] uppercase tracking-widest text-[#6B7A8D]">Loading more...</p>
+              <Loader2 className="h-5 w-5 animate-spin text-[#192334]" />
+              <p className="ml-3 text-[10px] uppercase tracking-widest text-[#8A94A3]">
+                Loading more...
+              </p>
             </div>
           )}
         </div>
 
+        {/* PAGINATION */}
         {!loading && pagination && pagination.totalPages > 1 && (
           <Pagination
             currentPage={pagination.page}
@@ -1020,11 +1037,12 @@ export default function RentPropertiesPage() {
         )}
 
         {!loading && !hasMore && properties.length > 0 && (
-          <p className="py-4 text-center text-[10px] uppercase tracking-[0.15em] text-[#6B7A8D]">
+          <p className="py-4 text-center text-[10px] uppercase tracking-[0.15em] text-[#8A94A3]">
             You've reached the end
           </p>
         )}
 
+        {/* EMPTY STATE */}
         {!loading && properties.length === 0 && !error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1032,10 +1050,10 @@ export default function RentPropertiesPage() {
             className="py-20 text-center"
           >
             <Key className="mx-auto h-14 w-14 text-gray-300" />
-            <h3 className="mt-4 text-[22px] text-[#0F1C2E]" style={{ fontFamily: FONT_DISPLAY }}>
+            <h3 className="mt-4 text-[22px] text-[#192334]" style={{ fontFamily: FONT_DISPLAY }}>
               No rental properties found
             </h3>
-            <p className="mx-auto mt-2 max-w-md text-[13px] text-[#6B7A8D]">
+            <p className="mx-auto mt-2 max-w-md text-[13px] text-[#8A94A3]">
               Try adjusting your filters or search terms.
             </p>
             <button
@@ -1049,6 +1067,7 @@ export default function RentPropertiesPage() {
         )}
       </div>
 
+      {/* SCROLL TO TOP */}
       <AnimatePresence>
         {showScrollTop && (
           <motion.button

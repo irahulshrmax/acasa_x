@@ -17,12 +17,23 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
-  Zap,
-  Database,
 } from "lucide-react";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import toast, { Toaster } from "react-hot-toast";
+
+// ==================== FONTS & THEME ====================
+
+const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
+const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+
+const THEME = {
+  primary: "#192334",
+  muted: "#8A94A3",
+  border: "#E8E6E1",
+  accent: "#C8AA78",
+  surface: "#F7F3EF",
+};
 
 // ==================== TYPES ====================
 
@@ -87,7 +98,7 @@ const NAME_REGEX = /^[\p{L}\s'.-]{2,50}$/u;
 
 const WHATSAPP_NUMBER = "971581645714";
 const COMPANY_PHONE = "+971 58 164 5714";
-const COMPANY_EMAIL = "info@acasa.ae";
+const COMPANY_EMAIL = "marketing@acasa.ae";
 
 const INITIAL_FORM_STATE: FormState = {
   first_name: "",
@@ -178,38 +189,34 @@ const CONTACT_TYPES = [
   "Other",
 ];
 
-const SOURCES = [
-  "Website Contact",
-  "Website Contact Agent",
-  "Property Finder",
-];
+const SOURCES = ["Website Contact", "Website Contact Agent", "Property Finder"];
 
 const PRIORITY_LEVELS = ["Low", "Medium", "High", "Urgent"];
 
 const CONTACT_CARDS: ContactCard[] = [
   {
-    icon: <Phone className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.5} />,
+    icon: <Phone className="h-4 w-4" strokeWidth={1.5} />,
     title: "Call Us",
     info: COMPANY_PHONE,
     subtitle: "Mon-Sat, 9AM-7PM",
     href: `tel:${COMPANY_PHONE.replace(/\s/g, "")}`,
   },
   {
-    icon: <Mail className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.5} />,
+    icon: <Mail className="h-4 w-4" strokeWidth={1.5} />,
     title: "Email Us",
     info: COMPANY_EMAIL,
     subtitle: "Reply within 24h",
     href: `mailto:${COMPANY_EMAIL}`,
   },
   {
-    icon: <MapPin className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.5} />,
+    icon: <MapPin className="h-4 w-4" strokeWidth={1.5} />,
     title: "Visit Us",
     info: "Dubai, UAE",
     subtitle: "By appointment",
     href: "https://maps.google.com/?q=Downtown+Dubai",
   },
   {
-    icon: <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.5} />,
+    icon: <MessageCircle className="h-4 w-4" strokeWidth={1.5} />,
     title: "Live Chat",
     info: "Start a chat",
     subtitle: "Available now",
@@ -264,11 +271,11 @@ const PHONE_STYLES = `
   .phone-input-wrapper .PhoneInput {
     display: flex;
     align-items: center;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid #E8E6E1;
     transition: border-color 0.2s;
   }
   .phone-input-wrapper .PhoneInput:focus-within {
-    border-bottom-color: #1A2437;
+    border-bottom-color: #192334;
   }
   .phone-input-wrapper .PhoneInputCountry {
     display: flex;
@@ -315,8 +322,9 @@ const PHONE_STYLES = `
     border: none;
     outline: none;
     font-size: 13px;
-    color: #1A2437;
+    color: #192334;
     padding: 0;
+    font-family: 'Inter', -apple-system, sans-serif;
   }
   .phone-input-wrapper .PhoneInputInput::placeholder {
     color: #d1d5db;
@@ -344,17 +352,13 @@ function isValidUrl(value: string): boolean {
 
 function getServerErrorMessage(result: any): string {
   if (!result) return "Invalid server response";
-
   if (Array.isArray(result.errors) && result.errors.length > 0) {
     const first = result.errors[0];
-
     if (typeof first === "string") return first;
     if (first?.message) return first.message;
     if (first?.errors?.[0]?.message) return first.errors[0].message;
   }
-
   if (result?.message) return result.message;
-
   return "Something went wrong";
 }
 
@@ -362,9 +366,11 @@ function getServerErrorMessage(result: any): string {
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-
   return (
-    <p className="mt-1 flex items-center gap-1 text-[10px] text-red-500">
+    <p
+      className="mt-1 flex items-center gap-1 text-[10px] text-red-500"
+      style={{ fontFamily: FONT_BODY }}
+    >
       <AlertCircle className="h-3 w-3" strokeWidth={2} />
       {message}
     </p>
@@ -384,7 +390,10 @@ function InputField({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1A2437]/60">
+      <label
+        className="mb-1.5 block text-[10px] font-medium uppercase tracking-[0.14em] text-[#8A94A3]"
+        style={{ fontFamily: FONT_BODY }}
+      >
         {label}
         {required && <span className="ml-0.5 text-red-400">*</span>}
       </label>
@@ -394,52 +403,32 @@ function InputField({
   );
 }
 
-function SuccessView({ 
-  onReset, 
-  zohoStatus 
-}: { 
-  onReset: () => void;
-  zohoStatus?: { synced: boolean; message?: string } | null;
-}) {
+function SuccessView({ onReset }: { onReset: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-10 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-50">
         <CheckCircle2 className="h-7 w-7 text-green-500" strokeWidth={1.5} />
       </div>
 
-      <h2 className="font-playfair mt-4 text-[22px] text-[#1A2437] sm:text-[26px]">
-        Thank You!
+      <h2
+        className="mt-4 text-[26px] font-normal text-[#192334] sm:text-[30px]"
+        style={{ fontFamily: FONT_DISPLAY }}
+      >
+        Thank You
       </h2>
 
-      <p className="mt-2 max-w-sm text-[13px] leading-relaxed text-neutral-500 sm:text-[14px]">
-        Your enquiry has been submitted successfully. Our team will contact you
-        within 24 hours.
+      <p
+        className="mt-3 max-w-sm text-[13px] leading-relaxed text-[#8A94A3]"
+        style={{ fontFamily: FONT_BODY }}
+      >
+        Your enquiry has been submitted successfully. Our team will contact you within 24 hours.
       </p>
-
-      {zohoStatus && (
-        <div className={`mt-3 flex items-center gap-2 rounded-lg px-4 py-2 text-[11px] ${
-          zohoStatus.synced 
-            ? 'bg-green-50 text-green-700' 
-            : 'bg-yellow-50 text-yellow-700'
-        }`}>
-          {zohoStatus.synced ? (
-            <>
-              <Zap className="h-3.5 w-3.5" />
-              <span>✓ Synced with Zoho CRM</span>
-            </>
-          ) : (
-            <>
-              <Database className="h-3.5 w-3.5" />
-              <span>{zohoStatus.message || 'Contact saved in database'}</span>
-            </>
-          )}
-        </div>
-      )}
 
       <button
         type="button"
         onClick={onReset}
-        className="mt-5 inline-flex h-11 items-center justify-center gap-2 border border-[#1A2437] px-8 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1A2437] transition-all duration-300 hover:bg-[#1A2437] hover:text-white"
+        className="mt-6 inline-flex h-11 items-center justify-center gap-2 border border-[#192334] px-8 text-[10px] font-medium uppercase tracking-[0.18em] text-[#192334] transition-all duration-300 hover:bg-[#192334] hover:text-white"
+        style={{ fontFamily: FONT_BODY }}
       >
         Send Another Enquiry
       </button>
@@ -452,10 +441,8 @@ function FAQItem({ faq }: { faq: FAQ }) {
 
   return (
     <article
-      className={`overflow-hidden rounded-xl border bg-white transition-all duration-300 ${
-        open
-          ? "border-[#1A2437]/30 shadow-md"
-          : "border-neutral-200 shadow-sm hover:border-neutral-300 hover:shadow-md"
+      className={`overflow-hidden border bg-white transition-all duration-300 ${
+        open ? "border-[#192334]/30" : "border-[#E8E6E1] hover:border-[#192334]/20"
       }`}
     >
       <button
@@ -464,13 +451,16 @@ function FAQItem({ faq }: { faq: FAQ }) {
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left sm:px-6 sm:py-5"
         aria-expanded={open}
       >
-        <h3 className="text-[13px] font-semibold leading-snug text-[#1A2437] sm:text-[14px]">
+        <h3
+          className="text-[13px] font-medium leading-snug text-[#192334] sm:text-[14px]"
+          style={{ fontFamily: FONT_BODY }}
+        >
           {faq.question}
         </h3>
 
         <span
-          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-neutral-200 text-[#1A2437] transition-transform duration-300 ${
-            open ? "rotate-180 border-[#1A2437]/30 bg-[#1A2437] text-white" : ""
+          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center border border-[#E8E6E1] text-[#192334] transition-all duration-300 ${
+            open ? "rotate-180 bg-[#192334] text-white border-[#192334]" : ""
           }`}
         >
           <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
@@ -483,7 +473,10 @@ function FAQItem({ faq }: { faq: FAQ }) {
         }`}
       >
         <div className="overflow-hidden">
-          <p className="px-5 pb-4 text-[12px] leading-relaxed text-neutral-500 sm:px-6 sm:pb-5 sm:text-[13px]">
+          <p
+            className="px-5 pb-4 text-[12px] leading-relaxed text-[#8A94A3] sm:px-6 sm:pb-5 sm:text-[13px]"
+            style={{ fontFamily: FONT_BODY }}
+          >
             {faq.answer}
           </p>
         </div>
@@ -492,66 +485,47 @@ function FAQItem({ faq }: { faq: FAQ }) {
   );
 }
 
-// ==================== CONTENT COMPONENT (uses useSearchParams) ====================
+// ==================== CONTENT COMPONENT ====================
 
 function ContactContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [formData, setFormData] = useState<FormState>({
-    ...INITIAL_FORM_STATE,
-  });
-
+  const [formData, setFormData] = useState<FormState>({ ...INITIAL_FORM_STATE });
   const [phoneValue, setPhoneValue] = useState<string | undefined>(undefined);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [zohoStatus, setZohoStatus] = useState<{ 
-    synced: boolean; 
-    message?: string;
-  } | null>(null);
 
-  // ✅ Handle URL query params - Auto select enquiry type
   useEffect(() => {
-    const type = searchParams.get('type');
-    
-    if (type === 'viewing') {
-      setFormData(prev => ({
+    const type = searchParams.get("type");
+
+    if (type === "viewing") {
+      setFormData((prev) => ({
         ...prev,
-        enquiryType: 'Schedule Viewing',
-        message: 'I would like to schedule a property viewing. Please contact me to arrange a suitable time.'
+        enquiryType: "Schedule Viewing",
+        message:
+          "I would like to schedule a property viewing. Please contact me to arrange a suitable time.",
       }));
-    } else if (type === 'buy') {
-      setFormData(prev => ({
-        ...prev,
-        enquiryType: 'Buy Property'
-      }));
-    } else if (type === 'sell') {
-      setFormData(prev => ({
-        ...prev,
-        enquiryType: 'Sell Property'
-      }));
-    } else if (type === 'rent') {
-      setFormData(prev => ({
-        ...prev,
-        enquiryType: 'Rent Property'
-      }));
-    } else if (type === 'investment') {
-      setFormData(prev => ({
-        ...prev,
-        enquiryType: 'Investment'
-      }));
+    } else if (type === "buy") {
+      setFormData((prev) => ({ ...prev, enquiryType: "Buy Property" }));
+    } else if (type === "sell") {
+      setFormData((prev) => ({ ...prev, enquiryType: "Sell Property" }));
+    } else if (type === "rent") {
+      setFormData((prev) => ({ ...prev, enquiryType: "Rent Property" }));
+    } else if (type === "investment") {
+      setFormData((prev) => ({ ...prev, enquiryType: "Investment" }));
     }
   }, [searchParams]);
 
   const inputClass = useCallback(
     (field: keyof FormErrors) => {
       return [
-        "h-11 w-full border-b bg-transparent px-0 text-[13px] text-[#1A2437] outline-none transition-colors placeholder:text-neutral-300 sm:h-10 sm:text-[12px]",
+        "h-11 w-full border-b bg-transparent px-0 text-[13px] text-[#192334] outline-none transition-colors placeholder:text-neutral-300",
         formErrors[field]
           ? "border-red-400 focus:border-red-500"
-          : "border-neutral-200 focus:border-[#1A2437]",
+          : "border-[#E8E6E1] focus:border-[#192334]",
       ].join(" ");
     },
     [formErrors]
@@ -560,39 +534,29 @@ function ContactContent() {
   const selectClass = useCallback(
     (field: keyof FormErrors) => {
       return [
-        "h-11 w-full border-b bg-transparent text-[13px] text-[#1A2437] outline-none transition-colors sm:h-10 sm:text-[12px]",
+        "h-11 w-full border-b bg-transparent text-[13px] text-[#192334] outline-none transition-colors",
         formErrors[field]
           ? "border-red-400 focus:border-red-500"
-          : "border-neutral-200 focus:border-[#1A2437]",
+          : "border-[#E8E6E1] focus:border-[#192334]",
       ].join(" ");
     },
     [formErrors]
   );
 
-  const handleChange = useCallback(
-    (field: keyof FormState, value: string) => {
-      setFormData((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
-
-      setFormErrors((prev) => {
-        if (!prev[field]) return prev;
-
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
-    },
-    []
-  );
+  const handleChange = useCallback((field: keyof FormState, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }, []);
 
   const handlePhoneChange = useCallback((value: string | undefined) => {
     setPhoneValue(value);
-
     setFormErrors((prev) => {
       if (!prev.phone) return prev;
-
       const next = { ...prev };
       delete next.phone;
       return next;
@@ -603,48 +567,27 @@ function ContactContent() {
     const errors: FormErrors = {};
 
     const firstName = formData.first_name.trim();
-
-    if (!firstName) {
-      errors.first_name = "First name is required";
-    } else if (!NAME_REGEX.test(firstName)) {
-      errors.first_name = "Enter a valid first name";
-    }
+    if (!firstName) errors.first_name = "First name is required";
+    else if (!NAME_REGEX.test(firstName)) errors.first_name = "Enter a valid first name";
 
     const lastName = formData.last_name.trim();
-
-    if (lastName && !NAME_REGEX.test(lastName)) {
-      errors.last_name = "Enter a valid last name";
-    }
+    if (lastName && !NAME_REGEX.test(lastName)) errors.last_name = "Enter a valid last name";
 
     const email = formData.email.trim().toLowerCase();
+    if (!email) errors.email = "Email is required";
+    else if (!EMAIL_REGEX.test(email)) errors.email = "Please enter a valid email";
 
-    if (!email) {
-      errors.email = "Email is required";
-    } else if (!EMAIL_REGEX.test(email)) {
-      errors.email = "Please enter a valid email";
-    }
+    if (!phoneValue) errors.phone = "Phone number is required";
+    else if (!isValidPhoneNumber(phoneValue)) errors.phone = "Please enter a valid phone number";
 
-    if (!phoneValue) {
-      errors.phone = "Phone number is required";
-    } else if (!isValidPhoneNumber(phoneValue)) {
-      errors.phone = "Please enter a valid phone number";
-    }
-
-    if (!formData.enquiryType) {
-      errors.enquiryType = "Please select enquiry type";
-    }
+    if (!formData.enquiryType) errors.enquiryType = "Please select enquiry type";
 
     const location = formData.location.trim();
+    if (!location) errors.location = "Location is required";
+    else if (location.length < 2) errors.location = "Please enter a valid location";
 
-    if (!location) {
-      errors.location = "Location is required";
-    } else if (location.length < 2) {
-      errors.location = "Please enter a valid location";
-    }
-
-    if (formData.website.trim() && !isValidUrl(formData.website.trim())) {
+    if (formData.website.trim() && !isValidUrl(formData.website.trim()))
       errors.website = "Website must be a valid URL";
-    }
 
     if (
       formData.third_party_client_email.trim() &&
@@ -653,31 +596,20 @@ function ContactContent() {
       errors.third_party_client_email = "Client email is invalid";
     }
 
-    if (formData.message.length > 1000) {
-      errors.message = "Message cannot exceed 1000 characters";
-    }
+    if (formData.message.length > 1000) errors.message = "Message cannot exceed 1000 characters";
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData, phoneValue]);
 
   const submitContact = useCallback(async (payload: Record<string, any>) => {
-    console.log('📤 Submitting to:', CONTACT_API_URL);
-    console.log('📦 Payload:', JSON.stringify(payload, null, 2));
-    
     const response = await fetch(CONTACT_API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
     });
 
-    console.log('📡 Response status:', response.status);
-    
     const result = await response.json().catch(() => null);
-    console.log('📡 Response data:', JSON.stringify(result, null, 2));
 
     if (!response.ok || !result?.success) {
       throw new Error(getServerErrorMessage(result));
@@ -690,22 +622,14 @@ function ContactContent() {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error("Please fix the errors in the form", {
-        id: "contact-submit",
-      });
+      toast.error("Please fix the errors in the form", { id: "contact-submit" });
       return;
     }
 
     setSubmitting(true);
-    setZohoStatus(null);
-
-    toast.loading("Submitting your enquiry...", {
-      id: "contact-submit",
-    });
+    toast.loading("Submitting your enquiry...", { id: "contact-submit" });
 
     try {
-      const fullName = `${formData.first_name.trim()} ${formData.last_name.trim()}`.trim();
-
       const finalMessage = [
         formData.message.trim(),
         `Enquiry Type: ${formData.enquiryType}`,
@@ -716,9 +640,9 @@ function ContactContent() {
 
       const payload: Record<string, any> = {
         first_name: formData.first_name.trim(),
-        last_name: trimToNull(formData.last_name) || '',
+        last_name: trimToNull(formData.last_name) || "",
         email: formData.email.trim().toLowerCase(),
-        phone: phoneValue?.replace(/[\s+]/g, '') || '',
+        phone: phoneValue?.replace(/[\s+]/g, "") || "",
         enquiryType: formData.enquiryType,
         location: formData.location.trim(),
         message: finalMessage,
@@ -752,27 +676,10 @@ function ContactContent() {
 
       for (const [key, value] of Object.entries(optionalFields)) {
         const cleaned = trimToNull(value);
-        if (cleaned) {
-          payload[key] = cleaned;
-        }
+        if (cleaned) payload[key] = cleaned;
       }
-
-      console.log("📦 Final Payload:", JSON.stringify(payload, null, 2));
 
       const result = await submitContact(payload);
-
-      if (result?.data?.zoho) {
-        setZohoStatus({
-          synced: result.data.zoho.success || false,
-          message: result.data.zoho.message || 
-            (result.data.zoho.success ? 'Synced with Zoho CRM' : 'Zoho sync pending'),
-        });
-      } else {
-        setZohoStatus({
-          synced: false,
-          message: 'Contact saved in database',
-        });
-      }
 
       toast.success(result?.message || "Enquiry submitted successfully!", {
         id: "contact-submit",
@@ -784,11 +691,7 @@ function ContactContent() {
       setFormErrors({});
       setShowAdvanced(false);
     } catch (error: any) {
-      console.error("❌ Contact submit error:", error);
-
-      toast.error(error?.message || "Failed to submit enquiry", {
-        id: "contact-submit",
-      });
+      toast.error(error?.message || "Failed to submit enquiry", { id: "contact-submit" });
     } finally {
       setSubmitting(false);
     }
@@ -796,23 +699,17 @@ function ContactContent() {
 
   const whatsappLink = useMemo(() => {
     const fullName = `${formData.first_name} ${formData.last_name}`.trim();
-
     const msg = fullName
       ? `Hi, I'm ${fullName}. I'm interested in ${
           formData.enquiryType || "your services"
         }${formData.location ? ` in ${formData.location}` : ""}.`
       : "Hi, I'm interested in your real estate services.";
-
     return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
-  }, [
-    formData.first_name,
-    formData.last_name,
-    formData.enquiryType,
-    formData.location,
-  ]);
+  }, [formData.first_name, formData.last_name, formData.enquiryType, formData.location]);
 
   return (
     <>
+      {/* HERO + FORM */}
       <section className="px-4 pt-6 pb-8 sm:px-6 sm:pt-10 sm:pb-12 lg:px-8 lg:pt-12 lg:pb-14">
         <div className="relative mx-auto max-w-[1680px]">
           <div className="relative hidden h-[200px] w-full overflow-hidden sm:block sm:h-[300px] md:h-[340px] lg:h-[380px]">
@@ -824,7 +721,7 @@ function ContactContent() {
               sizes="100vw"
               className="object-cover object-center"
             />
-            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#0d1421]/40 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#192334]/40 to-transparent" />
           </div>
 
           <div className="relative h-[160px] w-full overflow-hidden sm:hidden">
@@ -836,53 +733,49 @@ function ContactContent() {
               sizes="100vw"
               className="object-cover object-center"
             />
-            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#0d1421]/40 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#192334]/40 to-transparent" />
           </div>
 
-          <div className="relative z-10 mx-auto w-full max-w-[680px] bg-white px-5 py-6 shadow-[0_24px_60px_rgba(15,23,42,0.18)] sm:-mt-48 sm:px-8 sm:py-7 lg:-mt-[300px] lg:px-12 lg:py-9">
-            <div className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#1A2437] via-[#55708F] to-[#1A2437]" />
-
+          <div className="relative z-10 mx-auto w-full max-w-[680px] bg-white px-5 py-6 shadow-[0_24px_60px_rgba(15,23,42,0.15)] sm:-mt-48 sm:px-8 sm:py-8 lg:-mt-[300px] lg:px-12 lg:py-10">
             {submitted ? (
-              <SuccessView 
-                onReset={() => {
-                  setSubmitted(false);
-                  setZohoStatus(null);
-                }} 
-                zohoStatus={zohoStatus}
-              />
+              <SuccessView onReset={() => setSubmitted(false)} />
             ) : (
               <>
                 <div className="text-center">
-                  <p className="text-[9px] uppercase tracking-[0.3em] text-[#55708F] sm:text-[10px]">
+                  <p
+                    className="text-[10px] uppercase tracking-[0.24em] text-[#8A94A3]"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
                     Get in Touch
                   </p>
 
-                  <h2 className="font-playfair mt-1.5 text-[22px] leading-tight text-[#1A2437] sm:text-[28px]">
+                  <h2
+                    className="mt-2 text-[26px] font-normal leading-tight text-[#192334] sm:text-[32px]"
+                    style={{ fontFamily: FONT_DISPLAY }}
+                  >
                     Send Us a Message
                   </h2>
 
-                  <p className="mt-2 text-[13px] leading-relaxed text-[#1A2437]/70 sm:mt-3 sm:text-[14px]">
+                  <p
+                    className="mt-3 text-[13px] leading-relaxed text-[#8A94A3] sm:text-[14px]"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
                     Fill in your details and we will contact you shortly.
                   </p>
                 </div>
 
                 <form
                   onSubmit={handleSubmit}
-                  className="mt-5 space-y-3.5 sm:mt-6"
+                  className="mt-6 space-y-4 sm:mt-7"
                   noValidate
+                  style={{ fontFamily: FONT_BODY }}
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <InputField
-                      label="First Name"
-                      required
-                      error={formErrors.first_name}
-                    >
+                    <InputField label="First Name" required error={formErrors.first_name}>
                       <input
                         type="text"
                         value={formData.first_name}
-                        onChange={(e) =>
-                          handleChange("first_name", e.target.value)
-                        }
+                        onChange={(e) => handleChange("first_name", e.target.value)}
                         placeholder="John"
                         maxLength={50}
                         autoComplete="given-name"
@@ -891,16 +784,11 @@ function ContactContent() {
                       />
                     </InputField>
 
-                    <InputField
-                      label="Last Name"
-                      error={formErrors.last_name}
-                    >
+                    <InputField label="Last Name" error={formErrors.last_name}>
                       <input
                         type="text"
                         value={formData.last_name}
-                        onChange={(e) =>
-                          handleChange("last_name", e.target.value)
-                        }
+                        onChange={(e) => handleChange("last_name", e.target.value)}
                         placeholder="Smith"
                         maxLength={50}
                         autoComplete="family-name"
@@ -939,12 +827,8 @@ function ContactContent() {
                         smartCaret={false}
                         disabled={submitting}
                       />
-
                       <span className="pointer-events-none absolute left-[30px] top-1/2 -translate-y-1/2">
-                        <ChevronDown
-                          className="h-3 w-3 text-neutral-400"
-                          strokeWidth={2}
-                        />
+                        <ChevronDown className="h-3 w-3 text-neutral-400" strokeWidth={2} />
                       </span>
                     </div>
                   </InputField>
@@ -956,9 +840,7 @@ function ContactContent() {
                   >
                     <select
                       value={formData.enquiryType}
-                      onChange={(e) =>
-                        handleChange("enquiryType", e.target.value)
-                      }
+                      onChange={(e) => handleChange("enquiryType", e.target.value)}
                       disabled={submitting}
                       className={selectClass("enquiryType")}
                     >
@@ -971,11 +853,7 @@ function ContactContent() {
                     </select>
                   </InputField>
 
-                  <InputField
-                    label="Location"
-                    required
-                    error={formErrors.location}
-                  >
+                  <InputField label="Location" required error={formErrors.location}>
                     <input
                       type="text"
                       value={formData.location}
@@ -996,10 +874,9 @@ function ContactContent() {
                       placeholder="Tell us more about your requirements..."
                       maxLength={1000}
                       disabled={submitting}
-                      className="w-full resize-none border-b border-neutral-200 bg-transparent px-0 py-2 text-[13px] text-[#1A2437] outline-none transition-colors placeholder:text-neutral-300 focus:border-[#1A2437] sm:text-[12px]"
+                      className="w-full resize-none border-b border-[#E8E6E1] bg-transparent px-0 py-2 text-[13px] text-[#192334] outline-none transition-colors placeholder:text-neutral-300 focus:border-[#192334]"
                     />
-
-                    <p className="mt-1 text-right text-[9px] text-neutral-400">
+                    <p className="mt-1 text-right text-[10px] text-[#8A94A3]">
                       {formData.message.length}/1000
                     </p>
                   </InputField>
@@ -1007,7 +884,7 @@ function ContactContent() {
                   <button
                     type="button"
                     onClick={() => setShowAdvanced((prev) => !prev)}
-                    className="flex w-full items-center justify-between border-t border-neutral-100 pt-3 text-[10px] uppercase tracking-[0.15em] text-[#55708F] transition-colors hover:text-[#1A2437] sm:pt-4"
+                    className="flex w-full items-center justify-between border-t border-[#E8E6E1] pt-4 text-[10px] uppercase tracking-[0.18em] text-[#8A94A3] transition-colors hover:text-[#192334]"
                   >
                     <span>Advanced Options</span>
                     <ChevronDown
@@ -1019,15 +896,13 @@ function ContactContent() {
                   </button>
 
                   {showAdvanced && (
-                    <div className="space-y-3.5 border-t border-neutral-100 pt-4">
+                    <div className="space-y-4 border-t border-[#E8E6E1] pt-4">
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <InputField label="Company" error={formErrors.company}>
                           <input
                             type="text"
                             value={formData.company}
-                            onChange={(e) =>
-                              handleChange("company", e.target.value)
-                            }
+                            onChange={(e) => handleChange("company", e.target.value)}
                             placeholder="Company Name"
                             maxLength={200}
                             className={inputClass("company")}
@@ -1035,16 +910,11 @@ function ContactContent() {
                           />
                         </InputField>
 
-                        <InputField
-                          label="Designation"
-                          error={formErrors.designation}
-                        >
+                        <InputField label="Designation" error={formErrors.designation}>
                           <input
                             type="text"
                             value={formData.designation}
-                            onChange={(e) =>
-                              handleChange("designation", e.target.value)
-                            }
+                            onChange={(e) => handleChange("designation", e.target.value)}
                             placeholder="Job Title"
                             maxLength={200}
                             className={inputClass("designation")}
@@ -1054,15 +924,10 @@ function ContactContent() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <InputField
-                          label="Nationality"
-                          error={formErrors.nationality}
-                        >
+                        <InputField label="Nationality" error={formErrors.nationality}>
                           <select
                             value={formData.nationality}
-                            onChange={(e) =>
-                              handleChange("nationality", e.target.value)
-                            }
+                            onChange={(e) => handleChange("nationality", e.target.value)}
                             disabled={submitting}
                             className={selectClass("nationality")}
                           >
@@ -1075,15 +940,10 @@ function ContactContent() {
                           </select>
                         </InputField>
 
-                        <InputField
-                          label="Property Type"
-                          error={formErrors.property_type}
-                        >
+                        <InputField label="Property Type" error={formErrors.property_type}>
                           <select
                             value={formData.property_type}
-                            onChange={(e) =>
-                              handleChange("property_type", e.target.value)
-                            }
+                            onChange={(e) => handleChange("property_type", e.target.value)}
                             disabled={submitting}
                             className={selectClass("property_type")}
                           >
@@ -1098,15 +958,10 @@ function ContactContent() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <InputField
-                          label="Contact Type"
-                          error={formErrors.contact_type}
-                        >
+                        <InputField label="Contact Type" error={formErrors.contact_type}>
                           <select
                             value={formData.contact_type}
-                            onChange={(e) =>
-                              handleChange("contact_type", e.target.value)
-                            }
+                            onChange={(e) => handleChange("contact_type", e.target.value)}
                             disabled={submitting}
                             className={selectClass("contact_type")}
                           >
@@ -1122,9 +977,7 @@ function ContactContent() {
                         <InputField label="Source" error={formErrors.source}>
                           <select
                             value={formData.source}
-                            onChange={(e) =>
-                              handleChange("source", e.target.value)
-                            }
+                            onChange={(e) => handleChange("source", e.target.value)}
                             disabled={submitting}
                             className={selectClass("source")}
                           >
@@ -1142,9 +995,7 @@ function ContactContent() {
                           <input
                             type="url"
                             value={formData.website}
-                            onChange={(e) =>
-                              handleChange("website", e.target.value)
-                            }
+                            onChange={(e) => handleChange("website", e.target.value)}
                             placeholder="https://example.com"
                             maxLength={255}
                             className={inputClass("website")}
@@ -1152,16 +1003,11 @@ function ContactContent() {
                           />
                         </InputField>
 
-                        <InputField
-                          label="WhatsApp"
-                          error={formErrors.whats_app}
-                        >
+                        <InputField label="WhatsApp" error={formErrors.whats_app}>
                           <input
                             type="text"
                             value={formData.whats_app}
-                            onChange={(e) =>
-                              handleChange("whats_app", e.target.value)
-                            }
+                            onChange={(e) => handleChange("whats_app", e.target.value)}
                             placeholder="+971 50 123 4567"
                             maxLength={50}
                             className={inputClass("whats_app")}
@@ -1171,16 +1017,11 @@ function ContactContent() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <InputField
-                          label="Facebook"
-                          error={formErrors.facebook}
-                        >
+                        <InputField label="Facebook" error={formErrors.facebook}>
                           <input
                             type="text"
                             value={formData.facebook}
-                            onChange={(e) =>
-                              handleChange("facebook", e.target.value)
-                            }
+                            onChange={(e) => handleChange("facebook", e.target.value)}
                             placeholder="Facebook URL"
                             maxLength={255}
                             className={inputClass("facebook")}
@@ -1188,16 +1029,11 @@ function ContactContent() {
                           />
                         </InputField>
 
-                        <InputField
-                          label="Instagram"
-                          error={formErrors.insta}
-                        >
+                        <InputField label="Instagram" error={formErrors.insta}>
                           <input
                             type="text"
                             value={formData.insta}
-                            onChange={(e) =>
-                              handleChange("insta", e.target.value)
-                            }
+                            onChange={(e) => handleChange("insta", e.target.value)}
                             placeholder="Instagram URL"
                             maxLength={255}
                             className={inputClass("insta")}
@@ -1205,16 +1041,11 @@ function ContactContent() {
                           />
                         </InputField>
 
-                        <InputField
-                          label="LinkedIn"
-                          error={formErrors.linkedin}
-                        >
+                        <InputField label="LinkedIn" error={formErrors.linkedin}>
                           <input
                             type="text"
                             value={formData.linkedin}
-                            onChange={(e) =>
-                              handleChange("linkedin", e.target.value)
-                            }
+                            onChange={(e) => handleChange("linkedin", e.target.value)}
                             placeholder="LinkedIn URL"
                             maxLength={255}
                             className={inputClass("linkedin")}
@@ -1224,16 +1055,11 @@ function ContactContent() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <InputField
-                          label="Landline"
-                          error={formErrors.landline}
-                        >
+                        <InputField label="Landline" error={formErrors.landline}>
                           <input
                             type="text"
                             value={formData.landline}
-                            onChange={(e) =>
-                              handleChange("landline", e.target.value)
-                            }
+                            onChange={(e) => handleChange("landline", e.target.value)}
                             placeholder="04 123 4567"
                             maxLength={50}
                             className={inputClass("landline")}
@@ -1241,16 +1067,11 @@ function ContactContent() {
                           />
                         </InputField>
 
-                        <InputField
-                          label="BRN Number"
-                          error={formErrors.brn_number}
-                        >
+                        <InputField label="BRN Number" error={formErrors.brn_number}>
                           <input
                             type="text"
                             value={formData.brn_number}
-                            onChange={(e) =>
-                              handleChange("brn_number", e.target.value)
-                            }
+                            onChange={(e) => handleChange("brn_number", e.target.value)}
                             placeholder="BRN-12345"
                             maxLength={100}
                             className={inputClass("brn_number")}
@@ -1260,15 +1081,10 @@ function ContactContent() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <InputField
-                          label="Mortgage"
-                          error={formErrors.mortgage}
-                        >
+                        <InputField label="Mortgage" error={formErrors.mortgage}>
                           <select
                             value={formData.mortgage}
-                            onChange={(e) =>
-                              handleChange("mortgage", e.target.value)
-                            }
+                            onChange={(e) => handleChange("mortgage", e.target.value)}
                             disabled={submitting}
                             className={selectClass("mortgage")}
                           >
@@ -1281,9 +1097,7 @@ function ContactContent() {
                         <InputField label="Priority" error={formErrors.priority}>
                           <select
                             value={formData.priority}
-                            onChange={(e) =>
-                              handleChange("priority", e.target.value)
-                            }
+                            onChange={(e) => handleChange("priority", e.target.value)}
                             disabled={submitting}
                             className={selectClass("priority")}
                           >
@@ -1298,16 +1112,11 @@ function ContactContent() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <InputField
-                          label="Job Role"
-                          error={formErrors.job_role}
-                        >
+                        <InputField label="Job Role" error={formErrors.job_role}>
                           <input
                             type="text"
                             value={formData.job_role}
-                            onChange={(e) =>
-                              handleChange("job_role", e.target.value)
-                            }
+                            onChange={(e) => handleChange("job_role", e.target.value)}
                             placeholder="CEO, Manager, Investor..."
                             maxLength={200}
                             className={inputClass("job_role")}
@@ -1319,9 +1128,7 @@ function ContactContent() {
                           <input
                             type="text"
                             value={formData.profile}
-                            onChange={(e) =>
-                              handleChange("profile", e.target.value)
-                            }
+                            onChange={(e) => handleChange("profile", e.target.value)}
                             placeholder="Profile"
                             maxLength={200}
                             className={inputClass("profile")}
@@ -1330,8 +1137,11 @@ function ContactContent() {
                         </InputField>
                       </div>
 
-                      <div className="border-t border-neutral-100 pt-3">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#55708F]">
+                      <div className="border-t border-[#E8E6E1] pt-4">
+                        <p
+                          className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#8A94A3]"
+                          style={{ fontFamily: FONT_BODY }}
+                        >
                           Third Party Client Details
                         </p>
 
@@ -1344,10 +1154,7 @@ function ContactContent() {
                               type="text"
                               value={formData.third_party_client_name}
                               onChange={(e) =>
-                                handleChange(
-                                  "third_party_client_name",
-                                  e.target.value
-                                )
+                                handleChange("third_party_client_name", e.target.value)
                               }
                               placeholder="Client Name"
                               maxLength={100}
@@ -1364,10 +1171,7 @@ function ContactContent() {
                               type="email"
                               value={formData.third_party_client_email}
                               onChange={(e) =>
-                                handleChange(
-                                  "third_party_client_email",
-                                  e.target.value
-                                )
+                                handleChange("third_party_client_email", e.target.value)
                               }
                               placeholder="client@example.com"
                               maxLength={100}
@@ -1384,10 +1188,7 @@ function ContactContent() {
                               type="text"
                               value={formData.third_party_client_mobile}
                               onChange={(e) =>
-                                handleChange(
-                                  "third_party_client_mobile",
-                                  e.target.value
-                                )
+                                handleChange("third_party_client_mobile", e.target.value)
                               }
                               placeholder="+971 50 123 4567"
                               maxLength={50}
@@ -1400,38 +1201,32 @@ function ContactContent() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2 sm:pt-3">
+                  {/* ACTION BUTTONS */}
+                  <div className="grid grid-cols-1 gap-3 pt-3 sm:grid-cols-2">
                     <a
                       href={whatsappLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="group inline-flex h-12 items-center justify-center gap-2.5 border border-[#1A2437]/20 bg-white text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1A2437] transition-all duration-300 hover:border-[#25D366] hover:bg-[#25D366]/5 hover:text-[#25D366] sm:h-11"
+                      className="group inline-flex h-12 items-center justify-center gap-2.5 border border-[#E8E6E1] bg-white text-[10px] font-medium uppercase tracking-[0.18em] text-[#192334] transition-all duration-300 hover:border-[#25D366] hover:text-[#25D366]"
+                      style={{ fontFamily: FONT_BODY }}
                     >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#25D366] text-white transition-transform duration-300 group-hover:scale-110">
-                        <MessageCircle
-                          className="h-3 w-3"
-                          strokeWidth={2.5}
-                          fill="white"
-                        />
-                      </span>
+                      <MessageCircle className="h-3.5 w-3.5" strokeWidth={2} />
                       WhatsApp
                     </a>
 
                     <button
                       type="submit"
                       disabled={submitting}
-                      className={`group inline-flex h-12 items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white transition-all duration-300 sm:h-11 ${
+                      className={`group inline-flex h-12 items-center justify-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em] text-white transition-all duration-300 ${
                         submitting
-                          ? "cursor-not-allowed bg-[#1A2437]/60"
-                          : "bg-[#1A2437] hover:bg-[#263550]"
+                          ? "cursor-not-allowed bg-[#192334]/60"
+                          : "bg-[#192334] hover:bg-[#263550]"
                       }`}
+                      style={{ fontFamily: FONT_BODY }}
                     >
                       {submitting ? (
                         <>
-                          <Loader2
-                            className="h-3.5 w-3.5 animate-spin"
-                            strokeWidth={2}
-                          />
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
                           Submitting...
                         </>
                       ) : (
@@ -1452,13 +1247,13 @@ function ContactContent() {
         </div>
       </section>
 
+      {/* CONTACT CARDS */}
       <section className="pb-8 sm:pb-12 lg:pb-14">
         <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
             {CONTACT_CARDS.map((card) => {
               const isExternal = card.href?.startsWith("http");
               const Wrapper = card.href ? "a" : "div";
-
               const linkProps = card.href
                 ? {
                     href: card.href,
@@ -1471,23 +1266,31 @@ function ContactContent() {
                 <Wrapper
                   key={card.title}
                   {...(linkProps as any)}
-                  className="group relative flex min-h-[120px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-neutral-200 bg-white px-3 py-4 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[#1A2437]/20 hover:shadow-lg sm:min-h-[140px] sm:px-5 lg:px-6"
+                  className="group relative flex min-h-[130px] cursor-pointer flex-col items-center justify-center border border-[#E8E6E1] bg-white px-4 py-5 text-center transition-all duration-300 hover:border-[#192334]/30 sm:min-h-[150px]"
+                  style={{ fontFamily: FONT_BODY }}
                 >
-                  <div className="absolute inset-0 bg-[#1A2437] opacity-0 transition-opacity duration-300 group-hover:opacity-[0.03]" />
-
-                  <div className="mb-2.5 flex h-10 w-10 items-center justify-center rounded-full border border-[#1A2437]/10 bg-[#F7F3EF] text-[#1A2437] transition-all duration-300 group-hover:bg-[#1A2437] group-hover:text-white sm:h-11 sm:w-11">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center border border-[#E8E6E1] text-[#192334] transition-all duration-300 group-hover:bg-[#192334] group-hover:text-white group-hover:border-[#192334]">
                     {card.icon}
                   </div>
 
-                  <p className="text-[9px] uppercase tracking-[0.2em] text-neutral-400 sm:text-[10px]">
+                  <p
+                    className="text-[9px] uppercase tracking-[0.22em] text-[#8A94A3] sm:text-[10px]"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
                     {card.title}
                   </p>
 
-                  <h3 className="mt-1.5 text-[11px] font-semibold leading-tight text-[#1A2437] sm:mt-2 sm:text-[13px]">
+                  <h3
+                    className="mt-1.5 text-[12px] font-medium leading-tight text-[#192334] sm:text-[13px]"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
                     {card.info}
                   </h3>
 
-                  <p className="mt-1 text-[9px] leading-none text-neutral-400 sm:text-[10px]">
+                  <p
+                    className="mt-1 text-[9px] leading-none text-[#8A94A3] sm:text-[10px]"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
                     {card.subtitle}
                   </p>
                 </Wrapper>
@@ -1497,61 +1300,68 @@ function ContactContent() {
         </div>
       </section>
 
-      <section className="bg-[#F7F3EF] py-8 sm:py-12 lg:py-14">
+      {/* LOCATIONS */}
+      <section className="bg-[#F7F3EF] py-10 sm:py-14 lg:py-16">
         <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <p className="text-[9px] uppercase tracking-[0.3em] text-[#55708F] sm:text-[10px]">
+            <p
+              className="text-[10px] uppercase tracking-[0.24em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
               Find Us
             </p>
 
-            <h2 className="font-playfair mt-1.5 text-[24px] leading-tight text-[#1A2437] sm:text-[32px] lg:text-[38px]">
+            <h2
+              className="mt-2 text-[28px] font-normal leading-tight text-[#192334] sm:text-[36px] lg:text-[42px]"
+              style={{ fontFamily: FONT_DISPLAY }}
+            >
               Our Locations
             </h2>
 
-            <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#55708F] sm:mt-3 sm:text-[11px]">
+            <p
+              className="mt-3 text-[11px] uppercase tracking-[0.2em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
               Visit us at one of our offices across Dubai
             </p>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
             {LOCATION_CARDS.map((location) => (
               <article
                 key={location.address}
-                className="group overflow-hidden rounded-xl bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                className="group overflow-hidden bg-white transition-all duration-300"
               >
-                <div className="relative flex h-[130px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#1A2437]/5 via-[#F7F3EF] to-[#55708F]/10 sm:h-[170px] lg:h-[190px]">
+                <div className="relative flex h-[150px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#192334]/5 via-[#F7F3EF] to-[#8A94A3]/10 sm:h-[180px] lg:h-[200px]">
                   <div
-                    className="absolute inset-0 opacity-[0.06]"
+                    className="absolute inset-0 opacity-[0.05]"
                     style={{
                       backgroundImage:
-                        "linear-gradient(#1A2437 1px, transparent 1px), linear-gradient(90deg, #1A2437 1px, transparent 1px)",
+                        "linear-gradient(#192334 1px, transparent 1px), linear-gradient(90deg, #192334 1px, transparent 1px)",
                       backgroundSize: "28px 28px",
                     }}
                   />
 
-                  <div className="relative flex flex-col items-center gap-1.5">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#1A2437]/10 bg-white shadow-md transition-transform duration-300 group-hover:scale-110">
-                      <Building2
-                        className="h-5 w-5 text-[#1A2437]"
-                        strokeWidth={1.5}
-                      />
+                  <div className="relative flex flex-col items-center gap-2">
+                    <div className="flex h-12 w-12 items-center justify-center border border-[#E8E6E1] bg-white transition-transform duration-300 group-hover:scale-110">
+                      <Building2 className="h-5 w-5 text-[#192334]" strokeWidth={1.5} />
                     </div>
-
-                    <div className="h-0.5 w-5 bg-[#1A2437]/20" />
-
-                    <MapPin
-                      className="h-3 w-3 text-[#55708F]"
-                      strokeWidth={1.5}
-                    />
+                    <MapPin className="h-3.5 w-3.5 text-[#8A94A3]" strokeWidth={1.5} />
                   </div>
                 </div>
 
-                <div className="px-5 py-4 text-center sm:px-7 sm:py-5">
-                  <p className="text-[9px] uppercase tracking-[0.28em] text-[#55708F]">
+                <div className="px-5 py-5 text-center sm:px-7 sm:py-6">
+                  <p
+                    className="text-[10px] uppercase tracking-[0.22em] text-[#8A94A3]"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
                     {location.label}
                   </p>
 
-                  <h3 className="mt-2 text-[13px] font-medium leading-relaxed text-[#1A2437] sm:mt-2.5 sm:text-[14px]">
+                  <h3
+                    className="mt-2.5 text-[13px] font-normal leading-relaxed text-[#192334] sm:text-[14px]"
+                    style={{ fontFamily: FONT_BODY }}
+                  >
                     {location.address}
                   </h3>
 
@@ -1559,7 +1369,8 @@ function ContactContent() {
                     href={location.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="group/btn mt-4 inline-flex h-10 w-full items-center justify-center gap-2 border border-[#1A2437]/70 bg-white text-[10px] font-semibold uppercase tracking-[0.18em] text-[#1A2437] transition-all duration-300 hover:bg-[#1A2437] hover:text-white sm:mt-5"
+                    className="group/btn mt-5 inline-flex h-10 w-full items-center justify-center gap-2 border border-[#192334] bg-white text-[10px] font-medium uppercase tracking-[0.18em] text-[#192334] transition-all duration-300 hover:bg-[#192334] hover:text-white"
+                    style={{ fontFamily: FONT_BODY }}
                   >
                     Get Directions
                     <ExternalLink
@@ -1573,8 +1384,8 @@ function ContactContent() {
           </div>
         </div>
 
-        <div className="mt-6 w-full sm:mt-10 lg:mt-12">
-          <div className="relative h-[180px] w-full overflow-hidden sm:h-[260px] md:h-[340px] lg:h-[400px] xl:h-[450px]">
+        <div className="mt-10 w-full sm:mt-12 lg:mt-14">
+          <div className="relative h-[200px] w-full overflow-hidden sm:h-[280px] md:h-[360px] lg:h-[420px] xl:h-[460px]">
             <Image
               src="/contact/map.png"
               alt="ACASA location map"
@@ -1586,23 +1397,33 @@ function ContactContent() {
         </div>
       </section>
 
-      <section className="bg-white py-8 sm:py-12 lg:py-14">
+      {/* FAQS */}
+      <section className="bg-white py-10 sm:py-14 lg:py-16">
         <div className="mx-auto max-w-[1420px] px-4 sm:px-6 lg:px-8">
           <div className="text-center">
-            <p className="text-[9px] uppercase tracking-[0.3em] text-[#55708F] sm:text-[10px]">
+            <p
+              className="text-[10px] uppercase tracking-[0.24em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
               Support
             </p>
 
-            <h2 className="font-playfair mt-1.5 text-[24px] leading-tight text-[#1A2437] sm:text-[32px] lg:text-[38px]">
+            <h2
+              className="mt-2 text-[28px] font-normal leading-tight text-[#192334] sm:text-[36px] lg:text-[42px]"
+              style={{ fontFamily: FONT_DISPLAY }}
+            >
               Frequently Asked Questions
             </h2>
 
-            <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#55708F] sm:mt-3 sm:text-[11px]">
+            <p
+              className="mt-3 text-[11px] uppercase tracking-[0.2em] text-[#8A94A3]"
+              style={{ fontFamily: FONT_BODY }}
+            >
               Quick answers to common questions
             </p>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:mt-8 lg:grid-cols-2 lg:gap-3">
+          <div className="mt-8 grid grid-cols-1 gap-3 lg:grid-cols-2">
             {FAQS.map((faq) => (
               <FAQItem key={faq.question} faq={faq} />
             ))}
@@ -1613,20 +1434,24 @@ function ContactContent() {
   );
 }
 
-// ==================== MAIN EXPORT (with Suspense) ====================
+// ==================== MAIN EXPORT ====================
 
 export default function ContactSection() {
   return (
-    <section className="w-full overflow-hidden bg-white">
+    <section
+      className="w-full overflow-hidden bg-white"
+      style={{ fontFamily: FONT_BODY }}
+    >
       <Toaster position="top-center" />
       <style>{PHONE_STYLES}</style>
 
-      <div className="sticky top-0 z-50 border-b border-neutral-100 bg-white/95 backdrop-blur-sm">
+      {/* HEADER */}
+      <div className="sticky top-0 z-50 border-b border-[#E8E6E1] bg-white/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-[1680px] items-center px-4 py-3 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => window.history.back()}
-            className="group flex items-center gap-2 text-[#1A2437] transition-colors hover:text-[#55708F]"
+            className="group flex items-center gap-2 text-[#192334] transition-colors hover:text-[#8A94A3]"
             aria-label="Go back"
           >
             <ArrowLeft
@@ -1635,17 +1460,22 @@ export default function ContactSection() {
             />
           </button>
 
-          <h1 className="font-playfair ml-3 text-[16px] font-medium text-[#1A2437] sm:ml-4 sm:text-[18px] lg:text-[20px]">
+          <h1
+            className="ml-3 text-[18px] font-normal text-[#192334] sm:ml-4 sm:text-[20px] lg:text-[22px]"
+            style={{ fontFamily: FONT_DISPLAY }}
+          >
             Contact Us
           </h1>
         </div>
       </div>
 
-      <Suspense fallback={
-        <div className="flex min-h-[400px] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-[#1A2437]" />
-        </div>
-      }>
+      <Suspense
+        fallback={
+          <div className="flex min-h-[400px] items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-[#192334]" />
+          </div>
+        }
+      >
         <ContactContent />
       </Suspense>
     </section>

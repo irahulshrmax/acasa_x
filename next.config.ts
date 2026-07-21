@@ -31,6 +31,19 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  async rewrites() {
+    return [
+      {
+        source: "/api/v1/session/validate",
+        destination: "/api/v1/auth/admin/verify",
+      },
+      {
+        source: "/api/v1/session/login",
+        destination: "/api/v1/auth/login",
+      },
+    ];
+  },
+
   compress: true,
   generateEtags: true,
 
@@ -39,10 +52,7 @@ const nextConfig: NextConfig = {
   },
 
   compiler: {
-    removeConsole:
-      process.env.NODE_ENV === "production"
-        ? { exclude: ["error", "warn"] }
-        : false,
+    removeConsole: false,
   },
 
   productionBrowserSourceMaps: false,

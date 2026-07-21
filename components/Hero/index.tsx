@@ -215,7 +215,7 @@ export default function Hero() {
       `}</style>
 
       <section
-        className="relative w-full overflow-visible"
+        className="relative w-full overflow-visible bg-black"
         style={{
           height: "100svh",
           minHeight: isMobile ? "580px" : "620px",
@@ -248,7 +248,7 @@ export default function Hero() {
         {/* Content */}
         <div
           className={`relative z-10 h-full w-full flex flex-col ${
-            isMobile ? "justify-end pb-28" : "justify-center"
+            isMobile ? "justify-end pb-20" : "justify-center"
           } px-5 md:px-12 lg:pl-[8%]`}
         >
           <div className="max-w-[700px]">
@@ -343,13 +343,13 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* Search Bar */}
+        {/* Search Bar - Overlapping Hero */}
         <div
           className="absolute bottom-0 left-1/2 z-40 w-full max-w-[1000px] flex justify-center px-4"
           style={{
             transform: isMobile
-              ? "translate(-50%, 55%)"
-              : "translate(-50%, 65%)",
+              ? "translate(-50%, 45%)"
+              : "translate(-50%, 50%)",
           }}
         >
           <div className="w-full">
@@ -358,9 +358,10 @@ export default function Hero() {
         </div>
       </section>
 
+      {/* Minimal spacer to prevent content from being hidden behind search bar */}
       <div
-        style={{ height: isMobile ? 180 : 120 }}
-        className="bg-white"
+        style={{ height: isMobile ? 60 : 50 }}
+        className="bg-transparent"
       />
     </>
   );
