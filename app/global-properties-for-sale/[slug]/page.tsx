@@ -12,7 +12,6 @@ import {
   ChevronRight,
   X,
   Maximize2,
-  CheckCircle,
   Loader2,
   MapPin,
   Plus,
@@ -38,6 +37,7 @@ import {
   Globe,
   Home,
 } from "lucide-react";
+import EnquiryForm from "@/components/EnquiryForm";
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
@@ -78,6 +78,8 @@ interface Property {
   amenities: string[];
   isPriceOnRequest: boolean;
 }
+
+// ─── DUMMY DATA ──────────────────────────────────────────────────────────
 
 const DUMMY_PROPERTIES: Property[] = [
   {
@@ -352,7 +354,6 @@ const DUMMY_PROPERTIES: Property[] = [
   },
 ];
 
-// ✅ FIX: Extended properties with unique slugs
 const DUMMY_PROPERTIES_EXTENDED: Property[] = [
   ...DUMMY_PROPERTIES,
   ...DUMMY_PROPERTIES.slice(0, 6).map((p, i) => ({
@@ -362,21 +363,14 @@ const DUMMY_PROPERTIES_EXTENDED: Property[] = [
   })),
 ];
 
-// ✅ FIX: Better slug matching - tries both exact and extended slugs
 function getPropertyBySlug(slug: string): Property | null {
-  // First try exact match in extended list
   let found = DUMMY_PROPERTIES_EXTENDED.find(p => p.slug === slug);
   if (found) return found;
-  
-  // Then try original list
   found = DUMMY_PROPERTIES.find(p => p.slug === slug);
   if (found) return found;
-  
-  // Finally try to match base slug (remove -number suffix)
   const baseSlug = slug.replace(/-\d+$/, '');
   found = DUMMY_PROPERTIES.find(p => p.slug === baseSlug);
   if (found) return found;
-  
   return null;
 }
 
@@ -397,6 +391,8 @@ function getCountryFlag(country: string): string {
 function formatPrice(amount: number, currency: string): string {
   return `${currency} ${amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
+
+// ─── LOADER ───────────────────────────────────────────────────────────────
 
 function PageLoader() {
   return (
@@ -432,6 +428,8 @@ function PageLoader() {
     </div>
   );
 }
+
+// ─── GALLERY MODAL ──────────────────────────────────────────────────────
 
 function GalleryModal({
   images,
@@ -536,6 +534,8 @@ function GalleryModal({
   );
 }
 
+// ─── PROPERTY MAP ──────────────────────────────────────────────────────
+
 function PropertyMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
   const [err, setErr] = useState(false);
   if (err) {
@@ -557,6 +557,8 @@ function PropertyMap({ lat, lng, name }: { lat: number; lng: number; name: strin
     />
   );
 }
+
+// ─── MAIN COMPONENT ─────────────────────────────────────────────────────
 
 export default function GlobalPropertyDetailPage() {
   const { slug } = useParams() as { slug: string };
@@ -665,6 +667,7 @@ export default function GlobalPropertyDetailPage() {
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
+      {/* Breadcrumb */}
       <div className="border-b" style={{ borderColor: THEME.border, backgroundColor: THEME.surface }}>
         <div className="mx-auto max-w-[1180px] px-4 py-3 md:px-6">
           <div className="flex items-center justify-between gap-4">
@@ -713,6 +716,7 @@ export default function GlobalPropertyDetailPage() {
         </div>
       </div>
 
+      {/* Property Header */}
       <div className="mx-auto max-w-[1180px] px-4 pt-8 pb-6 md:px-6">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex-1 min-w-0">
@@ -806,6 +810,7 @@ export default function GlobalPropertyDetailPage() {
         </div>
       </div>
 
+      {/* Gallery */}
       <div className="mx-auto max-w-[1180px] px-4 md:px-6">
         <div
           className="relative overflow-hidden bg-gray-100 aspect-[16/9] group cursor-pointer"
@@ -910,8 +915,10 @@ export default function GlobalPropertyDetailPage() {
         )}
       </div>
 
+      {/* Content Grid */}
       <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-6">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px]">
+          {/* Left Column */}
           <div>
             <div className="flex border-b mb-8" style={{ borderColor: THEME.border }}>
               {["overview", "amenities"].map((tab) => (
@@ -995,74 +1002,22 @@ export default function GlobalPropertyDetailPage() {
             </div>
           </div>
 
+          {/* ─── Right Column - Enquiry Form ── */}
           <aside id="enquiry">
             <div className="sticky top-6">
-              <div className="border bg-white" style={{ borderColor: THEME.border }}>
-                <div className="border-b p-5" style={{ borderColor: THEME.border, backgroundColor: THEME.primary }}>
-                  <h3
-                    className="text-[16px] font-normal text-white"
-                    style={{ fontFamily: FONT_DISPLAY }}
-                  >
-                    Request Information
-                  </h3>
-                  <p className="mt-0.5 text-[10px] tracking-[0.1em] text-white/50">
-                    Get in touch about {property.name}
-                  </p>
-                </div>
-
-                <div className="p-5">
-                  <form className="space-y-3.5">
-                    <div>
-                      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                        Full Name <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Your full name"
-                        className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-gray-400 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                        Phone Number <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        placeholder="+971 50 000 0000"
-                        className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-gray-400 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                        Email Address <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        placeholder="you@email.com"
-                        className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-gray-400 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                        Message
-                      </label>
-                      <textarea
-                        rows={3}
-                        placeholder="I'm interested in this property..."
-                        className="mt-1.5 w-full resize-none border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-gray-400 focus:outline-none"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-3 text-[10px] font-medium uppercase tracking-[0.15em] text-white transition-all hover:opacity-90"
-                      style={{ backgroundColor: THEME.primary }}
-                    >
-                      Send Enquiry
-                    </button>
-                  </form>
-                </div>
-              </div>
+              {/* ✅ Updated EnquiryForm with proper props */}
+              <EnquiryForm
+                propertyName={property.name}
+                refNumber={`GLOBAL-${property.id}`}
+                propertyId={property.id}
+                agentId={null}
+                agentName="Global Property Agent"
+                agentPhone="+971 50 259 0071"
+                agentPhoto={null}
+                agentEmail="global@acasa.ae"
+                listingType={property.listing_type || "For Sale"}
+                whatsappNumber="971502590071"
+              />
 
               <a
                 href="https://wa.me/971502590071"
@@ -1074,11 +1029,21 @@ export default function GlobalPropertyDetailPage() {
                 <MessageCircle className="h-3.5 w-3.5" />
                 WhatsApp
               </a>
+
+              <Link
+                href="/global-properties-for-sale"
+                className="mt-3 flex items-center justify-center gap-2 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:bg-gray-50"
+                style={{ borderColor: THEME.border, color: THEME.muted }}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                All Global Properties
+              </Link>
             </div>
           </aside>
         </div>
       </div>
 
+      {/* Similar Properties */}
       {similarProperties.length > 0 && (
         <div className="mx-auto max-w-[1180px] px-4 pb-16 md:px-6">
           <div className="mb-10 flex items-end justify-between">
@@ -1158,6 +1123,7 @@ export default function GlobalPropertyDetailPage() {
         </div>
       )}
 
+      {/* Gallery Modal */}
       <AnimatePresence>
         {showModal && (
           <GalleryModal
@@ -1169,6 +1135,7 @@ export default function GlobalPropertyDetailPage() {
         )}
       </AnimatePresence>
 
+      {/* Mobile CTA */}
       <div
         className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white p-4 sm:hidden"
         style={{ borderColor: THEME.border }}

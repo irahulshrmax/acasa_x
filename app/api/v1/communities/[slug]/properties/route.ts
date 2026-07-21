@@ -1,8 +1,18 @@
-// app/api/v1/communities/[slug]/properties/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityBySlug } from '@/lib/models/communities';
 import { getProperties } from '@/lib/models/properties';
+
+// ─── HELPER: Extract actual slug ──────────────────────────────────────
+
+function extractActualSlug(slug: string): string {
+    let actualSlug = slug;
+    if (slug.startsWith('apartments-for-sale-in-')) {
+        actualSlug = slug.replace('apartments-for-sale-in-', '');
+    }
+    actualSlug = decodeURIComponent(actualSlug);
+    actualSlug = actualSlug.trim().replace(/\/+$/, '');
+    return actualSlug;
+}
 
 export async function GET(
   request: NextRequest,
@@ -12,9 +22,12 @@ export async function GET(
     const { slug } = await params;
     const { searchParams } = new URL(request.url);
 
+    // 🔥 Extract actual slug
+    const actualSlug = extractActualSlug(slug);
+
     // ─── Check if community exists ─────────────────────────────────────
     
-    const community = await getCommunityBySlug(slug);
+    const community = await getCommunityBySlug(actualSlug);
     if (!community) {
       return NextResponse.json(
         { success: false, message: 'Community not found' },
@@ -58,6 +71,7 @@ export async function GET(
       },
       cached: false,
     });
+    
   } catch (error: any) {
     console.error('Error fetching community properties:', error);
     return NextResponse.json(

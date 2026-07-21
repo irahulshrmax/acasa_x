@@ -113,7 +113,8 @@ function NeighborhoodCard({ item, index }: { item: Neighborhood; index: number }
     // Use seo_slug if available, otherwise use slug
     const slugToUse = item.seo_slug || item.slug;
     console.log("🔗 Navigating to community slug:", slugToUse);
-    router.push(`/communities/${slugToUse}`);
+    // 🔥 FIX: Change /communities to /dubai
+    router.push(`/dubai/${slugToUse}`);
   };
 
   const imageUrl = item.image || item.image_url || item.img || null;
@@ -318,7 +319,8 @@ export default function NeighborhoodsSection() {
       e.preventDefault();
       if (isNavigating) return;
       setIsNavigating(true);
-      router.push("/communities");
+      // 🔥 FIX: Change /communities to /dubai
+      router.push("/dubai");
     },
     [isNavigating, router]
   );

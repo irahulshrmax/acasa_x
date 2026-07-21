@@ -39,7 +39,13 @@ export async function GET(request: NextRequest) {
         }
 
         if (slug) {
-            const community = await getCommunityBySlug(slug);
+            // 🔥 Handle full slug pattern
+            let actualSlug = slug;
+            if (slug.startsWith('apartments-for-sale-in-')) {
+                actualSlug = slug.replace('apartments-for-sale-in-', '');
+            }
+            
+            const community = await getCommunityBySlug(actualSlug);
             if (!community) {
                 return NextResponse.json(
                     { success: false, message: 'Community not found' },
@@ -93,6 +99,7 @@ export async function GET(request: NextRequest) {
             meta: result.meta,
             cached: false,
         });
+        
     } catch (error: any) {
         console.error('Error fetching communities:', error);
         return NextResponse.json(

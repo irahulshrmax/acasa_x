@@ -12,7 +12,6 @@ import {
   ChevronRight,
   X,
   Maximize2,
-  CheckCircle,
   Loader2,
   MapPin,
   Phone,
@@ -35,6 +34,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import BrochureDownload from "@/components/Brochure";
+import EnquiryForm from "@/components/EnquiryForm";
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
@@ -98,6 +98,7 @@ interface PropertyDetail {
     phone: string | null;
     photo: string | null;
     rera_brn: string | null;
+    email: string | null;
   };
   featured_image: string | null;
   images: Array<{ id: number; url: string; title: string | null; featured: number }>;
@@ -114,6 +115,8 @@ interface PropertyDetail {
   display_title: string | null;
 }
 
+// ─── Image URL Helper ──────────────────────────────────────────────────
+
 function fixImageUrl(url: string | null): string {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -127,6 +130,21 @@ function fixImageUrl(url: string | null): string {
     return `https://acasa.ae/upload/${url}`;
   }
   return `https://acasa.ae/upload/media/${url}`;
+}
+
+function getDisplayName(property: any): string {
+  if (!property) return 'Property';
+  if (property.property_name && property.property_name !== 'Null' && property.property_name !== 'null') {
+    return property.property_name;
+  }
+  if (property.property_slug) {
+    return property.property_slug
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (char: string) => char.toUpperCase())
+      .replace(/\bLn\d+\b/g, '')
+      .trim() || `Property ${property.id}`;
+  }
+  return `Property ${property.id}`;
 }
 
 function getDisplayPrice(price: any): string {
@@ -200,6 +218,8 @@ function getCompletionStatus(date: string | null): string {
   }
 }
 
+// ─── LOADER ───────────────────────────────────────────────────────────────
+
 function PageLoader() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-white">
@@ -235,207 +255,7 @@ function PageLoader() {
   );
 }
 
-function EnquiryForm({ propertyName, refNumber }: { propertyName: string; refNumber: string }) {
-  const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
-  const [agreed, setAgreed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = "Required";
-    if (!form.phone.trim()) e.phone = "Required";
-    if (!form.email.trim() || !form.email.includes("@")) e.email = "Valid email required";
-    return e;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) {
-      setErrors(errs);
-      return;
-    }
-    if (!agreed || submitting) return;
-    setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setSubmitting(false);
-    setDone(true);
-    setTimeout(() => {
-      setDone(false);
-      setForm({ name: "", phone: "", email: "", message: "" });
-      setErrors({});
-    }, 6000);
-  };
-
-  const field = (key: keyof typeof form, label: string, type = "text", placeholder = "") => (
-    <div>
-      <label
-        className="text-[10px] font-medium uppercase tracking-[0.1em]"
-        style={{ color: THEME.muted }}
-      >
-        {label} <span className="text-red-400">*</span>
-      </label>
-      <input
-        type={type}
-        required
-        placeholder={placeholder}
-        value={form[key]}
-        onChange={(e) => {
-          setForm((p) => ({ ...p, [key]: e.target.value }));
-          if (errors[key]) setErrors((p) => {
-            const n = { ...p };
-            delete n[key];
-            return n;
-          });
-        }}
-        className={`mt-1.5 w-full border px-3 py-2.5 text-[12px] transition-all focus:outline-none ${
-          errors[key]
-            ? "border-red-300 bg-red-50 focus:border-red-400"
-            : "border-gray-200 bg-white focus:border-[#0A2540]"
-        }`}
-        style={{ fontFamily: FONT_BODY }}
-      />
-      {errors[key] && <p className="mt-1 text-[10px] text-red-500">{errors[key]}</p>}
-    </div>
-  );
-
-  return (
-    <div className="border bg-white" style={{ borderColor: THEME.border }}>
-      <div
-        className="border-b p-5"
-        style={{ borderColor: THEME.border, backgroundColor: THEME.primary }}
-      >
-        <h3 className="text-[16px] font-normal text-white" style={{ fontFamily: FONT_DISPLAY }}>
-          Request Information
-        </h3>
-        <p className="mt-0.5 text-[10px] tracking-[0.1em] text-white/50">
-          Get in touch about {propertyName}
-        </p>
-      </div>
-
-      <div className="p-5">
-        <AnimatePresence mode="wait">
-          {done ? (
-            <motion.div
-              key="done"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="py-10 text-center"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200 }}
-              >
-                <CheckCircle className="mx-auto h-14 w-14 text-emerald-500" />
-              </motion.div>
-              <p className="mt-4 text-[17px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
-                Message Sent!
-              </p>
-              <p className="mt-1.5 text-[12px]" style={{ color: THEME.muted }}>
-                We'll get back to you within 24 hours.
-              </p>
-              <div className="mt-4 rounded-[3px] bg-gray-50 p-3">
-                <p className="text-[10px]" style={{ color: THEME.muted }}>
-                  {propertyName} • Ref: {refNumber}
-                </p>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.form
-              key="form"
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onSubmit={handleSubmit}
-              className="space-y-3.5"
-            >
-              {field("name", "Full Name", "text", "Your full name")}
-              {field("phone", "Phone Number", "tel", "+971 50 000 0000")}
-              {field("email", "Email Address", "email", "you@email.com")}
-
-              <div>
-                <label
-                  className="text-[10px] font-medium uppercase tracking-[0.1em]"
-                  style={{ color: THEME.muted }}
-                >
-                  Message
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="I'm interested in this property..."
-                  value={form.message}
-                  onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
-                  className="mt-1.5 w-full resize-none border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-[#0A2540] focus:outline-none"
-                />
-              </div>
-
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <div className="relative mt-0.5">
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={agreed}
-                    onChange={(e) => setAgreed(e.target.checked)}
-                  />
-                  <div
-                    className={`flex h-4 w-4 items-center justify-center border-2 transition-colors ${
-                      agreed ? "border-transparent" : "border-gray-300 bg-white"
-                    }`}
-                    style={agreed ? { backgroundColor: THEME.primary } : {}}
-                  >
-                    {agreed && <Check className="h-2.5 w-2.5 text-white" />}
-                  </div>
-                </div>
-                <span className="text-[10px] leading-relaxed" style={{ color: THEME.muted }}>
-                  I agree to the{" "}
-                  <Link
-                    href="/terms"
-                    className="underline hover:no-underline"
-                    style={{ color: THEME.primary }}
-                  >
-                    Terms & Conditions
-                  </Link>{" "}
-                  and consent to being contacted.
-                </span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <a
-                  href={`https://wa.me/971502590071?text=I'm%20interested%20in%20${encodeURIComponent(
-                    propertyName
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-1.5 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:border-emerald-500 hover:bg-emerald-500 hover:text-white"
-                  style={{ borderColor: THEME.border, color: THEME.primary }}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                </a>
-                <button
-                  type="submit"
-                  disabled={!agreed || submitting}
-                  className="py-3 text-[10px] font-medium uppercase tracking-[0.15em] text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ backgroundColor: THEME.primary }}
-                >
-                  {submitting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending
-                    </span>
-                  ) : (
-                    "Submit"
-                  )}
-                </button>
-              </div>
-            </motion.form>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
+// ─── SIMILAR CARD ──────────────────────────────────────────────────────
 
 function SimilarCard({ property, index }: { property: any; index: number }) {
   const router = useRouter();
@@ -489,6 +309,115 @@ function SimilarCard({ property, index }: { property: any; index: number }) {
     </motion.div>
   );
 }
+
+// ─── GALLERY MODAL ──────────────────────────────────────────────────────
+
+function GalleryModal({
+  images,
+  currentIndex,
+  onClose,
+  onNavigate,
+}: {
+  images: string[];
+  currentIndex: number;
+  onClose: () => void;
+  onNavigate: (i: number) => void;
+}) {
+  const thumbsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft")
+        onNavigate((currentIndex - 1 + images.length) % images.length);
+      if (e.key === "ArrowRight")
+        onNavigate((currentIndex + 1) % images.length);
+    };
+    window.addEventListener("keydown", handler);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handler);
+      document.body.style.overflow = "";
+    };
+  }, [currentIndex, images.length, onClose, onNavigate]);
+
+  useEffect(() => {
+    if (!thumbsRef.current) return;
+    const activeThumb = thumbsRef.current.children[currentIndex] as HTMLElement;
+    activeThumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [currentIndex]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[100] flex flex-col bg-black/97"
+    >
+      <div className="flex items-center justify-between px-6 py-4">
+        <span className="text-[11px] tracking-[0.2em] text-white/50">
+          {currentIndex + 1} <span className="text-white/25">/</span> {images.length}
+        </span>
+        <button
+          onClick={onClose}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="relative flex flex-1 items-center justify-center px-16">
+        <button
+          onClick={() => onNavigate((currentIndex - 1 + images.length) % images.length)}
+          className="absolute left-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/25 hover:scale-105"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+
+        <AnimatePresence mode="sync">
+          <motion.img
+            key={currentIndex}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.25 }}
+            src={images[currentIndex]}
+            alt={`Photo ${currentIndex + 1}`}
+            className="max-h-[70vh] max-w-full object-contain"
+          />
+        </AnimatePresence>
+
+        <button
+          onClick={() => onNavigate((currentIndex + 1) % images.length)}
+          className="absolute right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/25 hover:scale-105"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+      </div>
+
+      <div className="pb-6 pt-4">
+        <div ref={thumbsRef} className="flex gap-2 overflow-x-auto px-6 pb-2 scrollbar-hide">
+          {images.map((img, i) => (
+            <button
+              key={i}
+              onClick={() => onNavigate(i)}
+              className={`h-16 w-24 flex-shrink-0 overflow-hidden transition-all duration-200 ${
+                i === currentIndex
+                  ? "scale-105 opacity-100 ring-2 ring-white"
+                  : "opacity-40 hover:opacity-70"
+              }`}
+            >
+              <img src={img} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── MAIN COMPONENT ─────────────────────────────────────────────────────
 
 export default function FeaturedExploreDetailClient({ slug }: { slug: string }) {
   const router = useRouter();
@@ -673,6 +602,7 @@ export default function FeaturedExploreDetailClient({ slug }: { slug: string }) 
   const refNumber = property.ref_number || `LN${property.id}`;
   const lat = property.location?.latitude ?? 25.0657;
   const lng = property.location?.longitude ?? 55.1713;
+  const displayName = getDisplayName(property);
   const priceDisplay = getDisplayPrice(property.price);
   const bedroomDisplay = getBedroomDisplay(property.bedrooms);
   const bathroomDisplay = getBathroomDisplay(property.bathrooms);
@@ -1284,10 +1214,23 @@ export default function FeaturedExploreDetailClient({ slug }: { slug: string }) 
             </AnimatePresence>
           </div>
 
-          {/* Right - Enquiry */}
+          {/* ─── Right - Enquiry Form ── */}
           <aside id="enquiry">
             <div className="sticky top-6">
-              <EnquiryForm propertyName={property.property_name} refNumber={refNumber} />
+              {/* ✅ Updated EnquiryForm with proper props */}
+              <EnquiryForm
+                propertyName={displayName}
+                refNumber={refNumber}
+                propertyId={property.id}
+                agentId={property.agent?.id}
+                agentName={property.agent?.name}
+                agentPhone={property.agent?.phone}
+                agentPhoto={property.agent?.photo ? fixImageUrl(property.agent.photo) : null}
+                agentEmail={property.agent?.email}
+                listingType={property.listing_type || "For Sale"}
+                whatsappNumber="971502590071"
+              />
+
               {property.agent?.phone && (
                 <a
                   href={`tel:${property.agent.phone}`}
@@ -1402,112 +1345,5 @@ export default function FeaturedExploreDetailClient({ slug }: { slug: string }) 
 
       <div className="h-20 sm:hidden" />
     </div>
-  );
-}
-
-// ─── GALLERY MODAL ──────────────────────────────────────────────────────
-
-function GalleryModal({
-  images,
-  currentIndex,
-  onClose,
-  onNavigate,
-}: {
-  images: string[];
-  currentIndex: number;
-  onClose: () => void;
-  onNavigate: (i: number) => void;
-}) {
-  const thumbsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft")
-        onNavigate((currentIndex - 1 + images.length) % images.length);
-      if (e.key === "ArrowRight")
-        onNavigate((currentIndex + 1) % images.length);
-    };
-    window.addEventListener("keydown", handler);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", handler);
-      document.body.style.overflow = "";
-    };
-  }, [currentIndex, images.length, onClose, onNavigate]);
-
-  useEffect(() => {
-    if (!thumbsRef.current) return;
-    const activeThumb = thumbsRef.current.children[currentIndex] as HTMLElement;
-    activeThumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }, [currentIndex]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-      className="fixed inset-0 z-[100] flex flex-col bg-black/97"
-    >
-      <div className="flex items-center justify-between px-6 py-4">
-        <span className="text-[11px] tracking-[0.2em] text-white/50">
-          {currentIndex + 1} <span className="text-white/25">/</span> {images.length}
-        </span>
-        <button
-          onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      <div className="relative flex flex-1 items-center justify-center px-16">
-        <button
-          onClick={() => onNavigate((currentIndex - 1 + images.length) % images.length)}
-          className="absolute left-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/25 hover:scale-105"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-
-        <AnimatePresence mode="sync">
-          <motion.img
-            key={currentIndex}
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.02 }}
-            transition={{ duration: 0.25 }}
-            src={images[currentIndex]}
-            alt={`Photo ${currentIndex + 1}`}
-            className="max-h-[70vh] max-w-full object-contain"
-          />
-        </AnimatePresence>
-
-        <button
-          onClick={() => onNavigate((currentIndex + 1) % images.length)}
-          className="absolute right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/25 hover:scale-105"
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
-      </div>
-
-      <div className="pb-6 pt-4">
-        <div ref={thumbsRef} className="flex gap-2 overflow-x-auto px-6 pb-2 scrollbar-hide">
-          {images.map((img, i) => (
-            <button
-              key={i}
-              onClick={() => onNavigate(i)}
-              className={`h-16 w-24 flex-shrink-0 overflow-hidden transition-all duration-200 ${
-                i === currentIndex
-                  ? "scale-105 opacity-100 ring-2 ring-white"
-                  : "opacity-40 hover:opacity-70"
-              }`}
-            >
-              <img src={img} alt="" className="h-full w-full object-cover" />
-            </button>
-          ))}
-        </div>
-      </div>
-    </motion.div>
   );
 }

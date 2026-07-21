@@ -10,36 +10,35 @@ import {
   Share2,
   ChevronLeft,
   ChevronRight,
-  X,
-  Maximize2,
-  CheckCircle,
-  Loader2,
-  MapPin,
-  Phone,
-  Calendar,
   Building2,
   Shield,
-  ExternalLink,
-  Check,
-  MessageCircle,
-  Play,
-  Grid3x3,
-  Bath,
-  BedDouble,
-  Maximize,
   Star,
-  Eye,
   Home,
   Plus,
-  FileText,
-  Users,
-  Award,
+  MapPin,
   Globe,
-  TrendingUp,
   Clock,
-  DollarSign,
-  Layers,
   Search,
+  Check,
+  Users,
+  Download,
+  FileText,
+  Phone,
+  Mail,
+  ExternalLink,
+  Maximize2,
+  X,
+  Menu,
+  Grid3x3,
+  List,
+  BedDouble,
+  Bath,
+  Maximize,
+  DollarSign,
+  Eye,
+  Award,
+  TrendingUp,
+  Calendar,
 } from "lucide-react";
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -55,47 +54,6 @@ const THEME = {
   surface: "#F8FAFC",
 };
 
-interface CommunityDetail {
-  id: number;
-  community_id: number;
-  name: string;
-  country_id: number;
-  state_id: number;
-  city_id: number;
-  slug: string;
-  latitude: string;
-  longitude: string;
-  img: string | null;
-  school_img: string | null;
-  hotel_img: string | null;
-  hospital_img: string | null;
-  train_img: string | null;
-  bus_img: string | null;
-  description: string | null;
-  top_community: string | null;
-  top_projects: string | null;
-  featured_project: string | null;
-  related_blog: string | null;
-  properties: string | null;
-  similar_location: string | null;
-  sales_diretor: string | null;
-  seo_slug: string | null;
-  seo_title: string | null;
-  seo_keywork: string | null;
-  seo_description: string | null;
-  featured: number;
-  status: number;
-  city_name: string;
-  city_slug: string;
-  state_name: string;
-  country_name: string;
-  property_count: number;
-  image_url: string | null;
-  image_variations: string[];
-  properties_list?: Property[];
-  similar_communities?: CommunityDetail[];
-}
-
 interface Property {
   id: number;
   property_name: string;
@@ -110,19 +68,53 @@ interface Property {
   status: number;
 }
 
+interface CommunityDetail {
+  id: number;
+  community_id: number;
+  name: string;
+  slug: string;
+  seo_slug: string | null;
+  description: string | null;
+  img: string | null;
+  image_url: string | null;
+  image_variations: string[];
+  school_img: string | null;
+  hotel_img: string | null;
+  hospital_img: string | null;
+  train_img: string | null;
+  bus_img: string | null;
+  latitude: string;
+  longitude: string;
+  featured: number;
+  status: number;
+  property_count: number;
+  city_name: string;
+  city_slug: string;
+  country_name: string;
+  state_name: string;
+  seo_title: string | null;
+  seo_keywork: string | null;
+  seo_description: string | null;
+  similar_location: string | null;
+  properties_list?: Property[];
+  similar_communities?: CommunityDetail[];
+  sales_diretor?: string | null;
+  top_community?: string | null;
+  top_projects?: string | null;
+  featured_project?: string | null;
+  related_blog?: string | null;
+}
+
 function fixImageUrl(url: string | null): string {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("/upload/") && !url.includes("/media/")) {
-    return url.replace("/upload/", "https://acasa.ae/upload/media/");
+  if (url.startsWith("/upload/") || url.startsWith("/uploads/")) {
+    return `https://acasa.ae${url}`;
   }
   if (url.startsWith("upload/")) {
-    return `https://acasa.ae/upload/media/${url.replace("upload/", "")}`;
+    return `https://acasa.ae/${url}`;
   }
-  if (url.startsWith("media/")) {
-    return `https://acasa.ae/upload/${url}`;
-  }
-  return `https://acasa.ae/upload/media/${url}`;
+  return `https://acasa.ae/upload/locations/${url}`;
 }
 
 function getDisplayPrice(price: any): string {
@@ -190,21 +182,19 @@ function PageLoader() {
           />
         </div>
         <motion.p
-          className="mt-5 text-[10px] uppercase tracking-[0.3em]"
-          style={{ color: THEME.muted }}
+          className="mt-5 text-[10px] uppercase tracking-[0.3em] text-[#6B7A8D]"
           animate={{ opacity: [0.4, 1, 0.4] }}
           transition={{ duration: 2, repeat: Infinity }}
         >
-          Loading Community
+          Loading Community...
         </motion.p>
       </div>
     </div>
   );
 }
 
-function PropertyCard({ property }: { property: Property }) {
+function PropertyCard({ property, router }: { property: Property; router: any }) {
   const [imgErr, setImgErr] = useState(false);
-  const router = useRouter();
 
   const img = !imgErr
     ? property.featured_image || null
@@ -273,13 +263,14 @@ function PropertyCard({ property }: { property: Property }) {
   );
 }
 
-function SimilarCommunityCard({ community, index }: { community: CommunityDetail; index: number }) {
-  const router = useRouter();
+function SimilarCommunityCard({ community, index, router }: { community: CommunityDetail; index: number; router: any }) {
   const [imgErr, setImgErr] = useState(false);
 
   const img = !imgErr
-    ? community.image_url || null
+    ? community.image_url || community.img || null
     : null;
+
+  const linkSlug = community.seo_slug || community.slug;
 
   return (
     <motion.div
@@ -287,7 +278,7 @@ function SimilarCommunityCard({ community, index }: { community: CommunityDetail
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4, delay: index * 0.1 }}
-      onClick={() => router.push(`/communities/${community.slug}`)}
+      onClick={() => router.push(`/dubai/${linkSlug}`)}
       className="group cursor-pointer"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
@@ -335,17 +326,38 @@ function SimilarCommunityCard({ community, index }: { community: CommunityDetail
   );
 }
 
-export default function CommunityDetailClient({ slug }: { slug: string }) {
+export default function CommunityDetailPage({ 
+  params 
+}: { 
+  params: Promise<{ slug: string }> 
+}) {
   const router = useRouter();
-
+  const [slug, setSlug] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showAllProperties, setShowAllProperties] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const fetchedRef = useRef(false);
 
+  // ─── RESOLVE PARAMS ───────────────────────────────────────────────────
+  useEffect(() => {
+    const resolveParams = async () => {
+      try {
+        const resolved = await params;
+        setSlug(resolved.slug);
+      } catch (err) {
+        console.error("Error resolving params:", err);
+        setError("Failed to load page parameters");
+        setLoading(false);
+      }
+    };
+    resolveParams();
+  }, [params]);
+
+  // ─── FETCH COMMUNITY ─────────────────────────────────────────────────
   useEffect(() => {
     if (!slug || fetchedRef.current) return;
     fetchedRef.current = true;
@@ -353,13 +365,24 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
     const fetchCommunity = async () => {
       setLoading(true);
       setError(null);
+
       try {
-        const apiUrl = `/api/v1/communities/${slug}?include_properties=true&include_related=true`;
-        
-        const res = await fetch(apiUrl);
+        const timestamp = Date.now();
+        const apiUrl = `/api/v1/communities/${slug}?include_properties=true&include_related=true&no_cache=true&_=${timestamp}`;
+
+        const res = await fetch(apiUrl, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+          }
+        });
 
         if (!res.ok) {
-          throw new Error(`API returned ${res.status}: ${res.statusText}`);
+          if (res.status === 404) {
+            throw new Error("Community not found");
+          }
+          throw new Error(`API returned ${res.status}`);
         }
 
         const data = await res.json();
@@ -370,7 +393,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
 
         setCommunity(data.data);
       } catch (err: any) {
-        console.error("❌ [Community Detail] Error:", err);
+        console.error("Error fetching community:", err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -380,6 +403,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
     fetchCommunity();
   }, [slug]);
 
+  // ─── WISHLIST ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!community) return;
     try {
@@ -416,31 +440,41 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
     } catch {}
   }, [community]);
 
+  // ─── IMAGES ───────────────────────────────────────────────────────────
   const images = useMemo(() => {
     if (!community) return [];
     const seen = new Set<string>();
     const add = (url: string) => {
-      if (url && !seen.has(url)) seen.add(url);
+      if (url && !seen.has(url)) {
+        const fixed = fixImageUrl(url);
+        seen.add(fixed);
+      }
     };
 
-    if (community.image_url) add(fixImageUrl(community.image_url));
+    if (community.image_url) add(community.image_url);
     if (community.image_variations) {
-      community.image_variations.forEach((url: string) => add(fixImageUrl(url)));
+      community.image_variations.forEach((url: string) => add(url));
     }
-    if (community.img) add(fixImageUrl(community.img));
+    if (community.img) add(community.img);
 
-    if (community.school_img) add(fixImageUrl(community.school_img));
-    if (community.hotel_img) add(fixImageUrl(community.hotel_img));
-    if (community.hospital_img) add(fixImageUrl(community.hospital_img));
-    if (community.train_img) add(fixImageUrl(community.train_img));
-    if (community.bus_img) add(fixImageUrl(community.bus_img));
+    if (community.school_img) add(community.school_img);
+    if (community.hotel_img) add(community.hotel_img);
+    if (community.hospital_img) add(community.hospital_img);
+    if (community.train_img) add(community.train_img);
+    if (community.bus_img) add(community.bus_img);
 
-    if (seen.size === 0) add("https://acasa.ae/upload/no-image.png");
+    if (seen.size === 0) {
+      add("https://acasa.ae/upload/no-image.png");
+    }
     return [...seen];
   }, [community]);
 
-  if (loading) return <PageLoader />;
+  // ─── LOADING ──────────────────────────────────────────────────────────
+  if (loading) {
+    return <PageLoader />;
+  }
 
+  // ─── ERROR ────────────────────────────────────────────────────────────
   if (error || !community) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-white">
@@ -463,7 +497,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
               <ArrowLeft className="mr-2 inline h-4 w-4" /> RETRY
             </button>
             <Link
-              href="/communities"
+              href="/dubai"
               className="bg-gray-200 px-6 py-2.5 text-[11px] tracking-widest text-gray-700 hover:bg-gray-300"
             >
               All Communities
@@ -474,11 +508,13 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
     );
   }
 
+  // ─── RENDER ──────────────────────────────────────────────────────────
   const location = community.city_name || "Dubai";
   const country = community.country_name || "UAE";
   const isFeatured = community.featured === 1;
   const propertyCount = community.properties_list?.length || community.property_count || 0;
   const displayProperties = community.properties_list || [];
+  const hasLocation = community.latitude && community.longitude;
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
@@ -489,7 +525,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
               <Link href="/" className="transition-colors hover:text-[#0A2540]">Home</Link>
               <ChevronLeft className="h-3 w-3 rotate-180" />
-              <Link href="/communities" className="transition-colors hover:text-[#0A2540]">Communities</Link>
+              <Link href="/dubai" className="transition-colors hover:text-[#0A2540]">Dubai</Link>
               <ChevronLeft className="h-3 w-3 rotate-180" />
               <span className="max-w-[120px] truncate text-gray-500 sm:max-w-none">{community.name}</span>
             </div>
@@ -516,7 +552,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* Community Header */}
+      {/* Header */}
       <div className="mx-auto max-w-[1180px] px-4 pb-6 pt-8 md:px-6">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="min-w-0 flex-1">
@@ -585,7 +621,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
         )}
       </div>
 
-      {/* Content Grid */}
+      {/* Content */}
       <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-6">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px]">
           {/* Left */}
@@ -604,46 +640,95 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
               </div>
             )}
 
-            {/* Amenity Images */}
-            <div className="mb-10">
-              <h2 className="mb-4 text-[20px] leading-snug sm:text-[24px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
-                Community Amenities
-              </h2>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                {community.school_img && (
-                  <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
-                    <img src={fixImageUrl(community.school_img)} alt="Schools" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Schools</p>
-                  </div>
-                )}
-                {community.hotel_img && (
-                  <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
-                    <img src={fixImageUrl(community.hotel_img)} alt="Hotels" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Hotels</p>
-                  </div>
-                )}
-                {community.hospital_img && (
-                  <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
-                    <img src={fixImageUrl(community.hospital_img)} alt="Hospitals" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Hospitals</p>
-                  </div>
-                )}
-                {community.train_img && (
-                  <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
-                    <img src={fixImageUrl(community.train_img)} alt="Transport" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Transport</p>
-                  </div>
-                )}
-                {community.bus_img && (
-                  <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
-                    <img src={fixImageUrl(community.bus_img)} alt="Buses" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
-                    <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Buses</p>
-                  </div>
-                )}
+            {/* Amenities */}
+            {(community.school_img || community.hotel_img || community.hospital_img || community.train_img || community.bus_img) && (
+              <div className="mb-10">
+                <h2 className="mb-4 text-[20px] leading-snug sm:text-[24px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
+                  Community Amenities
+                </h2>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  {community.school_img && (
+                    <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
+                      <img src={fixImageUrl(community.school_img)} alt="Schools" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+                      <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Schools</p>
+                    </div>
+                  )}
+                  {community.hotel_img && (
+                    <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
+                      <img src={fixImageUrl(community.hotel_img)} alt="Hotels" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+                      <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Hotels</p>
+                    </div>
+                  )}
+                  {community.hospital_img && (
+                    <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
+                      <img src={fixImageUrl(community.hospital_img)} alt="Hospitals" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+                      <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Hospitals</p>
+                    </div>
+                  )}
+                  {community.train_img && (
+                    <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
+                      <img src={fixImageUrl(community.train_img)} alt="Transport" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+                      <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Transport</p>
+                    </div>
+                  )}
+                  {community.bus_img && (
+                    <div className="rounded-[3px] border p-4 text-center" style={{ borderColor: THEME.border }}>
+                      <img src={fixImageUrl(community.bus_img)} alt="Buses" className="mx-auto h-12 w-12 object-contain" onError={(e) => (e.currentTarget.style.display = "none")} />
+                      <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Buses</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Properties in this community */}
+            {/* ─── MAP ─────────────────────────────────────────────────── */}
+            {hasLocation && (
+              <div className="mb-10">
+                <div className="mb-6 flex items-baseline gap-3">
+                  <h2 className="text-[20px] leading-snug sm:text-[24px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
+                    Location Map
+                  </h2>
+                  <span className="h-px flex-1" style={{ backgroundColor: THEME.border }} />
+                  <button
+                    onClick={() => setShowMap(!showMap)}
+                    className="text-[10px] uppercase tracking-[0.15em] transition-colors hover:opacity-70"
+                    style={{ color: THEME.primary }}
+                  >
+                    {showMap ? "Hide Map" : "View Map"}
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {showMap && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="overflow-hidden rounded-[3px] border"
+                      style={{ borderColor: THEME.border }}
+                    >
+                      <div className="h-[400px] w-full">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          style={{ border: 0 }}
+                          loading="lazy"
+                          src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${community.latitude},${community.longitude}&zoom=15`}
+                          allowFullScreen
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 border-t px-4 py-3" style={{ borderColor: THEME.border }}>
+                        <MapPin className="h-3.5 w-3.5 flex-shrink-0" style={{ color: THEME.primary }} />
+                        <p className="text-[12px]" style={{ color: THEME.muted }}>{community.name}, {location}, {country}</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* ─── PROPERTIES ──────────────────────────────────────────── */}
             {displayProperties.length > 0 && (
               <div className="mb-10">
                 <div className="mb-6 flex items-baseline gap-3">
@@ -655,7 +740,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
 
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {(showAllProperties ? displayProperties : displayProperties.slice(0, 6)).map((property) => (
-                    <PropertyCard key={property.id} property={property} />
+                    <PropertyCard key={property.id} property={property} router={router} />
                   ))}
                 </div>
 
@@ -671,30 +756,49 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
               </div>
             )}
 
-            {/* SEO Information */}
-            {(community.seo_title || community.seo_description) && (
-              <div className="mt-8 border-t pt-8" style={{ borderColor: THEME.border }}>
-                <h3 className="mb-3 text-[14px] font-medium" style={{ color: THEME.primary }}>Community Information</h3>
-                {community.seo_title && (
-                  <p className="text-[11px]" style={{ color: THEME.muted }}>
-                    <span className="font-medium">SEO Title:</span> {community.seo_title}
-                  </p>
-                )}
-                {community.seo_description && (
-                  <p className="mt-1 text-[11px]" style={{ color: THEME.muted }}>
-                    <span className="font-medium">Description:</span> {community.seo_description}
-                  </p>
-                )}
-                {community.seo_keywork && (
-                  <p className="mt-1 text-[11px]" style={{ color: THEME.muted }}>
-                    <span className="font-medium">Keywords:</span> {community.seo_keywork}
-                  </p>
-                )}
+            {/* ─── BROCHURE ────────────────────────────────────────────── */}
+            <div className="mb-10">
+              <div className="mb-6 flex items-baseline gap-3">
+                <h2 className="text-[20px] leading-snug sm:text-[24px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
+                  Community Brochure
+                </h2>
+                <span className="h-px flex-1" style={{ backgroundColor: THEME.border }} />
               </div>
-            )}
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <button
+                  onClick={() => {
+                    const brochureUrl = `https://acasa.ae/brochures/community-${community.id}.pdf`;
+                    window.open(brochureUrl, '_blank');
+                  }}
+                  className="flex items-center justify-center gap-3 border py-4 transition-colors hover:bg-gray-50"
+                  style={{ borderColor: THEME.border }}
+                >
+                  <FileText className="h-5 w-5" style={{ color: THEME.primary }} />
+                  <span className="text-[11px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.primary }}>
+                    Download Brochure
+                  </span>
+                  <Download className="h-4 w-4" style={{ color: THEME.muted }} />
+                </button>
+
+                <button
+                  onClick={() => {
+                    const communityUrl = `https://acasa.ae/dubai/${community.seo_slug || community.slug}`;
+                    window.open(communityUrl, '_blank');
+                  }}
+                  className="flex items-center justify-center gap-3 border py-4 transition-colors hover:bg-gray-50"
+                  style={{ borderColor: THEME.border }}
+                >
+                  <ExternalLink className="h-5 w-5" style={{ color: THEME.primary }} />
+                  <span className="text-[11px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.primary }}>
+                    View on Website
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Right Sidebar */}
+          {/* ─── RIGHT SIDEBAR ────────────────────────────────────────── */}
           <aside>
             <div className="sticky top-6 space-y-4">
               <div className="border bg-white p-5" style={{ borderColor: THEME.border }}>
@@ -726,23 +830,44 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
               <div className="border bg-white p-5" style={{ borderColor: THEME.border }}>
                 <h3 className="text-[14px] font-normal" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>Quick Links</h3>
                 <div className="mt-3 space-y-2">
-                  <Link href={`/communities/${community.slug}/properties`} className="flex items-center gap-2 text-[11px] transition-colors hover:opacity-70" style={{ color: THEME.primary }}>
+                  <Link href={`/dubai/${slug}/properties`} className="flex items-center gap-2 text-[11px] transition-colors hover:opacity-70" style={{ color: THEME.primary }}>
                     <Building2 className="h-3.5 w-3.5" />
-                    View Properties in {community.name}
+                    View All Properties
                   </Link>
-                  <Link href={`/communities?q=${encodeURIComponent(community.name)}`} className="flex items-center gap-2 text-[11px] transition-colors hover:opacity-70" style={{ color: THEME.primary }}>
-                    <Search className="h-3.5 w-3.5" />
-                    Search Similar Communities
-                  </Link>
+                  <button
+                    onClick={() => setShowMap(!showMap)}
+                    className="flex items-center gap-2 text-[11px] transition-colors hover:opacity-70"
+                    style={{ color: THEME.primary }}
+                  >
+                    <MapPin className="h-3.5 w-3.5" />
+                    {showMap ? "Hide Map" : "View on Map"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const brochureUrl = `https://acasa.ae/brochures/community-${community.id}.pdf`;
+                      window.open(brochureUrl, '_blank');
+                    }}
+                    className="flex items-center gap-2 text-[11px] transition-colors hover:opacity-70"
+                    style={{ color: THEME.primary }}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    Download Brochure
+                  </button>
                 </div>
               </div>
 
               <div className="border bg-white p-5" style={{ borderColor: THEME.border }}>
-                <h3 className="text-[14px] font-normal" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>Share This Community</h3>
-                <div className="mt-3 flex gap-2">
-                  <button onClick={handleShare} className="flex flex-1 items-center justify-center gap-2 border py-2.5 text-[10px] font-medium uppercase tracking-[0.1em] transition-colors hover:bg-gray-50" style={{ borderColor: THEME.border, color: THEME.primary }}>
-                    {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Share2 className="h-4 w-4" />}
-                    {copied ? "Copied!" : "Share"}
+                <h3 className="text-[14px] font-normal" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>Contact</h3>
+                <div className="mt-3 space-y-2">
+                  {community.sales_diretor && (
+                    <p className="text-[11px] flex items-center gap-2" style={{ color: THEME.muted }}>
+                      <Users className="h-3.5 w-3.5" />
+                      <span>Sales Director: {community.sales_diretor}</span>
+                    </p>
+                  )}
+                  <button className="flex w-full items-center justify-center gap-2 bg-[#0A2540] py-2.5 text-[10px] font-medium uppercase tracking-[0.1em] text-white transition-colors hover:bg-[#1B3A5F]">
+                    <Phone className="h-3.5 w-3.5" />
+                    Contact Agent
                   </button>
                 </div>
               </div>
@@ -751,7 +876,7 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* Similar Communities */}
+      {/* ─── SIMILAR COMMUNITIES ──────────────────────────────────────── */}
       {community.similar_communities && community.similar_communities.length > 0 && (
         <div className="border-t pb-16 pt-16" style={{ borderColor: THEME.border }}>
           <div className="mx-auto max-w-[1180px] px-4 md:px-6">
@@ -759,40 +884,18 @@ export default function CommunityDetailClient({ slug }: { slug: string }) {
               <div>
                 <p className="mb-2 text-[9px] uppercase tracking-[0.25em]" style={{ color: THEME.primary }}>Explore More</p>
                 <h2 className="text-[28px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>Similar Communities</h2>
+                <p className="mt-1 text-[12px]" style={{ color: THEME.muted }}>
+                  Discover other premium communities in Dubai
+                </p>
               </div>
-              <Link href="/communities" className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.2em] transition-colors hover:opacity-70 sm:flex" style={{ color: THEME.primary }}>
+              <Link href="/dubai" className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.2em] transition-colors hover:opacity-70 sm:flex" style={{ color: THEME.primary }}>
                 View All <ChevronLeft className="h-3.5 w-3.5 rotate-180" />
               </Link>
             </div>
-            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {community.similar_communities.map((c, i) => (
-                <SimilarCommunityCard key={c.id} community={c} index={i} />
+            <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {community.similar_communities.slice(0, 4).map((c, i) => (
+                <SimilarCommunityCard key={c.id} community={c} index={i} router={router} />
               ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Map */}
-      {(community.latitude || community.longitude) && (
-        <div className="mx-auto max-w-[1180px] px-4 pb-12 md:px-6">
-          <div className="mb-6 flex items-baseline gap-3">
-            <h2 className="text-[20px] sm:text-[24px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>Location</h2>
-            <span className="h-px flex-1" style={{ backgroundColor: THEME.border }} />
-          </div>
-          <div className="overflow-hidden rounded-[3px] border" style={{ borderColor: THEME.border }}>
-            <div className="h-[300px] sm:h-[400px]">
-              <iframe
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                src={`https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${community.latitude || 25.0657},${community.longitude || 55.1713}&zoom=15`}
-                allowFullScreen
-              />
-            </div>
-            <div className="flex items-center gap-2 border-t px-4 py-3" style={{ borderColor: THEME.border }}>
-              <MapPin className="h-3.5 w-3.5 flex-shrink-0" style={{ color: THEME.primary }} />
-              <p className="text-[12px]" style={{ color: THEME.muted }}>{community.name}, {location}, {country}</p>
             </div>
           </div>
         </div>

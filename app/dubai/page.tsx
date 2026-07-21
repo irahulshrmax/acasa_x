@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -118,6 +119,9 @@ function CommunityCard({
   const isListMode = viewMode === "list";
   const hasImage = !!imageUrl;
 
+  // 🔥 Fix: Use seo_slug for link if available, fallback to slug
+  const linkSlug = community.seo_slug || community.slug;
+
   const getBadgeConfig = () => {
     if (badge === "featured" || isFeatured) {
       return { label: "Featured", bg: "bg-[#0A2540]", icon: <Star className="h-3 w-3" /> };
@@ -136,7 +140,6 @@ function CommunityCard({
 
   const badgeConfig = getBadgeConfig();
 
-  // Extract short description
   const getShortDescription = () => {
     if (!community.description) return null;
     const text = community.description.replace(/<[^>]*>/g, '');
@@ -161,7 +164,7 @@ function CommunityCard({
           isListMode ? "sm:w-[320px] sm:flex-shrink-0" : "aspect-[4/3]"
         }`}
       >
-        <Link href={`/communities/${community.slug}`} className="block h-full w-full">
+        <Link href={`/dubai/${linkSlug}`} className="block h-full w-full">
           {hasImage ? (
             <img
               src={imageUrl}
@@ -205,7 +208,7 @@ function CommunityCard({
       <div className={`flex flex-1 flex-col ${isListMode ? "py-2 pr-2" : "pt-4"}`}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <Link href={`/communities/${community.slug}`}>
+            <Link href={`/dubai/${linkSlug}`}>
               <h3
                 className="truncate text-[15px] font-normal uppercase leading-snug tracking-[0.06em] transition-opacity hover:opacity-70"
                 style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
@@ -445,7 +448,7 @@ function Pagination({
 
 // ─── MAIN PAGE ──────────────────────────────────────────────────────────
 
-export default function CommunitiesPage() {
+export default function DubaiCommunitiesPage() {
   const [allCommunities, setAllCommunities] = useState<Community[]>([]);
   const [featuredCommunities, setFeaturedCommunities] = useState<Community[]>([]);
   const [popularCommunities, setPopularCommunities] = useState<Community[]>([]);
@@ -464,6 +467,7 @@ export default function CommunitiesPage() {
     sort_by: "featured_desc",
     status: "1",
     keyword: "",
+    city_id: "1", // Dubai
   });
 
   const hasActiveFilters = filters.keyword !== "" || filters.sort_by !== "featured_desc";
@@ -486,6 +490,7 @@ export default function CommunitiesPage() {
         params.append("sort_by", filters.sort_by);
         if (filters.status) params.append("status", filters.status);
         if (filters.keyword) params.append("keyword", filters.keyword);
+        if (filters.city_id) params.append("city_id", filters.city_id);
 
         const response = await fetch(`/api/v1/communities?${params.toString()}`);
         const data = await response.json();
@@ -529,6 +534,7 @@ export default function CommunitiesPage() {
         params.append("limit", String(filters.limit));
         params.append("featured", "true");
         if (filters.status) params.append("status", filters.status);
+        if (filters.city_id) params.append("city_id", filters.city_id);
 
         const response = await fetch(`/api/v1/communities?${params.toString()}`);
         const data = await response.json();
@@ -560,6 +566,7 @@ export default function CommunitiesPage() {
         params.append("limit", String(filters.limit));
         params.append("sort_by", "property_count_desc");
         if (filters.status) params.append("status", filters.status);
+        if (filters.city_id) params.append("city_id", filters.city_id);
 
         const response = await fetch(`/api/v1/communities?${params.toString()}`);
         const data = await response.json();
@@ -599,7 +606,7 @@ export default function CommunitiesPage() {
     };
 
     fetchData();
-  }, [activeTab, filters.page, filters.sort_by, filters.status, filters.keyword]);
+  }, [activeTab, filters.page, filters.sort_by, filters.status, filters.keyword, filters.city_id]);
 
   // ─── SEARCH ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -629,6 +636,7 @@ export default function CommunitiesPage() {
       sort_by: "featured_desc",
       status: "1",
       keyword: "",
+      city_id: "1",
     });
     setSearchKeyword("");
   }, []);
@@ -678,7 +686,7 @@ export default function CommunitiesPage() {
             className="text-[32px] font-normal leading-tight md:text-[40px]"
             style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
           >
-            Communities
+            Communities in Dubai
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 10 }}

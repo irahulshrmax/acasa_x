@@ -1,7 +1,6 @@
-// src/app/sell-properties-in-dubai/[slug]/SellPropertyDetailClient.tsx
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,6 +11,7 @@ import {
   MessageCircle, Play, Grid3x3, Bath, BedDouble,
   Maximize, Star, Copy, Home, Clock, Eye, Award, Sparkles,
 } from "lucide-react";
+import EnquiryForm from "@/components/EnquiryForm";
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
@@ -85,6 +85,7 @@ const DUMMY_PROPERTIES = [
       phone: "+971 50 123 4567",
       photo: null,
       rera_brn: "BRN-12345",
+      email: "ahmed@acasa.ae",
     },
     featured_image: "",
     images: [],
@@ -161,6 +162,7 @@ const DUMMY_PROPERTIES = [
       phone: "+971 50 987 6543",
       photo: null,
       rera_brn: null,
+      email: "sarah@acasa.ae",
     },
     featured_image: "",
     images: [],
@@ -237,6 +239,7 @@ const DUMMY_PROPERTIES = [
       phone: "+971 50 456 7890",
       photo: null,
       rera_brn: null,
+      email: "omar@acasa.ae",
     },
     featured_image: "",
     images: [],
@@ -313,6 +316,7 @@ const DUMMY_PROPERTIES = [
       phone: "+971 50 789 0123",
       photo: null,
       rera_brn: null,
+      email: "fatima@acasa.ae",
     },
     featured_image: "",
     images: [],
@@ -389,6 +393,7 @@ const DUMMY_PROPERTIES = [
       phone: "+971 50 234 5678",
       photo: null,
       rera_brn: null,
+      email: "mohammed@acasa.ae",
     },
     featured_image: "",
     images: [],
@@ -459,6 +464,7 @@ const DUMMY_PROPERTIES = [
       phone: "+971 50 345 6789",
       photo: null,
       rera_brn: null,
+      email: "khalid@acasa.ae",
     },
     featured_image: "",
     images: [],
@@ -595,6 +601,36 @@ function getGalleryImages(property: any): string[] {
   ];
 }
 
+function fixImageUrl(url: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/upload/') && !url.includes('/media/')) {
+    return url.replace('/upload/', 'https://acasa.ae/upload/media/');
+  }
+  if (url.startsWith('upload/')) {
+    return `https://acasa.ae/upload/media/${url.replace('upload/', '')}`;
+  }
+  if (url.startsWith('media/')) {
+    return `https://acasa.ae/upload/${url}`;
+  }
+  return `https://acasa.ae/upload/media/${url}`;
+}
+
+function getDisplayName(property: any): string {
+  if (!property) return 'Property';
+  if (property.property_name && property.property_name !== 'Null' && property.property_name !== 'null') {
+    return property.property_name;
+  }
+  if (property.property_slug) {
+    return property.property_slug
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (char: string) => char.toUpperCase())
+      .replace(/\bLn\d+\b/g, '')
+      .trim() || `Property ${property.id}`;
+  }
+  return `Property ${property.id}`;
+}
+
 // ─── LOADER ──────────────────────────────────────────────────────────────
 function PageLoader() {
   return (
@@ -628,6 +664,111 @@ function PageLoader() {
         </motion.p>
       </div>
     </div>
+  );
+}
+
+// ─── GALLERY MODAL ──────────────────────────────────────────────────────
+
+function GalleryModal({
+  images,
+  currentIndex,
+  onClose,
+  onNavigate,
+}: {
+  images: string[];
+  currentIndex: number;
+  onClose: () => void;
+  onNavigate: (i: number) => void;
+}) {
+  const thumbsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft") onNavigate((currentIndex - 1 + images.length) % images.length);
+      if (e.key === "ArrowRight") onNavigate((currentIndex + 1) % images.length);
+    };
+    window.addEventListener("keydown", handler);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handler);
+      document.body.style.overflow = "";
+    };
+  }, [currentIndex, images.length, onClose, onNavigate]);
+
+  useEffect(() => {
+    if (!thumbsRef.current) return;
+    const activeThumb = thumbsRef.current.children[currentIndex] as HTMLElement;
+    activeThumb?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [currentIndex]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[100] flex flex-col bg-black/97"
+    >
+      <div className="flex items-center justify-between px-6 py-4">
+        <span className="text-[11px] tracking-[0.2em] text-white/50">
+          {currentIndex + 1} <span className="text-white/25">/</span> {images.length}
+        </span>
+        <button
+          onClick={onClose}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="relative flex flex-1 items-center justify-center px-16">
+        <button
+          onClick={() => onNavigate((currentIndex - 1 + images.length) % images.length)}
+          className="absolute left-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/25 hover:scale-105"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+
+        <AnimatePresence mode="sync">
+          <motion.img
+            key={currentIndex}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.02 }}
+            transition={{ duration: 0.25 }}
+            src={images[currentIndex]}
+            alt={`Photo ${currentIndex + 1}`}
+            className="max-h-[70vh] max-w-full object-contain"
+          />
+        </AnimatePresence>
+
+        <button
+          onClick={() => onNavigate((currentIndex + 1) % images.length)}
+          className="absolute right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:bg-white/25 hover:scale-105"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+      </div>
+
+      <div className="pb-6 pt-4">
+        <div ref={thumbsRef} className="flex gap-2 overflow-x-auto px-6 pb-2 scrollbar-hide">
+          {images.map((img, i) => (
+            <button
+              key={i}
+              onClick={() => onNavigate(i)}
+              className={`h-16 w-24 flex-shrink-0 overflow-hidden transition-all duration-200 ${
+                i === currentIndex
+                  ? "ring-2 ring-white opacity-100 scale-105"
+                  : "opacity-40 hover:opacity-70"
+              }`}
+            >
+              <img src={img} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -757,6 +898,7 @@ export default function SellPropertyDetailClient() {
   const daysAgo = property.created_at ? getDaysAgo(property.created_at) : '';
   const isVerified = property.is_verified || false;
   const isOffPlan = property.is_off_plan || false;
+  const displayName = getDisplayName(property);
 
   const specs = [
     { icon: BedDouble, label: bedroomDisplay },
@@ -1037,46 +1179,23 @@ export default function SellPropertyDetailClient() {
             </AnimatePresence>
           </div>
 
-          {/* Enquiry */}
+          {/* ─── Enquiry Form ── */}
           <aside id="enquiry">
             <div className="sticky top-6">
-              <div className="border bg-white" style={{ borderColor: THEME.border }}>
-                <div className="border-b p-5" style={{ borderColor: THEME.border, backgroundColor: THEME.primary }}>
-                  <h3 className="text-[16px] font-normal text-white" style={{ fontFamily: FONT_DISPLAY }}>
-                    Request Information
-                  </h3>
-                  <p className="mt-0.5 text-[10px] tracking-[0.1em] text-white/50">Get in touch about {property.property_name}</p>
-                </div>
-                <div className="p-5">
-                  <form className="space-y-3.5">
-                    <div>
-                      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                        Full Name <span className="text-red-400">*</span>
-                      </label>
-                      <input type="text" placeholder="Your full name" className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-[12px] focus:border-gray-400 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                        Phone Number <span className="text-red-400">*</span>
-                      </label>
-                      <input type="tel" placeholder="+971 50 000 0000" className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-[12px] focus:border-gray-400 focus:outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                        Email Address <span className="text-red-400">*</span>
-                      </label>
-                      <input type="email" placeholder="you@email.com" className="mt-1.5 w-full border border-gray-200 px-3 py-2.5 text-[12px] focus:border-gray-400 focus:outline-none" />
-                    </div>
-                    <button
-                      type="submit"
-                      className="w-full py-3 text-[10px] font-medium uppercase tracking-[0.15em] text-white hover:opacity-90"
-                      style={{ backgroundColor: THEME.primary }}
-                    >
-                      Submit
-                    </button>
-                  </form>
-                </div>
-              </div>
+              <EnquiryForm
+                propertyName={displayName}
+                refNumber={refNumber}
+                propertyId={property.id}
+                agentId={property.agent?.id}
+                agentName={property.agent?.name}
+                agentPhone={property.agent?.phone}
+                agentPhoto={property.agent?.photo ? fixImageUrl(property.agent.photo) : null}
+                agentEmail={property.agent?.email || "agent@acasa.ae"}
+                listingType={property.listing_type || "For Sale"}
+                whatsappNumber="971502590071"
+                itemType="property"
+              />
+
               {property.agent?.phone && (
                 <a href={`tel:${property.agent.phone}`} className="mt-3 flex items-center justify-center gap-2 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] hover:bg-gray-50" style={{ borderColor: THEME.border, color: THEME.primary }}>
                   <Phone className="h-3.5 w-3.5" /> Call Agent
@@ -1103,66 +1222,12 @@ export default function SellPropertyDetailClient() {
       {/* ─── Gallery Modal ── */}
       <AnimatePresence>
         {showModal && hasGallery && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex flex-col bg-black/97"
-          >
-            <div className="flex items-center justify-between px-6 py-4">
-              <span className="text-[11px] tracking-[0.2em] text-white/50">
-                {activeIndex + 1} <span className="text-white/25">/</span> {galleryImages.length}
-              </span>
-              <button onClick={() => setShowModal(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="relative flex flex-1 items-center justify-center px-16">
-              <button
-                onClick={() => setActiveIndex(i => (i - 1 + galleryImages.length) % galleryImages.length)}
-                className="absolute left-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/25 hover:scale-105"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-
-              <AnimatePresence mode="sync">
-                <motion.img
-                  key={activeIndex}
-                  initial={{ opacity: 0, scale: 0.97 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.02 }}
-                  transition={{ duration: 0.25 }}
-                  src={galleryImages[activeIndex]}
-                  alt={`Photo ${activeIndex + 1}`}
-                  className="max-h-[70vh] max-w-full object-contain"
-                />
-              </AnimatePresence>
-
-              <button
-                onClick={() => setActiveIndex(i => (i + 1) % galleryImages.length)}
-                className="absolute right-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/25 hover:scale-105"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="pb-6 pt-4">
-              <div className="flex gap-2 overflow-x-auto px-6 pb-2 scrollbar-hide">
-                {galleryImages.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setActiveIndex(i)}
-                    className={`h-16 w-24 flex-shrink-0 overflow-hidden transition-all duration-200 ${
-                      i === activeIndex ? 'ring-2 ring-white opacity-100 scale-105' : 'opacity-40 hover:opacity-70'
-                    }`}
-                  >
-                    <img src={img} alt="" className="h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </motion.div>
+          <GalleryModal
+            images={galleryImages}
+            currentIndex={activeIndex}
+            onClose={() => setShowModal(false)}
+            onNavigate={setActiveIndex}
+          />
         )}
       </AnimatePresence>
 

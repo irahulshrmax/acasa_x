@@ -6,18 +6,19 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Heart, Share2, ChevronLeft, ChevronRight, X,
-  Maximize2, CheckCircle, Loader2, MapPin, Plus, Phone,
+  Maximize2, Loader2, MapPin, Plus, Phone,
   Calendar, Building2, Shield, ExternalLink, Check,
   MessageCircle, Play, Grid3x3, Bath, BedDouble,
-  Maximize, Star, Copy, Home,
+  Maximize, Star,
 } from "lucide-react";
 import BrochureDownload from "@/components/Brochure";
 import toast from "react-hot-toast";
+import EnquiryForm from "@/components/EnquiryForm";
 
 const FONT_DISPLAY = "'Display Pro', 'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
 
-// ✅ Updated THEME - Dark Blue with subtle gold accent
+// ✅ THEME - Dark Blue with subtle gold accent
 const THEME = {
   primary: "#192334",
   secondary: "#1A2F4A",
@@ -77,6 +78,7 @@ interface PropertyDetail {
     phone: string | null;
     photo: string | null;
     rera_brn: string | null;
+    email: string | null;  // ✅ ADD THIS LINE
   };
   featured_image: string | null;
   images: Array<{ id: number; url: string; title: string | null; featured: number }>;
@@ -92,33 +94,27 @@ interface PropertyDetail {
   payment_plans: Array<{ id: number; name: string; percentage: string }>;
   display_title: string | null;
 }
-
-// ─── FIXED: Image URL Helper ──────────────────────────────────────────
+// ─── Image URL Helper ──────────────────────────────────────────────────
 
 function fixImageUrl(url: string | null): string {
   if (!url) return '';
   
-  // If already full URL
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
   }
   
-  // If path starts with /
   if (url.startsWith('/')) {
     return `https://acasa.ae${url}`;
   }
   
-  // If it's just a filename with extension
   if (url.includes('.')) {
     return `https://acasa.ae/upload/media/${url}`;
   }
   
-  // If it's just a number (ID)
   if (/^\d+$/.test(url)) {
     return `https://acasa.ae/upload/media/${url}`;
   }
   
-  // If it's a path without domain
   if (url.includes('/')) {
     return `https://acasa.ae/upload/${url}`;
   }
@@ -126,7 +122,8 @@ function fixImageUrl(url: string | null): string {
   return `https://acasa.ae/upload/media/${url}`;
 }
 
-// ✅ FIXED: Get all gallery images with proper URLs
+// ─── Get Gallery Images ───────────────────────────────────────────────
+
 function getAllGalleryImages(property: PropertyDetail | null): string[] {
   if (!property) return [];
   const seen = new Set<string>();
@@ -137,29 +134,24 @@ function getAllGalleryImages(property: PropertyDetail | null): string[] {
     }
   };
   
-  // Priority: images array first (has correct paths)
   if (property.images && property.images.length > 0) {
     property.images.forEach((img: any) => {
       if (img.url) add(img.url);
     });
   }
   
-  // Then gallery_urls
   if (property.gallery_urls) {
     property.gallery_urls.forEach((url: string) => add(url));
   }
   
-  // Then gallery_images
   if (property.gallery_images) {
     property.gallery_images.forEach((url: string) => add(url));
   }
   
-  // Then featured_image
   if (property.featured_image) {
     add(property.featured_image);
   }
   
-  // Then gallery_preview
   if (property.gallery_preview) {
     property.gallery_preview.forEach((url: string) => add(url));
   }
@@ -170,6 +162,8 @@ function getAllGalleryImages(property: PropertyDetail | null): string[] {
   
   return [...seen];
 }
+
+// ─── Helper Functions ──────────────────────────────────────────────────
 
 function getDisplayPrice(price: any): string {
   if (!price) return 'Price on Request';
@@ -388,153 +382,6 @@ function GalleryModal({ images, currentIndex, onClose, onNavigate }: {
   );
 }
 
-// ─── ENQUIRY FORM ──────────────────────────────────────────────────────
-
-function EnquiryForm({ propertyName, refNumber }: { propertyName: string; refNumber: string }) {
-  const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' });
-  const [agreed, setAgreed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = 'Required';
-    if (!form.phone.trim()) e.phone = 'Required';
-    if (!form.email.trim() || !form.email.includes('@')) e.email = 'Valid email required';
-    return e;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    if (!agreed || submitting) return;
-    setSubmitting(true);
-    await new Promise(r => setTimeout(r, 1500));
-    setSubmitting(false);
-    setDone(true);
-    setTimeout(() => {
-      setDone(false);
-      setForm({ name: '', phone: '', email: '', message: '' });
-      setErrors({});
-    }, 6000);
-  };
-
-  const field = (key: keyof typeof form, label: string, type = 'text', placeholder = '') => (
-    <div>
-      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-        {label} <span className="text-red-400">*</span>
-      </label>
-      <input
-        type={type}
-        required
-        placeholder={placeholder}
-        value={form[key]}
-        onChange={e => {
-          setForm(p => ({ ...p, [key]: e.target.value }));
-          if (errors[key]) setErrors(p => { const n = { ...p }; delete n[key]; return n; });
-        }}
-        className={`mt-1.5 w-full border px-3 py-2.5 text-[12px] transition-all focus:outline-none ${
-          errors[key] ? 'border-red-300 bg-red-50 focus:border-red-400' : 'border-gray-200 bg-white focus:border-gray-400'
-        }`}
-        style={{ fontFamily: FONT_BODY }}
-      />
-      {errors[key] && <p className="mt-1 text-[10px] text-red-500">{errors[key]}</p>}
-    </div>
-  );
-
-  return (
-    <div className="border bg-white" style={{ borderColor: THEME.border }}>
-      <div className="border-b p-5" style={{ borderColor: THEME.border, backgroundColor: THEME.primary }}>
-        <h3 className="text-[16px] font-normal text-white" style={{ fontFamily: FONT_DISPLAY }}>
-          Request Information
-        </h3>
-        <p className="mt-0.5 text-[10px] tracking-[0.1em] text-white/50">Get in touch about {propertyName}</p>
-      </div>
-
-      <div className="p-5">
-        <AnimatePresence mode="wait">
-          {done ? (
-            <motion.div
-              key="done"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="py-10 text-center"
-            >
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 200 }}>
-                <CheckCircle className="mx-auto h-14 w-14 text-emerald-500" />
-              </motion.div>
-              <p className="mt-4 text-[17px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>Message Sent!</p>
-              <p className="mt-1.5 text-[12px]" style={{ color: THEME.muted }}>We'll get back to you within 24 hours.</p>
-              <div className="mt-4 rounded-[3px] bg-gray-50 p-3">
-                <p className="text-[10px]" style={{ color: THEME.muted }}>{propertyName} • Ref: {refNumber}</p>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.form key="form" initial={{ opacity: 1 }} exit={{ opacity: 0 }} onSubmit={handleSubmit} className="space-y-3.5">
-              {field('name', 'Full Name', 'text', 'Your full name')}
-              {field('phone', 'Phone Number', 'tel', '+971 50 000 0000')}
-              {field('email', 'Email Address', 'email', 'you@email.com')}
-
-              <div>
-                <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>Message</label>
-                <textarea
-                  rows={3}
-                  placeholder="I'm interested in this property..."
-                  value={form.message}
-                  onChange={e => setForm(p => ({ ...p, message: e.target.value }))}
-                  className="mt-1.5 w-full resize-none border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-gray-400 focus:outline-none"
-                />
-              </div>
-
-              <label className="flex items-start gap-2.5 cursor-pointer">
-                <div className="relative mt-0.5">
-                  <input type="checkbox" className="sr-only" checked={agreed} onChange={e => setAgreed(e.target.checked)} />
-                  <div
-                    className={`h-4 w-4 border-2 flex items-center justify-center transition-colors ${
-                      agreed ? 'border-transparent' : 'border-gray-300 bg-white'
-                    }`}
-                    style={agreed ? { backgroundColor: THEME.primary } : {}}
-                  >
-                    {agreed && <Check className="h-2.5 w-2.5 text-white" />}
-                  </div>
-                </div>
-                <span className="text-[10px] leading-relaxed" style={{ color: THEME.muted }}>
-                  I agree to the <Link href="/terms" className="underline hover:no-underline" style={{ color: THEME.primary }}>Terms & Conditions</Link> and consent to being contacted.
-                </span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <a
-                  href={`https://wa.me/971502590071?text=I'm%20interested%20in%20${encodeURIComponent(propertyName)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-1.5 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:bg-emerald-500 hover:border-emerald-500 hover:text-white"
-                  style={{ borderColor: THEME.border, color: THEME.primary }}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                </a>
-                <button
-                  type="submit"
-                  disabled={!agreed || submitting}
-                  className="py-3 text-[10px] font-medium uppercase tracking-[0.15em] text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ backgroundColor: THEME.primary }}
-                >
-                  {submitting ? (
-                    <span className="flex items-center justify-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Sending</span>
-                  ) : 'Submit'}
-                </button>
-              </div>
-            </motion.form>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
-
 // ─── SIMILAR PROPERTY CARD ─────────────────────────────────────────────
 
 function SimilarCard({ property, index }: { property: any; index: number }) {
@@ -593,7 +440,6 @@ export default function ApartmentDetailClient() {
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'amenities' | 'plans'>('overview');
   const [similarProperties, setSimilarProperties] = useState<any[]>([]);
-  const [similarLoading, setSimilarLoading] = useState(true);
   const fetchedRef = useRef(false);
 
   // ─── Fetch Property Detail ────────────────────────────────────────────
@@ -605,7 +451,6 @@ export default function ApartmentDetailClient() {
       setLoading(true);
       setError(null);
       try {
-        // ✅ FIX: Use correct API endpoint
         const apiUrl = `/api/v1/properties/${slug}`;
         console.log('🔍 [Detail] Fetching:', apiUrl);
         
@@ -641,7 +486,6 @@ export default function ApartmentDetailClient() {
     if (!property) return;
 
     const fetchSimilar = async () => {
-      setSimilarLoading(true);
       try {
         const res = await fetch(
           `/api/v1/properties/apartments?page=1&limit=6&sort_by=newest&status=1`
@@ -652,8 +496,6 @@ export default function ApartmentDetailClient() {
         }
       } catch (err) {
         console.error('Similar properties error:', err);
-      } finally {
-        setSimilarLoading(false);
       }
     };
 
@@ -753,9 +595,6 @@ export default function ApartmentDetailClient() {
 
   const hasGallery = galleryImages.length > 0;
   const mainImage = hasGallery ? galleryImages[activeIndex % galleryImages.length] : null;
-
-  console.log('🖼️ [Detail] Gallery Images:', galleryImages);
-  console.log('🖼️ [Detail] Main Image:', mainImage);
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
@@ -1115,12 +954,27 @@ export default function ApartmentDetailClient() {
             </AnimatePresence>
           </div>
 
-          {/* Right Column – Enquiry */}
+          {/* ─── Right Column – Enquiry Form (Imported) ── */}
           <aside id="enquiry">
             <div className="sticky top-6">
-              <EnquiryForm propertyName={displayName} refNumber={refNumber} />
+              <EnquiryForm
+  propertyName={displayName}
+  refNumber={refNumber}
+  propertyId={property.id}  // ✅ Property ID
+  agentId={property.agent?.id}
+  agentName={property.agent?.name}
+  agentPhone={property.agent?.phone}
+  agentPhoto={property.agent?.photo ? fixImageUrl(property.agent.photo) : null}
+  agentEmail={property.agent?.email}
+  listingType={property.listing_type || "For Sale"}
+  whatsappNumber="971502590071"
+/>
               {property.agent?.phone && (
-                <a href={`tel:${property.agent.phone}`} className="mt-3 flex items-center justify-center gap-2 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:bg-gray-50" style={{ borderColor: THEME.border, color: THEME.primary }}>
+                <a
+                  href={`tel:${property.agent.phone}`}
+                  className="mt-3 flex items-center justify-center gap-2 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:bg-gray-50"
+                  style={{ borderColor: THEME.border, color: THEME.primary }}
+                >
                   <Phone className="h-3.5 w-3.5" /> Call Agent
                 </a>
               )}
@@ -1176,10 +1030,20 @@ export default function ApartmentDetailClient() {
       {/* ─── Mobile CTA ── */}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white p-4 sm:hidden" style={{ borderColor: THEME.border }}>
         <div className="flex gap-2">
-          <a href={`https://wa.me/971502590071?text=I'm%20interested%20in%20${encodeURIComponent(displayName)}`} target="_blank" rel="noreferrer" className="flex flex-1 items-center justify-center gap-1.5 border py-3 text-[10px] font-medium uppercase tracking-[0.1em] text-emerald-700 transition-colors hover:bg-emerald-50" style={{ borderColor: '#10b981' }}>
+          <a
+            href={`https://wa.me/971502590071?text=I'm%20interested%20in%20${encodeURIComponent(displayName)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex flex-1 items-center justify-center gap-1.5 border py-3 text-[10px] font-medium uppercase tracking-[0.1em] text-emerald-700 transition-colors hover:bg-emerald-50"
+            style={{ borderColor: '#10b981' }}
+          >
             <MessageCircle className="h-4 w-4" /> WhatsApp
           </a>
-          <button onClick={() => document.getElementById('enquiry')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-1 items-center justify-center py-3 text-[10px] font-medium uppercase tracking-[0.1em] text-white" style={{ backgroundColor: THEME.primary }}>
+          <button
+            onClick={() => document.getElementById('enquiry')?.scrollIntoView({ behavior: 'smooth' })}
+            className="flex flex-1 items-center justify-center py-3 text-[10px] font-medium uppercase tracking-[0.1em] text-white"
+            style={{ backgroundColor: THEME.primary }}
+          >
             Enquire Now
           </button>
         </div>

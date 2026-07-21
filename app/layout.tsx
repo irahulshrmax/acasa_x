@@ -3,7 +3,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import Script from "next/script";
-import { Inter, Playfair_Display } from "next/font/google";
+import { Inter, Playfair_Display, EB_Garamond } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 
@@ -20,6 +20,14 @@ const playfair = Playfair_Display({
   display : "swap",
   variable: "--font-playfair",
   weight  : ["400", "500", "600", "700"],
+});
+
+const ebGaramond = EB_Garamond({
+  subsets      : ["latin"],
+  display      : "swap",
+  variable     : "--font-eb-garamond",
+  weight       : ["400", "500", "600", "700", "800"],
+  style        : ["normal", "italic"],
 });
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────
@@ -179,7 +187,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en-AE"
-      className={`${inter.variable} ${playfair.variable}`}
+      className={`${inter.variable} ${playfair.variable} ${ebGaramond.variable}`}
       suppressHydrationWarning
     >
       <head>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,32 +12,21 @@ import {
   ChevronRight,
   X,
   Maximize2,
-  CheckCircle,
-  Loader2,
+  Check,
   MapPin,
-  Plus,
-  Phone,
   Calendar,
   Building2,
   Shield,
-  ExternalLink,
-  Check,
-  MessageCircle,
-  Play,
-  Grid3x3,
-  Map as MapIcon,
-  Bath,
-  Maximize,
-  BedDouble,
-  Star,
-  Eye,
-  Copy,
-  TrendingUp,
   Clock,
   Award,
-  Sparkles,
   Users,
+  BedDouble,
+  Maximize,
+  Grid3x3,
 } from "lucide-react";
+
+// Import the EnquiryForm component
+import EnquiryForm from "@/components/EnquiryForm";
 
 const API_URL = "/api/v1/projects/new-project";
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -104,6 +93,12 @@ interface Project {
   logo_url: string | null;
   specs: any | null;
   developer_name?: string;
+  // Agent fields
+  agent_name?: string;
+  agent_phone?: string;
+  agent_email?: string;
+  agent_photo?: string | null;
+  agent_id?: string;
 }
 
 function stripHtml(html: string | null): string {
@@ -249,210 +244,10 @@ function GalleryModal({
   );
 }
 
-function EnquiryForm({ projectName, projectId }: { projectName: string; projectId: number }) {
-  const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
-  const [agreed, setAgreed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = "Required";
-    if (!form.phone.trim()) e.phone = "Required";
-    if (!form.email.trim() || !form.email.includes("@")) e.email = "Valid email required";
-    return e;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) {
-      setErrors(errs);
-      return;
-    }
-    if (!agreed || submitting) return;
-    setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setSubmitting(false);
-    setDone(true);
-    setTimeout(() => {
-      setDone(false);
-      setForm({ name: "", phone: "", email: "", message: "" });
-      setErrors({});
-    }, 6000);
-  };
-
-  const field = (
-    key: keyof typeof form,
-    label: string,
-    type = "text",
-    placeholder = ""
-  ) => (
-    <div>
-      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-        {label} <span className="text-red-400">*</span>
-      </label>
-      <input
-        type={type}
-        required
-        placeholder={placeholder}
-        value={form[key]}
-        onChange={(e) => {
-          setForm((p) => ({ ...p, [key]: e.target.value }));
-          if (errors[key]) setErrors((p) => {
-            const n = { ...p };
-            delete n[key];
-            return n;
-          });
-        }}
-        className={`mt-1.5 w-full border px-3 py-2.5 text-[12px] transition-all focus:outline-none ${
-          errors[key]
-            ? "border-red-300 bg-red-50 focus:border-red-400"
-            : "border-gray-200 bg-white focus:border-gray-400"
-        }`}
-        style={{ fontFamily: FONT_BODY }}
-      />
-      {errors[key] && <p className="mt-1 text-[10px] text-red-500">{errors[key]}</p>}
-    </div>
-  );
-
-  return (
-    <div className="border bg-white" style={{ borderColor: THEME.border }}>
-      <div className="border-b p-5" style={{ borderColor: THEME.border, backgroundColor: THEME.primary }}>
-        <h3
-          className="text-[16px] font-normal text-white"
-          style={{ fontFamily: FONT_DISPLAY }}
-        >
-          Request Information
-        </h3>
-        <p className="mt-0.5 text-[10px] tracking-[0.1em] text-white/50">
-          Get in touch about {projectName}
-        </p>
-      </div>
-
-      <div className="p-5">
-        <AnimatePresence mode="wait">
-          {done ? (
-            <motion.div
-              key="done"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="py-10 text-center"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200 }}
-              >
-                <CheckCircle className="mx-auto h-14 w-14 text-emerald-500" />
-              </motion.div>
-              <p className="mt-4 text-[17px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
-                Message Sent!
-              </p>
-              <p className="mt-1.5 text-[12px]" style={{ color: THEME.muted }}>
-                We'll get back to you within 24 hours.
-              </p>
-              <div className="mt-4 rounded-[3px] bg-gray-50 p-3">
-                <p className="text-[10px]" style={{ color: THEME.muted }}>
-                  {projectName}
-                </p>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.form
-              key="form"
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onSubmit={handleSubmit}
-              className="space-y-3.5"
-            >
-              {field("name", "Full Name", "text", "Your full name")}
-              {field("phone", "Phone Number", "tel", "+971 50 000 0000")}
-              {field("email", "Email Address", "email", "you@email.com")}
-
-              <div>
-                <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                  Message
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="I'm interested in this project..."
-                  value={form.message}
-                  onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
-                  className="mt-1.5 w-full resize-none border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-gray-400 focus:outline-none"
-                />
-              </div>
-
-              <label className="flex items-start gap-2.5 cursor-pointer">
-                <div className="relative mt-0.5">
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={agreed}
-                    onChange={(e) => setAgreed(e.target.checked)}
-                  />
-                  <div
-                    className={`h-4 w-4 border-2 flex items-center justify-center transition-colors ${
-                      agreed ? "border-transparent" : "border-gray-300 bg-white"
-                    }`}
-                    style={agreed ? { backgroundColor: THEME.primary } : {}}
-                  >
-                    {agreed && <Check className="h-2.5 w-2.5 text-white" />}
-                  </div>
-                </div>
-                <span className="text-[10px] leading-relaxed" style={{ color: THEME.muted }}>
-                  I agree to the{" "}
-                  <Link href="/terms" className="underline hover:no-underline" style={{ color: THEME.primary }}>
-                    Terms & Conditions
-                  </Link>{" "}
-                  and consent to being contacted.
-                </span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <a
-                  href="https://wa.me/971502590071"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-1.5 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:bg-emerald-500 hover:border-emerald-500 hover:text-white"
-                  style={{ borderColor: THEME.border, color: THEME.primary }}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  WhatsApp
-                </a>
-
-                <button
-                  type="submit"
-                  disabled={!agreed || submitting}
-                  className="py-3 text-[10px] font-medium uppercase tracking-[0.15em] text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ backgroundColor: THEME.primary }}
-                >
-                  {submitting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Sending
-                    </span>
-                  ) : (
-                    "Submit"
-                  )}
-                </button>
-              </div>
-            </motion.form>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
-
 function SimilarProjectCard({ project, index }: { project: any; index: number }) {
   const [imgErr, setImgErr] = useState(false);
   const router = useRouter();
-  const img = !imgErr
-    ? project.image_url || project.gallery_images?.[0] || null
-    : null;
+  const img = !imgErr ? project.image_url || project.gallery_images?.[0] || null : null;
 
   return (
     <motion.div
@@ -460,7 +255,7 @@ function SimilarProjectCard({ project, index }: { project: any; index: number })
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4, delay: index * 0.1 }}
-      onClick={() => router.push(`/projects/${project.project_slug || project.id}`)}
+      onClick={() => router.push(`/new-projects-in-dubai/${project.project_slug || project.id}`)}
       className="group cursor-pointer"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
@@ -559,9 +354,7 @@ export default function ProjectDetailPage() {
       const next = !prev;
       try {
         const saved = JSON.parse(localStorage.getItem("project_wishlist") || "[]");
-        const updated = next
-          ? [...saved, project.id]
-          : saved.filter((id: number) => id !== project.id);
+        const updated = next ? [...saved, project.id] : saved.filter((id: number) => id !== project.id);
         localStorage.setItem("project_wishlist", JSON.stringify(updated));
       } catch {}
       return next;
@@ -591,14 +384,14 @@ export default function ProjectDetailPage() {
       images.push(project.image_url);
     }
     if (project.gallery_images) {
-      project.gallery_images.forEach(img => {
+      project.gallery_images.forEach((img) => {
         if (!images.includes(img) && !img.includes("no-image")) {
           images.push(img);
         }
       });
     }
     if (project.media_records) {
-      project.media_records.forEach(record => {
+      project.media_records.forEach((record) => {
         if (record.full_url && !images.includes(record.full_url) && !record.full_url.includes("no-image")) {
           images.push(record.full_url);
         }
@@ -619,7 +412,7 @@ export default function ProjectDetailPage() {
           <Building2 className="mx-auto h-12 w-12 text-gray-300 mb-4" />
           <p className="text-sm text-red-500 mb-6">{error || "Project not found"}</p>
           <Link
-            href="/projects"
+            href="/new-projects-in-dubai"
             className="inline-flex items-center gap-2 px-6 py-3 text-[11px] uppercase tracking-widest text-white transition-colors hover:opacity-90"
             style={{ backgroundColor: THEME.primary }}
           >
@@ -641,10 +434,17 @@ export default function ProjectDetailPage() {
     { icon: Maximize, label: project.area_display || "Area on Request" },
   ].filter((s) => s.label);
 
-  const similarProjects: any[] = [];
+  // Agent data with fallbacks
+  const agentData = {
+    name: project.agent_name || "Ahmed Al Maktoum",
+    phone: project.agent_phone || "+971 50 259 0071",
+    email: project.agent_email || "ahmed@acasa.ae",
+    photo: project.agent_photo || null,
+  };
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
+      {/* Breadcrumb */}
       <div className="border-b" style={{ borderColor: THEME.border, backgroundColor: THEME.surface }}>
         <div className="mx-auto max-w-[1180px] px-4 py-3 md:px-6">
           <div className="flex items-center justify-between gap-4">
@@ -653,7 +453,7 @@ export default function ProjectDetailPage() {
                 Home
               </Link>
               <ChevronLeft className="h-3 w-3 rotate-180" />
-              <Link href="/projects" className="hover:text-gray-600 transition-colors">
+              <Link href="/new-projects-in-dubai" className="hover:text-gray-600 transition-colors">
                 Projects
               </Link>
               <ChevronLeft className="h-3 w-3 rotate-180" />
@@ -666,9 +466,7 @@ export default function ProjectDetailPage() {
               <button
                 onClick={toggleWishlist}
                 className={`flex h-9 w-9 items-center justify-center border transition-all ${
-                  isWishlisted
-                    ? "border-red-500 bg-red-500 text-white"
-                    : "border-gray-200 bg-white text-gray-500 hover:border-red-300 hover:text-red-500"
+                  isWishlisted ? "border-red-500 bg-red-500 text-white" : "border-gray-200 bg-white text-gray-500 hover:border-red-300 hover:text-red-500"
                 }`}
               >
                 <Heart className={`h-4 w-4 ${isWishlisted ? "fill-current" : ""}`} />
@@ -682,7 +480,7 @@ export default function ProjectDetailPage() {
               </button>
 
               <button
-                onClick={() => document.getElementById("enquiry")?.scrollIntoView({ behavior: "smooth" })}
+                onClick={() => document.getElementById("enquiry-form")?.scrollIntoView({ behavior: "smooth" })}
                 className="hidden sm:flex items-center gap-2 px-5 py-2 text-[10px] font-medium uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-90"
                 style={{ backgroundColor: THEME.primary }}
               >
@@ -693,6 +491,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
+      {/* Project Header */}
       <div className="mx-auto max-w-[1180px] px-4 pt-8 pb-6 md:px-6">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex-1 min-w-0">
@@ -710,7 +509,6 @@ export default function ProjectDetailPage() {
                   className={`px-2.5 py-1 text-[8px] font-medium uppercase tracking-[0.15em] border ${
                     isOffPlan ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"
                   }`}
-                  style={{ borderColor: THEME.border, color: THEME.muted }}
                 >
                   {project.listing_type}
                 </span>
@@ -777,11 +575,7 @@ export default function ProjectDetailPage() {
 
         <div className="mt-6 flex flex-wrap gap-3">
           {specs.map(({ icon: Icon, label }, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 rounded-[3px] border px-3.5 py-2"
-              style={{ borderColor: THEME.border }}
-            >
+            <div key={i} className="flex items-center gap-2 rounded-[3px] border px-3.5 py-2" style={{ borderColor: THEME.border }}>
               <Icon className="h-3.5 w-3.5" style={{ color: THEME.accent }} />
               <span className="text-[11px] font-medium" style={{ color: THEME.primary }}>
                 {label}
@@ -789,10 +583,7 @@ export default function ProjectDetailPage() {
             </div>
           ))}
           {project.occupancy && (
-            <div
-              className="flex items-center gap-2 rounded-[3px] border px-3.5 py-2"
-              style={{ borderColor: THEME.border }}
-            >
+            <div className="flex items-center gap-2 rounded-[3px] border px-3.5 py-2" style={{ borderColor: THEME.border }}>
               <Clock className="h-3.5 w-3.5" style={{ color: THEME.accent }} />
               <span className="text-[11px] font-medium" style={{ color: THEME.primary }}>
                 {project.occupancy}
@@ -802,6 +593,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
+      {/* Gallery */}
       <div className="mx-auto max-w-[1180px] px-4 md:px-6">
         <div
           className="relative overflow-hidden bg-gray-100 aspect-[16/9] group cursor-pointer"
@@ -882,11 +674,7 @@ export default function ProjectDetailPage() {
                   className={`h-16 w-24 flex-shrink-0 overflow-hidden transition-all duration-200 ${
                     i === activeIndex ? "opacity-100" : "opacity-50 hover:opacity-80"
                   }`}
-                  style={
-                    i === activeIndex
-                      ? { outline: `2px solid ${THEME.primary}`, outlineOffset: "-1px" }
-                      : {}
-                  }
+                  style={i === activeIndex ? { outline: `2px solid ${THEME.primary}`, outlineOffset: "-1px" } : {}}
                 >
                   <img src={img} alt="" loading="lazy" className="h-full w-full object-cover" />
                 </button>
@@ -897,8 +685,7 @@ export default function ProjectDetailPage() {
                   className="flex h-16 w-24 flex-shrink-0 items-center justify-center border text-[9px] uppercase tracking-widest transition-colors hover:bg-gray-50"
                   style={{ borderColor: THEME.border, color: THEME.muted }}
                 >
-                  <Plus className="h-3.5 w-3.5 mr-1" />
-                  {galleryImages.length - 10}
+                  <span className="text-[11px] font-medium">+{galleryImages.length - 10}</span>
                 </button>
               )}
             </div>
@@ -906,8 +693,10 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
+      {/* Main Content */}
       <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-6">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px]">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_380px]">
+          {/* Left Column - Overview */}
           <div>
             <div className="border-b mb-8" style={{ borderColor: THEME.border }}>
               <button
@@ -934,8 +723,8 @@ export default function ProjectDetailPage() {
                 />
               ) : (
                 <p className="text-[13px] leading-relaxed" style={{ color: "#4A5462" }}>
-                  Welcome to {project.ProjectName}, a premium development in {location}, Dubai. 
-                  This exceptional project offers world-class amenities and stunning views.
+                  Welcome to {project.ProjectName}, a premium development in {location}, Dubai. This exceptional project
+                  offers world-class amenities and stunning views.
                 </p>
               )}
 
@@ -967,10 +756,7 @@ export default function ProjectDetailPage() {
 
               {project.specs && (
                 <div className="mt-8 border-t pt-8" style={{ borderColor: THEME.border }}>
-                  <h3
-                    className="text-[16px] mb-4"
-                    style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
-                  >
+                  <h3 className="text-[16px] mb-4" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
                     Specifications
                   </h3>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -979,7 +765,7 @@ export default function ProjectDetailPage() {
                       .slice(0, 12)
                       .map(([key]) => (
                         <div key={key} className="flex items-center gap-2 text-[11px]" style={{ color: THEME.primary }}>
-                          <span className="h-1 w-1 rounded-full bg-amber-500" />
+                          <span className="h-1 w-1 rounded-full" style={{ backgroundColor: THEME.accent }} />
                           {key.replace(/_/g, " ").toUpperCase()}
                         </div>
                       ))}
@@ -989,12 +775,26 @@ export default function ProjectDetailPage() {
             </div>
           </div>
 
-          <aside id="enquiry">
+          {/* ✅ Right Column - Enquiry Form (FIXED PROPS) */}
+          <aside id="enquiry-form">
             <div className="sticky top-6">
-              <EnquiryForm projectName={project.ProjectName || "Project"} projectId={project.id} />
+         <EnquiryForm
+  propertyName={project.ProjectName || "Project"}
+  refNumber={project.project_slug || String(project.id)}
+  projectId={project.id}  // ✅ Ye pass kar rahe ho?
+  propertyId={null}       // ✅ Property page nahi hai toh null
+  agentId={null}
+  agentName={agentData.name}
+  agentPhone={agentData.phone}
+  agentEmail={agentData.email}
+  agentPhoto={agentData.photo}
+  listingType={project.listing_type || "For Sale"}
+  itemType="project"       // ✅ Explicitly set karo
+  whatsappNumber="971502590071"
+/>
 
               <Link
-                href="/projects"
+                href="/new-projects-in-dubai"
                 className="mt-3 flex items-center justify-center gap-2 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:bg-gray-50"
                 style={{ borderColor: THEME.border, color: THEME.muted }}
               >
@@ -1005,6 +805,18 @@ export default function ProjectDetailPage() {
           </aside>
         </div>
       </div>
+
+      {/* Gallery Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <GalleryModal
+            images={galleryImages}
+            currentIndex={activeIndex}
+            onClose={() => setShowModal(false)}
+            onNavigate={setActiveIndex}
+          />
+        )}
+      </AnimatePresence>
 
       <div className="h-20 sm:hidden" />
     </div>

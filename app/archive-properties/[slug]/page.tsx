@@ -12,7 +12,6 @@ import {
   ChevronRight,
   X,
   Maximize2,
-  CheckCircle,
   Loader2,
   MapPin,
   Plus,
@@ -39,6 +38,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
+import EnquiryForm from "@/components/EnquiryForm";
 
 const API_URL = "/api/v1/properties/archive";
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -66,7 +66,6 @@ interface PropertyDetail {
   status: number;
   featured: boolean;
   created_at: string;
-  updated_at: string;
   completion_date: string | null;
   exclusive_status: string | null;
   dld_permit: string | null;
@@ -74,94 +73,84 @@ interface PropertyDetail {
   rera_number: string | null;
   price: {
     amount: number | null;
-    amount_end: number | null;
-    display: string;
-    display_end: string | null;
+    display: string | null;
     currency: string;
     symbol: string;
     is_price_on_request: boolean;
-    sale_price: number | null;
-    listing_price: number | null;
-    rental_price: number | null;
   };
   bedrooms: string;
   bathrooms: string;
   area: {
     value: number | null;
-    display: string;
+    display: string | null;
     size: string | null;
-    min_area: string | null;
-    max_area: string | null;
   };
   location: {
     community: string | null;
-    community_slug: string | null;
-    sub_community: string | null;
-    city: string | null;
+    city: string;
     address: string | null;
     latitude: number | null;
     longitude: number | null;
     community_id: number | null;
-    city_id: number | null;
   };
   developer: {
     id: number | null;
     name: string | null;
-    logo_url: string | null;
-    logo_variations: string[];
+    logo: string | null;
     country: string | null;
     website: string | null;
-    informations: string | null;
-    is_international: boolean;
   };
   agent: {
     id: number | null;
     name: string | null;
     phone: string | null;
-    photo_url: string | null;
+    photo: string | null;
     rera_brn: string | null;
     email: string | null;
-    mobile: string | null;
-    about: string | null;
   };
-  featured_image: string;
+  featured_image: string | null;
   images: Array<{ id: number; url: string; title: string | null; featured: number }>;
   gallery_images: string[];
   gallery_urls: string[];
   gallery_preview: string[];
-  media_base_url: string;
   description: string | null;
   amenities: string[];
   furnishing: string | null;
   flooring: string | null;
   parking: string | null;
   video_url: string | null;
-  payment_plans: Array<{
-    id: number;
-    name: string;
-    percentage: string;
-    item_id: number;
-    item_type: string | null;
-  }>;
-  display_title: string;
-  facilities: any;
-  location_data: any;
-  is_off_plan: boolean;
-  seo: {
-    title: string;
-    description: string | null;
-    keywords: string | null;
-    slug: string;
-  };
-  similar_properties: any[];
-  project_id: number | null;
-  status_label?: string;
-  is_archived?: boolean;
-  is_draft?: boolean;
-  is_pending?: boolean;
+  payment_plans: Array<{ id: number; name: string; percentage: string }>;
+  display_title: string | null;
   can_restore?: boolean;
-  can_edit?: boolean;
   can_permanently_delete?: boolean;
+}
+
+// ─── Image URL Helper ──────────────────────────────────────────────────
+
+function fixImageUrl(url: string | null): string {
+  if (!url) return '';
+  
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  if (url.startsWith('/')) {
+    return `https://acasa.ae${url}`;
+  }
+  
+  if (url.includes('.')) {
+    return `https://acasa.ae/upload/media/${url}`;
+  }
+  
+  if (/^\d+$/.test(url)) {
+    return `https://acasa.ae/upload/media/${url}`;
+  }
+  
+  if (url.includes('/')) {
+    return `https://acasa.ae/upload/${url}`;
+  }
+  
+  return `https://acasa.ae/upload/media/${url}`;
 }
 
 const STATUS_COLORS: Record<number, string> = {
@@ -195,6 +184,23 @@ function getStatusColor(status: number): string {
 function getStatusLabel(status: number): string {
   return STATUS_LABELS[status] || `Status ${status}`;
 }
+
+function getDisplayName(property: any): string {
+  if (!property) return 'Property';
+  if (property.property_name && property.property_name !== 'Null' && property.property_name !== 'null') {
+    return property.property_name;
+  }
+  if (property.property_slug) {
+    return property.property_slug
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (char: string) => char.toUpperCase())
+      .replace(/\bLn\d+\b/g, '')
+      .trim() || `Property ${property.id}`;
+  }
+  return `Property ${property.id}`;
+}
+
+// ─── LOADER ───────────────────────────────────────────────────────────────
 
 function PageLoader() {
   return (
@@ -230,6 +236,8 @@ function PageLoader() {
     </div>
   );
 }
+
+// ─── GALLERY MODAL ──────────────────────────────────────────────────────
 
 function GalleryModal({
   images,
@@ -334,6 +342,8 @@ function GalleryModal({
   );
 }
 
+// ─── PAYMENT PLANS ──────────────────────────────────────────────────────
+
 function PaymentPlans({ plans }: { plans: any[] }) {
   if (!plans?.length) return null;
   const sorted = [...plans].sort((a, b) => parseFloat(a.percentage) - parseFloat(b.percentage));
@@ -380,203 +390,7 @@ function PaymentPlans({ plans }: { plans: any[] }) {
   );
 }
 
-function EnquiryForm({ propertyName, refNumber }: { propertyName: string; refNumber: string }) {
-  const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
-  const [agreed, setAgreed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = "Required";
-    if (!form.phone.trim()) e.phone = "Required";
-    if (!form.email.trim() || !form.email.includes("@")) e.email = "Valid email required";
-    return e;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) {
-      setErrors(errs);
-      return;
-    }
-    if (!agreed || submitting) return;
-    setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setSubmitting(false);
-    setDone(true);
-    setTimeout(() => {
-      setDone(false);
-      setForm({ name: "", phone: "", email: "", message: "" });
-      setErrors({});
-    }, 6000);
-  };
-
-  const field = (
-    key: keyof typeof form,
-    label: string,
-    type = "text",
-    placeholder = ""
-  ) => (
-    <div>
-      <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-        {label} <span className="text-red-400">*</span>
-      </label>
-      <input
-        type={type}
-        required
-        placeholder={placeholder}
-        value={form[key]}
-        onChange={(e) => {
-          setForm((p) => ({ ...p, [key]: e.target.value }));
-          if (errors[key]) setErrors((p) => {
-            const n = { ...p };
-            delete n[key];
-            return n;
-          });
-        }}
-        className={`mt-1.5 w-full border px-3 py-2.5 text-[12px] transition-all focus:outline-none ${
-          errors[key]
-            ? "border-red-300 bg-red-50 focus:border-red-400"
-            : "border-gray-200 bg-white focus:border-gray-400"
-        }`}
-        style={{ fontFamily: FONT_BODY }}
-      />
-      {errors[key] && <p className="mt-1 text-[10px] text-red-500">{errors[key]}</p>}
-    </div>
-  );
-
-  return (
-    <div className="border bg-white" style={{ borderColor: THEME.border }}>
-      <div className="border-b p-5" style={{ borderColor: THEME.border, backgroundColor: THEME.primary }}>
-        <h3
-          className="text-[16px] font-normal text-white"
-          style={{ fontFamily: FONT_DISPLAY }}
-        >
-          Request Information
-        </h3>
-        <p className="mt-0.5 text-[10px] tracking-[0.1em] text-white/50">
-          Get in touch about {propertyName}
-        </p>
-      </div>
-
-      <div className="p-5">
-        <AnimatePresence mode="wait">
-          {done ? (
-            <motion.div
-              key="done"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="py-10 text-center"
-            >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 200 }}
-              >
-                <CheckCircle className="mx-auto h-14 w-14 text-emerald-500" />
-              </motion.div>
-              <p className="mt-4 text-[17px]" style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}>
-                Message Sent!
-              </p>
-              <p className="mt-1.5 text-[12px]" style={{ color: THEME.muted }}>
-                We'll get back to you within 24 hours.
-              </p>
-              <div className="mt-4 rounded-[3px] bg-gray-50 p-3">
-                <p className="text-[10px]" style={{ color: THEME.muted }}>
-                  {propertyName} • Ref: {refNumber}
-                </p>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.form
-              key="form"
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onSubmit={handleSubmit}
-              className="space-y-3.5"
-            >
-              {field("name", "Full Name", "text", "Your full name")}
-              {field("phone", "Phone Number", "tel", "+971 50 000 0000")}
-              {field("email", "Email Address", "email", "you@email.com")}
-
-              <div>
-                <label className="text-[10px] font-medium uppercase tracking-[0.1em]" style={{ color: THEME.muted }}>
-                  Message
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="I'm interested in this property..."
-                  value={form.message}
-                  onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
-                  className="mt-1.5 w-full resize-none border border-gray-200 px-3 py-2.5 text-[12px] transition-all focus:border-gray-400 focus:outline-none"
-                />
-              </div>
-
-              <label className="flex items-start gap-2.5 cursor-pointer">
-                <div className="relative mt-0.5">
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={agreed}
-                    onChange={(e) => setAgreed(e.target.checked)}
-                  />
-                  <div
-                    className={`h-4 w-4 border-2 flex items-center justify-center transition-colors ${
-                      agreed ? "border-transparent" : "border-gray-300 bg-white"
-                    }`}
-                    style={agreed ? { backgroundColor: THEME.primary } : {}}
-                  >
-                    {agreed && <Check className="h-2.5 w-2.5 text-white" />}
-                  </div>
-                </div>
-                <span className="text-[10px] leading-relaxed" style={{ color: THEME.muted }}>
-                  I agree to the{" "}
-                  <Link href="/terms" className="underline hover:no-underline" style={{ color: THEME.primary }}>
-                    Terms & Conditions
-                  </Link>{" "}
-                  and consent to being contacted.
-                </span>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <a
-                  href="https://wa.me/971502590071"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-1.5 border py-3 text-[10px] font-medium uppercase tracking-[0.15em] transition-all hover:bg-emerald-500 hover:border-emerald-500 hover:text-white"
-                  style={{ borderColor: THEME.border, color: THEME.primary }}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  WhatsApp
-                </a>
-
-                <button
-                  type="submit"
-                  disabled={!agreed || submitting}
-                  className="py-3 text-[10px] font-medium uppercase tracking-[0.15em] text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                  style={{ backgroundColor: THEME.primary }}
-                >
-                  {submitting ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Sending
-                    </span>
-                  ) : (
-                    "Submit"
-                  )}
-                </button>
-              </div>
-            </motion.form>
-          )}
-        </AnimatePresence>
-      </div>
-    </div>
-  );
-}
+// ─── PROPERTY MAP ──────────────────────────────────────────────────────
 
 function PropertyMap({ lat, lng, name }: { lat: number; lng: number; name: string }) {
   const [err, setErr] = useState(false);
@@ -599,6 +413,8 @@ function PropertyMap({ lat, lng, name }: { lat: number; lng: number; name: strin
     />
   );
 }
+
+// ─── SIMILAR CARD ──────────────────────────────────────────────────────
 
 function SimilarCard({ property, index }: { property: any; index: number }) {
   const [imgErr, setImgErr] = useState(false);
@@ -673,6 +489,8 @@ function SimilarCard({ property, index }: { property: any; index: number }) {
     </motion.div>
   );
 }
+
+// ─── MAIN COMPONENT ─────────────────────────────────────────────────────
 
 export default function ArchivePropertyDetailPage() {
   const { slug } = useParams() as { slug: string };
@@ -783,6 +601,7 @@ export default function ArchivePropertyDetailPage() {
   const refNumber = property.ref_number || `LN${property.id}`;
   const lat = property.location?.latitude ?? 25.0657;
   const lng = property.location?.longitude ?? 55.1713;
+  const displayName = getDisplayName(property);
 
   const statusColor = getStatusColor(property.status);
   const statusLabel = getStatusLabel(property.status);
@@ -795,6 +614,7 @@ export default function ArchivePropertyDetailPage() {
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_BODY }}>
+      {/* ─── Breadcrumb ── */}
       <div className="border-b" style={{ borderColor: THEME.border, backgroundColor: THEME.surface }}>
         <div className="mx-auto max-w-[1180px] px-4 py-3 md:px-6">
           <div className="flex items-center justify-between gap-4">
@@ -835,6 +655,7 @@ export default function ArchivePropertyDetailPage() {
         </div>
       </div>
 
+      {/* ─── Header ── */}
       <div className="mx-auto max-w-[1180px] px-4 pt-8 pb-6 md:px-6">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex-1 min-w-0">
@@ -952,6 +773,7 @@ export default function ArchivePropertyDetailPage() {
         </div>
       </div>
 
+      {/* ─── Gallery ── */}
       <div className="mx-auto max-w-[1180px] px-4 md:px-6">
         <div
           className="relative overflow-hidden bg-gray-100 aspect-[16/9] group cursor-pointer"
@@ -1068,8 +890,10 @@ export default function ArchivePropertyDetailPage() {
         )}
       </div>
 
+      {/* ─── Content Grid ── */}
       <div className="mx-auto max-w-[1180px] px-4 py-12 md:px-6">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px]">
+          {/* Left Column */}
           <div>
             <div className="flex border-b mb-8" style={{ borderColor: THEME.border }}>
               {(["overview", "amenities", "plans"] as const)
@@ -1166,13 +990,13 @@ export default function ArchivePropertyDetailPage() {
                         Developer
                       </p>
                       <div className="flex items-center gap-4">
-                        {property.developer.logo_url && (
+                        {property.developer.logo && (
                           <div
                             className="flex h-14 w-20 items-center justify-center border rounded-[3px] p-2"
                             style={{ borderColor: THEME.border }}
                           >
                             <img
-                              src={property.developer.logo_url}
+                              src={fixImageUrl(property.developer.logo)}
                               alt={property.developer.name}
                               className="max-h-full max-w-full object-contain"
                               onError={(e) => (e.currentTarget.style.display = "none")}
@@ -1211,9 +1035,9 @@ export default function ArchivePropertyDetailPage() {
                         Listing Agent
                       </p>
                       <div className="flex items-center gap-4">
-                        {property.agent.photo_url ? (
+                        {property.agent.photo ? (
                           <img
-                            src={property.agent.photo_url}
+                            src={fixImageUrl(property.agent.photo)}
                             alt={property.agent.name}
                             className="h-14 w-14 rounded-full object-cover border-2"
                             style={{ borderColor: THEME.border }}
@@ -1303,9 +1127,22 @@ export default function ArchivePropertyDetailPage() {
             </AnimatePresence>
           </div>
 
+          {/* ─── Right Column - Enquiry Form ── */}
           <aside id="enquiry">
             <div className="sticky top-6">
-              <EnquiryForm propertyName={property.property_name} refNumber={refNumber} />
+              {/* ✅ Updated EnquiryForm with proper props */}
+              <EnquiryForm
+                propertyName={displayName}
+                refNumber={refNumber}
+                propertyId={property.id}
+                agentId={property.agent?.id}
+                agentName={property.agent?.name}
+                agentPhone={property.agent?.phone}
+                agentPhoto={property.agent?.photo ? fixImageUrl(property.agent.photo) : null}
+                agentEmail={property.agent?.email}
+                listingType={property.listing_type || "For Sale"}
+                whatsappNumber="971502590071"
+              />
 
               {property.agent?.phone && (
                 <a
@@ -1375,6 +1212,7 @@ export default function ArchivePropertyDetailPage() {
         </div>
       </div>
 
+      {/* ─── Map ── */}
       <div className="mx-auto max-w-[1180px] px-4 pb-12 md:px-6">
         <div className="mb-6 flex items-baseline gap-3">
           <h2
@@ -1404,6 +1242,7 @@ export default function ArchivePropertyDetailPage() {
         </div>
       </div>
 
+      {/* ─── Gallery Modal ── */}
       <AnimatePresence>
         {showModal && (
           <GalleryModal
@@ -1415,6 +1254,7 @@ export default function ArchivePropertyDetailPage() {
         )}
       </AnimatePresence>
 
+      {/* ─── Mobile CTA ── */}
       <div
         className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white p-4 sm:hidden"
         style={{ borderColor: THEME.border }}

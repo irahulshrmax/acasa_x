@@ -368,7 +368,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
     filters.min_bedrooms !== "" ||
     filters.max_bedrooms !== "";
 
-  // ─── RESOLVE PARAMS ────────────────────────────────────────────────────
   useEffect(() => {
     const resolveParams = async () => {
       const resolved = await params;
@@ -377,7 +376,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
     resolveParams();
   }, [params]);
 
-  // ─── FETCH ─────────────────────────────────────────────────────────────
   const fetchData = useCallback(
     async (page: number) => {
       if (!slug) return;
@@ -421,7 +419,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
     }
   }, [slug, filters.page]);
 
-  // ─── FILTER HANDLERS ───────────────────────────────────────────────────
   const updateFilter = useCallback((key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
   }, []);
@@ -489,7 +486,7 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
             </button>
             <div>
               <Link
-                href={`/communities/${slug}`}
+                href={`/dubai/${slug}`}
                 className="text-[10px] uppercase tracking-[0.15em] transition-colors hover:opacity-70"
                 style={{ color: THEME.muted }}
               >
@@ -512,7 +509,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
           <div className="flex h-14 items-center gap-2">
             <div className="flex flex-1 items-center gap-2 overflow-x-auto">
               <div className="hidden items-center gap-2 lg:flex">
-                {/* Sort */}
                 <select
                   value={filters.sort_by}
                   onChange={(e) => updateFilter("sort_by", e.target.value)}
@@ -525,7 +521,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
                   ))}
                 </select>
 
-                {/* Property Type */}
                 <select
                   value={filters.property_type}
                   onChange={(e) => updateFilter("property_type", e.target.value)}
@@ -539,7 +534,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
                   ))}
                 </select>
 
-                {/* Price */}
                 <select
                   value={currentPriceValue}
                   onChange={(e) => handlePriceChange(e.target.value)}
@@ -553,7 +547,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
                   ))}
                 </select>
 
-                {/* Bedrooms */}
                 <select
                   value={
                     filters.min_bedrooms === filters.max_bedrooms && filters.min_bedrooms !== ""
@@ -709,7 +702,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
           </div>
         )}
 
-        {/* Properties Grid */}
         <div
           className={`grid gap-x-6 gap-y-8 ${
             viewMode === "grid" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"
@@ -720,7 +712,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
             : properties.map((property) => <PropertyCard key={property.id} property={property} />)}
         </div>
 
-        {/* Pagination */}
         {!loading && pagination && pagination.totalPages > 1 && (
           <Pagination
             currentPage={pagination.page}
@@ -729,7 +720,6 @@ export default function CommunityPropertiesPage({ params }: { params: Promise<{ 
           />
         )}
 
-        {/* No Results */}
         {!loading && properties.length === 0 && !error && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}

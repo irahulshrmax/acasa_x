@@ -76,6 +76,7 @@ const SORT_OPTIONS = [
   { value: "popular", label: "Most Popular" },
 ];
 
+// ✅ UPDATED BLOGCARD - Title 1 line, Description 2 lines
 function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
   const [imageError, setImageError] = useState(false);
 
@@ -121,9 +122,11 @@ function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
         </div>
 
         <div className="p-5">
+          {/* ✅ TITLE - EK LINE MEIN ... KE SAATH */}
           <h3
-            className="text-[16px] font-normal uppercase leading-snug tracking-[0.04em] transition-opacity group-hover:opacity-70 line-clamp-2"
+            className="text-[16px] font-normal uppercase leading-snug tracking-[0.04em] transition-opacity group-hover:opacity-70 truncate"
             style={{ fontFamily: FONT_DISPLAY, color: THEME.primary }}
+            title={blog.title}
           >
             {blog.title}
           </h3>
@@ -141,7 +144,8 @@ function BlogCard({ blog, index = 0 }: { blog: Blog; index?: number }) {
             )}
           </div>
 
-          <p className="mt-3 text-[13px] leading-relaxed text-[#4A5462] line-clamp-3">
+          {/* ✅ DESCRIPTION - 2 LINES MEIN ... KE SAATH */}
+          <p className="mt-3 text-[13px] leading-relaxed text-[#4A5462] line-clamp-2">
             {blog.excerpt || blog.descriptions?.replace(/<[^>]*>/g, '').slice(0, 120) || ""}
           </p>
 

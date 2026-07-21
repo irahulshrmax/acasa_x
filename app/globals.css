@@ -1,3 +1,4 @@
+
 /* Google Fonts */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -6,49 +7,43 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer utilities {
   @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
- 
   .animate-fade-in {
     animation: fadeIn 0.5s ease-in-out;
   }
+  .font-eb-garamond {
+    font-family: var(--font-eb-garamond), 'EB Garamond', Georgia, serif;
+    font-optical-sizing: auto;
+  }
 }
- 
+
 /* Root Variables */
 :root {
   --background: #ffffff;
   --foreground: #171717;
-
   --font-playfair: 'Playfair Display', serif;
   --font-inter: 'Inter', sans-serif;
 }
 
-/* Global Body */
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-inter); /* ✅ Default Inter */
+  font-family: var(--font-inter);
 }
 
-/* Utility Classes */
 .font-playfair {
   font-family: var(--font-playfair);
 }
-
 .font-inter {
   font-family: var(--font-inter);
 }
 
-
-:root{
+:root {
   --text-dark: #171717;
   --muted: #525252;
   --card-bg: #FAFAFA;
@@ -56,16 +51,13 @@ body {
   --accent-bg: #F4EFEB;
 }
 
-/* Font families used in component */
 .font-playfair { font-family: 'Playfair Display', serif; }
 .font-sans { font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
 
-/* Small utility overrides for exact spacing/line-height */
 .text-14 { font-size: 14px; }
 .text-15 { font-size: 15px; }
 .leading-18 { line-height: 1.8; }
 
-/* Icon wrapper to ensure consistent icon size */
 .about-icon {
   width: 48px;
   height: 48px;
@@ -75,17 +67,15 @@ body {
   color: var(--text-dark);
 }
 
-/* Card shadow that matches screenshot more closely */
 .card-shadow {
   box-shadow: 0 6px 18px rgba(23,23,23,0.04);
 }
 
-/* Ensure images keep intended aspect and don't stretch */
 .about-image {
   object-fit: cover;
   border-radius: 6px;
 }
-/* Add at the end */
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -94,10 +84,80 @@ body {
   display: none;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+/* ✅ BLOG CONTENT STYLING - YEH IMPORTANT HAI */
+.blog-content h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  color: #171717;
+  font-family: 'Playfair Display', Georgia, serif;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
 }
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+
+.blog-content h3 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  color: #171717;
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+.blog-content p {
+  font-size: 1.05rem;
+  line-height: 1.8;
+  margin-bottom: 1.25rem;
+  color: #404040;
+}
+
+.blog-content strong {
+  font-weight: 600;
+  color: #171717;
+}
+
+.blog-content ul {
+  list-style-type: disc;
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.blog-content ol {
+  list-style-type: decimal;
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+}
+
+.blog-content li {
+  margin-bottom: 0.5rem;
+  line-height: 1.7;
+  color: #404040;
+}
+
+.blog-content blockquote {
+  border-left: 4px solid #C8AA78;
+  padding-left: 1.5rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: #525252;
+}
+
+.blog-content a {
+  color: #C8AA78;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.blog-content img {
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  max-width: 100%;
+  height: auto;
+}
+
+.blog-content hr {
+  margin: 2rem 0;
+  border: 0;
+  border-top: 1px solid #E8E6E1;
 }

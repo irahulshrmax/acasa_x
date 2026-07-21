@@ -1,4 +1,3 @@
-// app/api/v1/communities/[slug]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCommunityBySlug,
@@ -11,6 +10,25 @@ import {
 import { cache } from '@/lib/cache';
 import { db } from '@/lib/database';
 
+// ─── HELPER: Extract actual slug from URL pattern ────────────────────
+
+function extractActualSlug(slug: string): string {
+  let actualSlug = slug;
+  
+  const prefix = 'apartments-for-sale-in-';
+  if (slug.startsWith(prefix)) {
+    actualSlug = slug.replace(prefix, '');
+  }
+  
+  try {
+    actualSlug = decodeURIComponent(actualSlug);
+  } catch {
+    // If decoding fails, use as-is
+  }
+  
+  return actualSlug.trim().replace(/\/+$/, '');
+}
+
 // ─── GET: Fetch community by Slug ──────────────────────────────────────
 
 export async function GET(
@@ -21,39 +39,76 @@ export async function GET(
     const { slug } = await params;
     const { searchParams } = new URL(request.url);
     
+    const actualSlug = extractActualSlug(slug);
     const includeProperties = searchParams.get('include_properties') === 'true';
     const includeRelated = searchParams.get('include_related') === 'true';
     const noCache = searchParams.get('no_cache') === 'true';
 
-    // ─── Check cache first ─────────────────────────────────────────────
-    
-    const cacheKey = `community:${slug}:${String(includeProperties)}:${String(includeRelated)}`;
+    const cacheKey = `community:${actualSlug}:${String(includeProperties)}:${String(includeRelated)}`;
     let community: CommunityWithRelations | null = null;
     let cached = false;
 
-    if (!noCache && slug) {
+    // ─── Check cache ─────────────────────────────────────────────
+    
+    if (!noCache && actualSlug) {
       try {
         const cachedData = await cache.get<CommunityWithRelations>(cacheKey);
         if (cachedData) {
           community = cachedData;
           cached = true;
         }
-      } catch (error) {
-        console.warn('Cache read error:', error);
+      } catch {
+        // Cache read error - continue to fetch from database
       }
     }
 
-    // ─── If not in cache, fetch from database ─────────────────────────
+    // ─── Fetch from database ─────────────────────────────────────
     
     if (!community) {
-      community = await getCommunityBySlug(slug);
+      community = await getCommunityBySlug(actualSlug);
       
-      if (community && !noCache && slug) {
+      // Fallback: Direct DB query if getCommunityBySlug fails
+      if (!community) {
         try {
-          // ✅ FIX: Pass object with ttl property
-          await cache.set(cacheKey, community, { ttl: 3600 }); // Cache for 1 hour
-        } catch (error) {
-          console.warn('Cache write error:', error);
+          const knex = await db();
+          
+          const directCommunity = await knex('community as c')
+            .leftJoin('cities as ci', 'c.city_id', 'ci.id')
+            .leftJoin('state as s', 'c.state_id', 's.id')
+            .leftJoin('country as co', 'c.country_id', 'co.id')
+            .where('c.slug', actualSlug)
+            .orWhere('c.seo_slug', actualSlug)
+            .orWhere('c.seo_slug', slug)
+            .first()
+            .select(
+              'c.*',
+              'ci.name as city_name',
+              'ci.slug as city_slug',
+              's.name as state_name',
+              'co.name as country_name'
+            );
+          
+          if (directCommunity) {
+            community = directCommunity as CommunityWithRelations;
+            
+            const propertyCount = await knex('properties')
+              .where('community_id', community.id)
+              .where('status', 5)
+              .count('* as count')
+              .first();
+            community.property_count = Number(propertyCount?.count || 0);
+          }
+        } catch {
+          // Fallback query error - continue
+        }
+      }
+      
+      // Cache if found
+      if (community && !noCache && actualSlug) {
+        try {
+          await cache.set(cacheKey, community, { ttl: 3600 });
+        } catch {
+          // Cache write error - continue
         }
       }
     }
@@ -65,54 +120,60 @@ export async function GET(
       );
     }
 
-    // ─── Include properties if requested ──────────────────────────────
+    // ─── Build response ──────────────────────────────────────────
     
     let responseData: any = { ...community };
 
     if (includeProperties && community.id) {
-      const knex = await db();
-      const properties = await knex('properties')
-        .where('community_id', community.id)
-        .where('status', 5)
-        .select(
-          'id',
-          'property_name',
-          'property_slug',
-          'price',
-          'bedroom',
-          'bathrooms',
-          'area',
-          'area_size',
-          'featured_image',
-          'listing_type'
-        )
-        .orderBy('price', 'desc')
-        .limit(20);
+      try {
+        const knex = await db();
+        const properties = await knex('properties')
+          .where('community_id', community.id)
+          .where('status', 5)
+          .select(
+            'id',
+            'property_name',
+            'property_slug',
+            'price',
+            'bedroom',
+            'bathrooms',
+            'area',
+            'area_size',
+            'featured_image',
+            'listing_type'
+          )
+          .orderBy('price', 'desc')
+          .limit(20);
 
-      responseData.properties = properties;
-      responseData.property_count = properties.length;
+        responseData.properties = properties;
+        responseData.property_count = properties.length;
+      } catch {
+        // Property fetch error - continue without properties
+      }
     }
 
-    // ─── Include related communities if requested ─────────────────────
-    
     if (includeRelated && community.similar_location) {
-      const similarIds = community.similar_location
-        .split(',')
-        .map((id: string) => parseInt(id.trim()))
-        .filter((id: number) => !isNaN(id));
+      try {
+        const similarIds = community.similar_location
+          .split(',')
+          .map((id: string) => parseInt(id.trim()))
+          .filter((id: number) => !isNaN(id));
 
-      if (similarIds.length > 0) {
-        const knex = await db();
-        const similar = await knex('community')
-          .whereIn('id', similarIds)
-          .where('status', 1)
-          .select('id', 'name', 'slug', 'img', 'latitude', 'longitude')
-          .limit(10);
+        if (similarIds.length > 0) {
+          const knex = await db();
+          const similar = await knex('community')
+            .whereIn('id', similarIds)
+            .where('status', 1)
+            .select('id', 'name', 'slug', 'img', 'latitude', 'longitude')
+            .limit(10);
 
-        responseData.similar_communities = similar.map((s: any) => ({
-          ...s,
-          image_url: s.img ? `/uploads/communities/${s.img}` : null,
-        }));
+          responseData.similar_communities = similar.map((s: any) => ({
+            ...s,
+            image_url: s.img ? `/uploads/communities/${s.img}` : null,
+          }));
+        }
+      } catch {
+        // Related fetch error - continue without related
       }
     }
 
@@ -121,8 +182,8 @@ export async function GET(
       data: responseData,
       cached: cached,
     });
+    
   } catch (error: any) {
-    console.error('Error fetching community:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to fetch community', error: error.message },
       { status: 500 }
@@ -140,9 +201,9 @@ export async function PUT(
     const { slug } = await params;
     const body = await request.json();
 
-    // ─── Check if community exists ─────────────────────────────────────
-    
-    const existingCommunity = await getCommunityBySlug(slug);
+    const actualSlug = extractActualSlug(slug);
+
+    const existingCommunity = await getCommunityBySlug(actualSlug);
     if (!existingCommunity) {
       return NextResponse.json(
         { success: false, message: 'Community not found' },
@@ -150,8 +211,6 @@ export async function PUT(
       );
     }
 
-    // ─── Generate new slug if name changes ────────────────────────────
-    
     let newSlug = body.slug;
     if (body.name && body.name !== existingCommunity.name) {
       newSlug = body.name
@@ -160,9 +219,7 @@ export async function PUT(
         .replace(/^-+|-+$/g, '');
     }
 
-    // ─── Check slug uniqueness ─────────────────────────────────────────
-    
-    if (newSlug && newSlug !== slug) {
+    if (newSlug && newSlug !== actualSlug) {
       const knex = await db();
       const duplicate = await knex('community')
         .where('slug', newSlug)
@@ -177,9 +234,7 @@ export async function PUT(
       }
     }
 
-    // ─── Update community ──────────────────────────────────────────────
-    
-    const community = await updateCommunityBySlug(slug, {
+    const community = await updateCommunityBySlug(actualSlug, {
       name: body.name,
       community_id: body.community_id,
       country_id: body.country_id,
@@ -210,19 +265,14 @@ export async function PUT(
       status: body.status,
     });
 
-    // ─── Clear cache for this community ───────────────────────────────
-    
-    if (slug) {
+    if (actualSlug) {
       try {
-        // Clear all cache variations for this slug
-        await cache.delPattern(`community:${slug}:*`);
-        
-        // Also clear the new slug cache if it changed
-        if (newSlug && newSlug !== slug) {
+        await cache.delPattern(`community:${actualSlug}:*`);
+        if (newSlug && newSlug !== actualSlug) {
           await cache.delPattern(`community:${newSlug}:*`);
         }
-      } catch (error) {
-        console.warn('Cache clear error:', error);
+      } catch {
+        // Cache clear error - continue
       }
     }
 
@@ -231,8 +281,8 @@ export async function PUT(
       data: community,
       message: 'Community updated successfully',
     });
+    
   } catch (error: any) {
-    console.error('Error updating community:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to update community', error: error.message },
       { status: 500 }
@@ -251,8 +301,9 @@ export async function DELETE(
     const { searchParams } = new URL(request.url);
     
     const permanent = searchParams.get('permanent') === 'true';
+    const actualSlug = extractActualSlug(slug);
 
-    const existingCommunity = await getCommunityBySlug(slug);
+    const existingCommunity = await getCommunityBySlug(actualSlug);
     if (!existingCommunity) {
       return NextResponse.json(
         { success: false, message: 'Community not found' },
@@ -263,18 +314,16 @@ export async function DELETE(
     let result;
 
     if (permanent) {
-      result = await permanentDeleteCommunityBySlug(slug);
+      result = await permanentDeleteCommunityBySlug(actualSlug);
     } else {
-      result = await deleteCommunityBySlug(slug);
+      result = await deleteCommunityBySlug(actualSlug);
     }
 
-    // ─── Clear cache for this community ───────────────────────────────
-    
-    if (slug) {
+    if (actualSlug) {
       try {
-        await cache.delPattern(`community:${slug}:*`);
-      } catch (error) {
-        console.warn('Cache clear error:', error);
+        await cache.delPattern(`community:${actualSlug}:*`);
+      } catch {
+        // Cache clear error - continue
       }
     }
 
@@ -283,8 +332,8 @@ export async function DELETE(
       data: result,
       message: permanent ? 'Community permanently deleted' : 'Community archived successfully',
     });
+    
   } catch (error: any) {
-    console.error('Error deleting community:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to delete community', error: error.message },
       { status: 500 }
@@ -292,7 +341,7 @@ export async function DELETE(
   }
 }
 
-// ─── PATCH: Partial update (featured, status, restore) ──────────────
+// ─── PATCH: Partial update ────────────────────────────────────────────
 
 export async function PATCH(
   request: NextRequest,
@@ -302,7 +351,9 @@ export async function PATCH(
     const { slug } = await params;
     const body = await request.json();
 
-    const existingCommunity = await getCommunityBySlug(slug);
+    const actualSlug = extractActualSlug(slug);
+
+    const existingCommunity = await getCommunityBySlug(actualSlug);
     if (!existingCommunity) {
       return NextResponse.json(
         { success: false, message: 'Community not found' },
@@ -313,45 +364,31 @@ export async function PATCH(
     let community: CommunityWithRelations | null = null;
     let message = '';
 
-    // ─── Restore community ─────────────────────────────────────────────
-    
     if (body.action === 'restore') {
-      community = await restoreCommunityBySlug(slug);
+      community = await restoreCommunityBySlug(actualSlug);
       message = 'Community restored successfully';
-    }
-
-    // ─── Update featured status ────────────────────────────────────────
-    
-    else if (body.featured !== undefined) {
-      community = await updateCommunityBySlug(slug, {
+    } else if (body.featured !== undefined) {
+      community = await updateCommunityBySlug(actualSlug, {
         featured: body.featured ? 1 : 0,
       });
       message = `Community ${body.featured ? 'featured' : 'unfeatured'} successfully`;
-    }
-
-    // ─── Update status ──────────────────────────────────────────────────
-    
-    else if (body.status !== undefined) {
-      community = await updateCommunityBySlug(slug, {
+    } else if (body.status !== undefined) {
+      community = await updateCommunityBySlug(actualSlug, {
         status: body.status,
       });
       message = `Community ${body.status === 1 ? 'activated' : 'deactivated'} successfully`;
-    }
-
-    else {
+    } else {
       return NextResponse.json(
         { success: false, message: 'No valid action specified' },
         { status: 400 }
       );
     }
 
-    // ─── Clear cache for this community ───────────────────────────────
-    
-    if (community && slug) {
+    if (community && actualSlug) {
       try {
-        await cache.delPattern(`community:${slug}:*`);
-      } catch (error) {
-        console.warn('Cache clear error:', error);
+        await cache.delPattern(`community:${actualSlug}:*`);
+      } catch {
+        // Cache clear error - continue
       }
     }
 
@@ -360,8 +397,8 @@ export async function PATCH(
       data: community,
       message: message,
     });
+    
   } catch (error: any) {
-    console.error('Error updating community:', error);
     return NextResponse.json(
       { success: false, message: 'Failed to update community', error: error.message },
       { status: 500 }

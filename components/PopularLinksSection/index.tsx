@@ -13,178 +13,205 @@ type LinkGroup = {
 };
 
 const LINK_GROUPS: LinkGroup[] = [
+  // ─── POPULAR SEARCHES ──────────────────────────────────────────────
   {
     title: "Popular Searches",
     links: [
       {
-        label: "Luxury homes for sale in United Arab Emirates",
+        label: "Luxury homes for sale in Dubai",
         href: "/featured-explore-properties?keyword=luxury-homes",
       },
       {
-        label: "Waterfront properties in United Arab Emirates",
+        label: "Waterfront properties in Dubai",
         href: "/featured-explore-properties?keyword=waterfront-properties",
       },
       {
-        label: "Beachfront villas in United Arab Emirates",
+        label: "Beachfront villas in Dubai",
         href: "/featured-explore-properties?keyword=beachfront-villas",
       },
       {
-        label: "Investment properties in United Arab Emirates",
+        label: "Investment properties in Dubai",
         href: "/featured-explore-properties?keyword=investment-properties",
       },
       {
-        label: "Branded residences in United Arab Emirates",
+        label: "Branded residences in Dubai",
         href: "/featured-explore-properties?keyword=branded-residences",
       },
       {
-        label: "Golf course properties in United Arab Emirates",
+        label: "Golf course properties in Dubai",
         href: "/featured-explore-properties?keyword=golf-course-properties",
       },
       {
-        label: "Properties with private pool in United Arab Emirates",
+        label: "Properties with private pool in Dubai",
         href: "/featured-explore-properties?keyword=private-pool",
       },
       {
-        label: "Sea view properties in United Arab Emirates",
+        label: "Sea view properties in Dubai",
         href: "/featured-explore-properties?keyword=sea-view",
       },
       {
-        label: "New launch properties in United Arab Emirates",
+        label: "New launch properties in Dubai",
         href: "/new-projects-in-dubai",
       },
       {
-        label: "Ready to move properties in United Arab Emirates",
+        label: "Ready to move properties in Dubai",
         href: "/featured-explore-properties?status=1",
       },
     ],
   },
-  {
-    title: "Lifestyle",
-    links: [
-      {
-        label: "Family-friendly communities in UAE",
-        href: "/dubai-lifestyle-properties?keyword=family-friendly",
-      },
-      {
-        label: "Gated communities in UAE",
-        href: "/dubai-lifestyle-properties?keyword=gated-communities",
-      },
-      {
-        label: "High ROI areas in UAE",
-        href: "/dubai-lifestyle-properties?keyword=high-roi",
-      },
-      {
-        label: "Pet-friendly properties in UAE",
-        href: "/dubai-lifestyle-properties?keyword=pet-friendly",
-      },
-      {
-        label: "Properties near metro in Dubai",
-        href: "/dubai-lifestyle-properties?keyword=near-metro",
-      },
-      {
-        label: "Branded residences in UAE",
-        href: "/dubai-lifestyle-properties?keyword=branded-residences",
-      },
-    ],
-  },
+
+  // ─── PROPERTY TYPES ──────────────────────────────────────────────────
   {
     title: "Property Types",
     links: [
       {
-        label: "Apartments for sale in United Arab Emirates",
+        label: "Apartments for sale in Dubai",
         href: "/apartments-for-sale-in-dubai",
       },
       {
-        label: "Villas for sale in United Arab Emirates",
+        label: "Villas for sale in Dubai",
         href: "/properties-for-sale-dubai?type=villas",
       },
       {
-        label: "Townhouses for sale in United Arab Emirates",
+        label: "Townhouses for sale in Dubai",
         href: "/properties-for-sale-dubai?type=townhouses",
       },
       {
-        label: "Penthouses for sale in United Arab Emirates",
+        label: "Penthouses for sale in Dubai",
         href: "/properties-for-sale-dubai?type=penthouses",
       },
       {
-        label: "Duplexes for sale in United Arab Emirates",
+        label: "Duplexes for sale in Dubai",
         href: "/properties-for-sale-dubai?type=duplexes",
       },
       {
-        label: "Mansions for sale in United Arab Emirates",
+        label: "Mansions for sale in Dubai",
         href: "/properties-for-sale-dubai?type=mansions",
       },
       {
-        label: "Waterfront homes for sale in United Arab Emirates",
-        href: "/properties-for-sale-dubai?type=waterfront",
+        label: "Luxury homes for sale in Dubai",
+        href: "/luxury-properties",
       },
       {
-        label: "Off-plan properties in United Arab Emirates",
+        label: "Off-plan properties in Dubai",
         href: "/off-plan-properties-in-dubai",
       },
       {
-        label: "Luxury homes for sale in United Arab Emirates",
-        href: "/featured-explore-properties",
+        label: "Rental properties in Dubai",
+        href: "/properties-for-rent-dubai",
+      },
+      {
+        label: "Properties for sale in Dubai",
+        href: "/sell-your-property-in-dubai",
       },
     ],
   },
+
+  // ─── BUY & SELL ──────────────────────────────────────────────────────
   {
-    title: "Popular Cities",
+    title: "Buy & Sell",
     links: [
       {
-        label: "Properties for sale in Palm Jumeirah, Dubai",
+        label: "Properties for sale in Dubai",
+        href: "/properties-for-sale-dubai",
+      },
+      {
+        label: "Properties for rent in Dubai",
+        href: "/properties-for-rent-dubai",
+      },
+      {
+        label: "Off-plan properties in Dubai",
+        href: "/off-plan-properties-in-dubai",
+      },
+      {
+        label: "New projects in Dubai",
+        href: "/new-projects-in-dubai",
+      },
+      {
+        label: "Luxury properties in Dubai",
+        href: "/luxury-properties",
+      },
+      {
+        label: "Lifestyle properties in Dubai",
+        href: "/dubai-lifestyle-properties",
+      },
+      {
+        label: "Sell your property in Dubai",
+        href: "/sell-your-property-in-dubai",
+      },
+      {
+        label: "Archive properties in Dubai",
+        href: "/archive-properties",
+      },
+      {
+        label: "Archive projects in Dubai",
+        href: "/archive-projects",
+      },
+      {
+        label: "Global properties for sale",
+        href: "/global-properties-for-sale",
+      },
+    ],
+  },
+
+  // ─── POPULAR AREAS ──────────────────────────────────────────────────
+  {
+    title: "Popular Areas",
+    links: [
+      {
+        label: "Properties in Palm Jumeirah, Dubai",
         href: "/neighborhood-guide/palm-jumeirah",
       },
       {
-        label: "Properties for sale in Dubai Marina, Dubai",
+        label: "Properties in Dubai Marina, Dubai",
         href: "/neighborhood-guide/dubai-marina",
       },
       {
-        label: "Properties for sale in Downtown Dubai",
+        label: "Properties in Downtown Dubai",
         href: "/neighborhood-guide/downtown-dubai",
       },
       {
-        label: "Properties for sale in Business Bay, Dubai",
+        label: "Properties in Business Bay, Dubai",
         href: "/neighborhood-guide/business-bay",
       },
       {
-        label: "Properties for sale in Dubai Hills Estate",
+        label: "Properties in Dubai Hills Estate",
         href: "/neighborhood-guide/dubai-hills-estate",
       },
       {
-        label: "Properties for sale in Palm Jumeirah Bay Island",
+        label: "Properties in Jumeirah Bay Island",
         href: "/neighborhood-guide/jumeirah-bay-island",
       },
       {
-        label: "Properties for sale in Emirates Hills",
+        label: "Properties in Emirates Hills",
         href: "/neighborhood-guide/emirates-hills",
       },
       {
-        label: "Properties for sale in Dubai Harbour",
+        label: "Properties in Dubai Harbour",
         href: "/neighborhood-guide/dubai-harbour",
       },
       {
-        label: "Properties for sale in Bluewaters Island",
+        label: "Properties in Bluewaters Island",
         href: "/neighborhood-guide/bluewaters-island",
       },
       {
-        label: "Properties for sale in Al Barari",
+        label: "Properties in Al Barari",
         href: "/neighborhood-guide/al-barari",
       },
       {
-        label: "Properties for sale in Yas Island, Abu Dhabi",
+        label: "Properties in Yas Island, Abu Dhabi",
         href: "/neighborhood-guide/yas-island",
       },
       {
-        label: "Properties for sale in Saadiyat Island, Abu Dhabi",
+        label: "Properties in Saadiyat Island, Abu Dhabi",
         href: "/neighborhood-guide/saadiyat-island",
       },
       {
-        label: "Properties for sale in Al Reem Island, Abu Dhabi",
+        label: "Properties in Al Reem Island, Abu Dhabi",
         href: "/neighborhood-guide/al-reem-island",
       },
       {
-        label: "Properties for sale in Al Marjan Island, Ras Al Khaimah",
+        label: "Properties in Al Marjan Island, Ras Al Khaimah",
         href: "/neighborhood-guide/al-marjan-island",
       },
     ],
